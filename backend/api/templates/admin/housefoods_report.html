@@ -1,0 +1,117 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block extrastyle %}
+<style>
+:root {
+  --card-bg: #1e1e2d; --card-border: #2b2b3d; --text-muted: #a2a3b7;
+  --green: #0bb783; --blue: #556ee6; --red: #f46a6a;
+}
+body { background: #15152b; }
+.content { padding: 20px; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap: 18px; margin-bottom: 28px; }
+.stat-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 20px; }
+.stat-value { font-size: 24px; font-weight: 700; color: #fff; }
+.stat-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin-top: 2px; }
+.table-wrap { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 20px; overflow-x: auto; }
+.table-wrap table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table-wrap th { text-align: left; padding: 10px 12px; color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--card-border); }
+.table-wrap td { padding: 10px 12px; color: #d1d3e0; border-bottom: 1px solid rgba(255,255,255,.04); }
+.table-wrap tr:last-child td { border-bottom: none; }
+.amt { font-weight: 600; color: #fff; }
+.badge { font-size: 10px; padding: 2px 7px; border-radius: 4px; }
+.badge-success { background: rgba(11,183,131,.2); color: #0bb783; }
+.badge-warning { background: rgba(244,106,106,.2); color: #f46a6a; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="content">
+
+  {% if kitchens is not None %}
+  <!-- Kitchen Report -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-value">{{ total_kitchens }}</div>
+      <div class="stat-label">Total Kitchens</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">₹{{ total_kitchen_revenue|floatformat:"0" }}</div>
+      <div class="stat-label">Total Revenue</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">₹{{ total_payouts|floatformat:"0" }}</div>
+      <div class="stat-label">Total Payouts (Approved)</div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <tr>
+        <th>Kitchen</th><th>Chef</th><th>Orders</th><th>Revenue</th><th>Delivery Fees</th><th>Net Earnings</th><th>Payouts (Approved)</th><th>Payouts (Pending)</th>
+      </tr>
+      {% for k in kitchens %}
+      <tr>
+        <td><strong>{{ k.name }}</strong></td>
+        <td>{{ k.chef.name }}</td>
+        <td>{{ k.total_orders }}</td>
+        <td class="amt">₹{{ k.total_revenue|floatformat:"0"|default:"0" }}</td>
+        <td>₹{{ k.total_delivery_fees|floatformat:"0"|default:"0" }}</td>
+        <td class="amt">₹{{ k.net_earnings|floatformat:"0" }}</td>
+        <td><span class="badge badge-success">₹{{ k.payouts.approved|floatformat:"0"|default:"0" }}</span></td>
+        <td><span class="badge badge-warning">₹{{ k.payouts.pending|floatformat:"0"|default:"0" }}</span></td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:20px">No kitchens found</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  {% elif delivery_partners is not None %}
+  <!-- DP Report -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-value">{{ total_dps }}</div>
+      <div class="stat-label">Total DPs</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">₹{{ total_dp_earnings|floatformat:"0" }}</div>
+      <div class="stat-label">Total Earnings</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{{ total_deliveries }}</div>
+      <div class="stat-label">Total Deliveries</div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <tr>
+        <th>DP Name</th><th>Email</th><th>Status</th><th>Deliveries</th><th>Total Earnings</th>
+      </tr>
+      {% for dp in delivery_partners %}
+      <tr>
+        <td><strong>{{ dp.name }}</strong></td>
+        <td>{{ dp.email }}</td>
+        <td>
+          {% if dp.is_verified %}
+            <span class="badge badge-success">Verified</span>
+          {% else %}
+            <span class="badge badge-warning">Unverified</span>
+          {% endif %}
+        </td>
+        <td>{{ dp.total_deliveries|default:"0" }}</td>
+        <td class="amt">₹{{ dp.total_earnings|floatformat:"0"|default:"0" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px">No delivery partners</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  {% else %}
+  <p style="color:var(--text-muted)">No report data available.</p>
+  {% endif %}
+
+</div>
+{% endblock %}

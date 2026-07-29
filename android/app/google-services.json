@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "481479523905",
+    "project_id": "aikya-73c23",
+    "storage_bucket": "aikya-73c23.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:481479523905:android:266147ecf55be44e9710c0",
+        "android_client_info": {
+          "package_name": "com.example.housefoods"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "481479523905-q2ql8aq955mb3q91a60akelf6nfjgp1p.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBlbec46Lu8Oxs01BZETcGkm0s0y9ID6J4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "481479523905-foupjbrllm662huv4f5t8pol22pir8m5.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "481479523905-ldvlafotm4682crprpof1lccm5jrl3po.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.housefoods"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

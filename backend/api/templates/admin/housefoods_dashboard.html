@@ -1,0 +1,229 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block extrastyle %}
+<style>
+:root {
+  --card-bg: #1e1e2d;
+  --card-border: #2b2b3d;
+  --text-muted: #a2a3b7;
+  --green: #0bb783;
+  --blue: #556ee6;
+  --red: #f46a6a;
+  --purple: #7c3aed;
+}
+body { background: #15152b; }
+.content { padding: 20px; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 18px; margin-bottom: 28px; }
+.stat-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 20px; }
+.stat-icon { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; margin-bottom: 12px; }
+.stat-value { font-size: 24px; font-weight: 700; color: #fff; margin-bottom: 2px; }
+.stat-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; }
+.stat-sub { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+.stat-sub span { color: var(--green); font-weight: 600; }
+
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 28px; }
+@media (max-width:900px) { .row { grid-template-columns: 1fr; } }
+.card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 20px; }
+.card h3 { color: #fff; font-size: 13px; margin: 0 0 14px; text-transform: uppercase; letter-spacing: .5px; display: flex; justify-content: space-between; align-items: center; }
+.bar { display: flex; align-items: center; margin-bottom: 8px; font-size: 12px; }
+.bar-label { width: 70px; color: var(--text-muted); flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { flex: 1; height: 20px; background: rgba(255,255,255,.06); border-radius: 4px; overflow: hidden; margin: 0 8px; }
+.bar-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; padding: 0 6px; font-size: 10px; color: #fff; font-weight: 600; justify-content: flex-end; min-width: 30px; }
+.bar-value { width: 60px; text-align: right; color: var(--text-muted); flex-shrink: 0; }
+
+.month-row { display: flex; align-items: center; margin-bottom: 6px; font-size: 12px; }
+.month-label { width: 60px; color: var(--text-muted); flex-shrink: 0; }
+.month-track { flex: 1; display: flex; gap: 3px; height: 16px; }
+.month-bar { height: 100%; border-radius: 3px; min-width: 2px; }
+.month-bar.b1 { background: var(--blue); }
+.month-bar.b2 { background: var(--green); }
+.month-orders { width: 46px; text-align: right; color: var(--text-muted); flex-shrink: 0; font-size: 11px; }
+
+.legend { display: flex; gap: 16px; margin-bottom: 10px; flex-wrap: wrap; }
+.legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-muted); }
+.legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+
+.table-wrap { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 20px; margin-bottom: 20px; overflow-x: auto; }
+.table-wrap table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table-wrap th { text-align: left; padding: 8px 10px; color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--card-border); }
+.table-wrap td { padding: 8px 10px; color: #d1d3e0; border-bottom: 1px solid rgba(255,255,255,.04); white-space: nowrap; }
+.table-wrap tr:last-child td { border-bottom: none; }
+.table-wrap .amt { font-weight: 600; color: #fff; }
+.badge { font-size: 10px; padding: 2px 7px; border-radius: 4px; display: inline-block; }
+.badge-success { background: rgba(11,183,131,.2); color: #0bb783; }
+.badge-warning { background: rgba(244,106,106,.2); color: #f46a6a; }
+.badge-info { background: rgba(85,110,230,.2); color: #556ee6; }
+.badge-secondary { background: rgba(162,163,183,.15); color: #a2a3b7; }
+.badge-pending { background: rgba(244,106,106,.2); color: #f46a6a; }
+.badge-delivered { background: rgba(11,183,131,.2); color: #0bb783; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="content">
+
+  <!-- Stats -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:rgba(85,110,230,.15);color:var(--blue)">📦</div>
+      <div class="stat-value">{{ total_orders }}</div>
+      <div class="stat-label">Total Orders</div>
+      <div class="stat-sub"><span>{{ today_orders }}</span> today · <span>{{ month_orders }}</span> this month</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:rgba(11,183,131,.15);color:var(--green)">💰</div>
+      <div class="stat-value">₹{{ total_revenue|floatformat:"0" }}</div>
+      <div class="stat-label">Gross Turnover</div>
+      <div class="stat-sub">₹{{ month_revenue|floatformat:"0" }} this month</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:rgba(124,58,237,.15);color:var(--purple)">🏪</div>
+      <div class="stat-value">₹{{ platform_fees|floatformat:"0" }}</div>
+      <div class="stat-label">Platform Fees (est.)</div>
+      <div class="stat-sub">Turnover − Delivery − Kitchen Payouts</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:rgba(244,106,106,.15);color:var(--red)">🚚</div>
+      <div class="stat-value">₹{{ total_delivery_fees|floatformat:"0" }}</div>
+      <div class="stat-label">Delivery Fees</div>
+      <div class="stat-sub">To {{ total_dps }} delivery partners</div>
+    </div>
+  </div>
+
+  <!-- Monthly chart + Top DPs -->
+  <div class="row">
+    <div class="card">
+      <h3>Monthly Revenue</h3>
+      <div class="legend">
+        <span class="legend-item"><span class="legend-dot" style="background:var(--blue)"></span> Revenue</span>
+        <span class="legend-item"><span class="legend-dot" style="background:var(--green)"></span> Delivery Fees</span>
+      </div>
+      {% for m in monthly_data %}
+      <div class="month-row">
+        <div class="month-label">{{ m.label }}</div>
+        <div class="month-track">
+          <div class="month-bar b1" style="width:{% widthratio m.revenue monthly_data.0.revenue 100 %}%"></div>
+          <div class="month-bar b2" style="width:{% widthratio m.fees monthly_data.0.revenue 100 %}%"></div>
+        </div>
+        <div class="month-orders">{{ m.orders }}</div>
+      </div>
+      {% empty %}
+      <p style="color:var(--text-muted)">No data</p>
+      {% endfor %}
+    </div>
+    <div class="card">
+      <h3>Top Delivery Partners</h3>
+      {% for dp in dp_earnings %}
+      <div class="bar">
+        <div class="bar-label">{{ dp.delivery_partner__name|default:"—" }}</div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:{% widthratio dp.earnings dp_earnings.0.earnings 100 %}%;background:var(--green)">₹{{ dp.earnings|floatformat:"0" }}</div>
+        </div>
+        <div class="bar-value">{{ dp.deliveries }} del</div>
+      </div>
+      {% empty %}
+      <p style="color:var(--text-muted)">No deliveries yet</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Top Kitchens + Payouts -->
+  <div class="row">
+    <div class="card">
+      <h3>Top Kitchens by Revenue</h3>
+      {% for k in top_kitchens %}
+      <div class="bar">
+        <div class="bar-label">{{ k.kitchen__name }}</div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:{% widthratio k.revenue top_kitchens.0.revenue 100 %}%;background:var(--blue)">₹{{ k.revenue|floatformat:"0" }}</div>
+        </div>
+        <div class="bar-value">{{ k.order_count }} ord</div>
+      </div>
+      {% empty %}
+      <p style="color:var(--text-muted)">No data</p>
+      {% endfor %}
+    </div>
+    <div class="card">
+      <h3>Kitchen Payouts</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+        <div>
+          <div style="font-size:20px;font-weight:700;color:var(--green)">₹{{ total_kitchen_payouts|floatformat:"0" }}</div>
+          <div style="font-size:11px;color:var(--text-muted)">Approved ({{ payout_count }})</div>
+        </div>
+        <div>
+          <div style="font-size:20px;font-weight:700;color:var(--red)">₹{{ pending_kitchen_payouts|floatformat:"0" }}</div>
+          <div style="font-size:11px;color:var(--text-muted)">Pending ({{ pending_payout_list|length }})</div>
+        </div>
+      </div>
+      <div style="max-height:180px;overflow-y:auto">
+        {% for p in pending_payout_list|slice:":8" %}
+        <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:12px">
+          <span style="color:var(--text-muted)">{{ p.chef.name }}</span>
+          <span style="color:#fff;font-weight:600">₹{{ p.amount|floatformat:"0" }}</span>
+        </div>
+        {% empty %}
+        <p style="color:var(--text-muted);font-size:12px">None pending</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- DPs summary row -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:rgba(85,110,230,.1);color:var(--blue)">👥</div>
+      <div class="stat-value">{{ total_dps }}</div>
+      <div class="stat-label">Delivery Partners</div>
+      <div class="stat-sub"><span>{{ active_dps }}</span> online · <span>{{ verified_dps }}</span> verified</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:rgba(11,183,131,.1);color:var(--green)">🏪</div>
+      <div class="stat-value">{{ top_kitchens|length }}</div>
+      <div class="stat-label">Active Kitchens</div>
+      <div class="stat-sub">With completed orders</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:rgba(244,106,106,.1);color:var(--red)">📊</div>
+      <div class="stat-value">{{ total_revenue|add:total_delivery_fees|floatformat:"0" }}</div>
+      <div class="stat-label">Total Partner Earnings</div>
+      <div class="stat-sub">Kitchens + Delivery Partners</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:rgba(124,58,237,.1);color:var(--purple)">📅</div>
+      <div class="stat-value">{{ month_orders }}</div>
+      <div class="stat-label">This Month</div>
+      <div class="stat-sub">₹{{ month_revenue|floatformat:"0" }} revenue</div>
+    </div>
+  </div>
+
+  <!-- Recent orders -->
+  <div class="table-wrap">
+    <h3>
+      Recent Orders
+      <a href="{% url 'admin:api_order_changelist' %}" style="color:var(--blue);font-size:11px;text-decoration:none">View All →</a>
+    </h3>
+    <table>
+      <tr>
+        <th>#</th><th>Customer</th><th>Kitchen</th><th>Amount</th><th>Del. Fee</th><th>Status</th><th>Delivery</th><th>DP</th><th>Date</th>
+      </tr>
+      {% for o in recent_orders %}
+      <tr>
+        <td><a href="{% url 'admin:api_order_change' o.id %}" style="color:var(--blue)">#{{ o.id }}</a></td>
+        <td>{{ o.customer.name|default:o.customer.email|truncatechars:14 }}</td>
+        <td>{{ o.kitchen.name|truncatechars:16 }}</td>
+        <td class="amt">₹{{ o.amount|floatformat:"0" }}</td>
+        <td>₹{{ o.delivery_fee|floatformat:"0" }}</td>
+        <td><span class="badge badge-{{ o.status }}">{{ o.status }}</span></td>
+        <td><span class="badge badge-{{ o.delivery_status }}">{{ o.delivery_status|title }}</span></td>
+        <td>{{ o.delivery_partner.name|default:"—"|truncatechars:12 }}</td>
+        <td style="color:var(--text-muted);font-size:11px">{{ o.created_at|date:"d M H:i" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:20px">No orders yet</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+
+</div>
+{% endblock %}

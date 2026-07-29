@@ -1,0 +1,14 @@
+{
+  "appName": "HouseFoods",
+  "welcomeTitle": "Welcome to HouseFoods",
+  "loginPrompt": "Enter your phone number to continue",
+  "sendOtp": "Send OTP",
+  "home": "Home",
+  "search": "Search",
+  "orders": "Orders",
+  "profile": "Profile",
+  "trackMeal": "Track Today's Meal",
+  "renewNow": "Renew Now",
+  "settings": "Settings",
+  "logout": "Logout"
+}

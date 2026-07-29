@@ -1,0 +1,22 @@
+databases:
+  - name: housefoods-db
+    plan: free
+    databaseName: housefoods
+    user: housefoods
+
+services:
+  - type: web
+    name: housefoods-api
+    runtime: python
+    rootDir: backend
+    buildCommand: bash build.sh
+    startCommand: gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: housefoods-db
+          property: connectionString
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
