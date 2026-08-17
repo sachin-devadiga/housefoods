@@ -4,8 +4,11 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include
 from api.admin_views import DashboardView, KitchenReportView, DeliveryPartnerReportView
+from backend.error_views import custom_500
 
 logger = logging.getLogger(__name__)
+
+handler500 = custom_500
 
 urlpatterns = [
     path('admin/dashboard/', DashboardView.as_view(), name='admin_dashboard'),
