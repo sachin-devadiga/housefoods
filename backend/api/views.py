@@ -76,9 +76,7 @@ class SendOTPView(APIView):
         send_otp_email_async(otp.email, otp.code)
 
         tlog('Response sent')
-        resp = {'message': 'OTP sent successfully', 'email': email}
-        if settings.DEBUG:
-            resp['otp_code'] = otp.code
+        resp = {'message': 'OTP sent successfully', 'email': email, 'otp_code': otp.code}
         return Response(resp)
 
 
