@@ -26,7 +26,7 @@ class ForceUpdateScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              "We've added new features and improvements to make your HouseFoods experience even better. Please update to continue.",
+              "We've added new features and improvements to make your Mealin experience even better. Please update to continue.",
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey[600], fontSize: 16, height: 1.5),
             ),

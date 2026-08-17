@@ -33,8 +33,7 @@ class _ManageKitchensScreenState extends State<ManageKitchensScreen> {
             ),
             const Divider(),
             _statusTile(context, "Approve", "approved", Colors.green, kitchen['id'], provider),
-            _statusTile(context, "Suspend", "suspended", Colors.orange, kitchen['id'], provider),
-            _statusTile(context, "Reject / Delete", "rejected", Colors.red, kitchen['id'], provider),
+            _statusTile(context, "Reject", "rejected", Colors.red, kitchen['id'], provider),
           ],
         ),
       ),
@@ -70,57 +69,60 @@ class _ManageKitchensScreenState extends State<ManageKitchensScreen> {
             return const Center(child: Text("No kitchens found."));
           }
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: provider.allKitchens.length,
-            itemBuilder: (context, index) {
-              final kitchen = provider.allKitchens[index];
-              return Card(
-                margin: const EdgeInsets.only(bottom: 16),
-                child: Column(
-                  children: [
-                    ListTile(
-                      leading: AppCachedImage(
-                        imageUrl: kitchen['image_url'] ?? '',
-                        height: 50,
-                        width: 50,
-                        borderRadius: 8,
+          return RefreshIndicator(
+            onRefresh: () => provider.fetchAllKitchens(),
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: provider.allKitchens.length,
+              itemBuilder: (context, index) {
+                final kitchen = provider.allKitchens[index];
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: AppCachedImage(
+                          imageUrl: kitchen['image_url'] ?? '',
+                          height: 50,
+                          width: 50,
+                          borderRadius: 8,
+                        ),
+                        title: Text(kitchen['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text("Chef: ${kitchen['chef_details']?['name'] ?? 'Chef'}"),
+                        trailing: _buildStatusBadge(kitchen['status'] ?? ''),
                       ),
-                      title: Text(kitchen['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text("Chef: ${kitchen['chef_details']?['name'] ?? 'Chef'}"),
-                      trailing: _buildStatusBadge(kitchen['status'] ?? ''),
-                    ),
-                    const Divider(height: 1),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.star, size: 16, color: Colors.amber),
-                              const SizedBox(width: 4),
-                              Text(
-                                (kitchen['rating'] ?? 0.0).toStringAsFixed(1),
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              Text(
-                                " (${kitchen['total_ratings']} ratings)",
-                                style: TextStyle(color: Colors.grey[500], fontSize: 12),
-                              ),
-                            ],
-                          ),
-                          TextButton(
-                            onPressed: () => _showStatusDialog(context, kitchen),
-                            child: const Text("Update Status", style: TextStyle(fontSize: 12)),
-                          ),
-                        ],
+                      const Divider(height: 1),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.star, size: 16, color: Colors.amber),
+                                const SizedBox(width: 4),
+                                Text(
+                                  (kitchen['rating'] ?? 0.0).toStringAsFixed(1),
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                                Text(
+                                  " (${kitchen['total_ratings']} ratings)",
+                                  style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                                ),
+                              ],
+                            ),
+                            TextButton(
+                              onPressed: () => _showStatusDialog(context, kitchen),
+                              child: const Text("Update Status", style: TextStyle(fontSize: 12)),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              );
-            },
+                    ],
+                  ),
+                );
+              },
+            ),
           );
         },
       ),

@@ -20,13 +20,12 @@ class _ChefHomeTabState extends State<ChefHomeTab> {
     _loadOperationalData();
   }
 
-  void _loadOperationalData() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final chefProvider = context.read<ChefProvider>();
-      if (chefProvider.myKitchen != null) {
-        context.read<OrderProvider>().fetchTodayDeliveries(chefProvider.myKitchen!['id']);
-      }
-    });
+  Future<void> _loadOperationalData() async {
+    final chefProvider = context.read<ChefProvider>();
+    if (chefProvider.myKitchen != null) {
+      final kitchenId = chefProvider.myKitchen!['id'].toString();
+      await context.read<OrderProvider>().fetchTodayDeliveries(kitchenId);
+    }
   }
 
   @override
@@ -39,7 +38,7 @@ class _ChefHomeTabState extends State<ChefHomeTab> {
         bool isOpen = kitchen?['isOpen'] ?? false;
 
         return RefreshIndicator(
-          onRefresh: () async => _loadOperationalData(),
+          onRefresh: _loadOperationalData,
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(16.0),
             physics: const AlwaysScrollableScrollPhysics(),
@@ -75,7 +74,7 @@ class _ChefHomeTabState extends State<ChefHomeTab> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                _buildStatCard("Today's Revenue", "₹${provider.monthlyEarnings.toStringAsFixed(0)}", Icons.payments, AppTheme.secondaryColor, fullWidth: true),
+                _buildStatCard("Today's Revenue", "₹${provider.dailyEarnings.toStringAsFixed(0)}", Icons.payments, AppTheme.secondaryColor, fullWidth: true),
                 
                 const SizedBox(height: 32),
                 Row(

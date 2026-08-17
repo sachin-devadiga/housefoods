@@ -334,9 +334,9 @@ class OrderProvider extends ChangeNotifier {
       return;
     }
     var options = {
-      'key': 'rzp_test_YOUR_KEY_HERE',
+      'key': AppConstants.razorpayKey,
       'amount': (finalPayable * 100).toInt(),
-      'name': 'HouseFoods',
+      'name': 'Mealin',
       'description': 'Subscription',
       'prefill': {'contact': userPhone, 'email': userEmail}
     };

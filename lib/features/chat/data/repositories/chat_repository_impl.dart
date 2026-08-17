@@ -27,7 +27,7 @@ class ChatRepositoryImpl implements ChatRepository {
         final data = await _api.get(AppConstants.chatMessagesEndpoint, queryParams: {
           'other_uid': chatRoomId,
         });
-        final list = (data['data'] as List?) ?? [];
+        final list = (data['data'] as List?) ?? data as List? ?? [];
         return list.map((e) => MessageModel.fromMap(e as Map<String, dynamic>, e['id'].toString())).toList();
       } catch (e) {
         return <MessageModel>[];

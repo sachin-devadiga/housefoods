@@ -97,7 +97,14 @@ class _AddressBookScreenState extends State<AddressBookScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => AddAddressScreen(user: _user!)),
-            ).then((_) => _loadUserData());
+            ).then((result) {
+              _loadUserData();
+              if (result == true && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Address saved successfully"), backgroundColor: Colors.green),
+                );
+              }
+            });
           }
         },
         backgroundColor: AppTheme.primaryColor,

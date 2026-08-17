@@ -28,7 +28,10 @@ class DeliveryPartnerEarningsTab extends StatelessWidget {
           }
 
           return RefreshIndicator(
-            onRefresh: () => provider.fetchMyDeliveries(),
+            onRefresh: () async {
+              await provider.fetchMyDeliveries();
+              await provider.fetchEarnings();
+            },
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),
@@ -61,7 +64,7 @@ class DeliveryPartnerEarningsTab extends StatelessWidget {
                   const SizedBox(height: 24),
                   Text('Recent Deliveries', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey[800])),
                   const SizedBox(height: 12),
-                  if (provider.myDeliveries.isEmpty)
+                  if (provider.deliveryHistory.isEmpty)
                     Center(
                       child: Padding(
                         padding: const EdgeInsets.all(32),
@@ -69,13 +72,13 @@ class DeliveryPartnerEarningsTab extends StatelessWidget {
                       ),
                     )
                   else
-                    ...provider.myDeliveries
-                        .where((d) => (d['status'] ?? '').toString().toLowerCase() == 'delivered')
+                    ...provider.deliveryHistory
+                        .where((d) => (d['delivery_status'] ?? '').toString().toLowerCase() == 'delivered')
                         .map((d) => ListTile(
                               leading: const Icon(Icons.check_circle, color: Colors.green),
-                              title: Text('Delivery #${_shortId(d['orderId'])}'),
-                              subtitle: Text(d['deliveryAddress'] ?? ''),
-                              trailing: Text(_safeCurrency(d['deliveryFee']),
+                              title: Text('Delivery #${_shortId(d['id'])}'),
+                              subtitle: Text(d['delivery_address'] ?? ''),
+                              trailing: Text(_safeCurrency(d['delivery_fee']),
                                   style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
                             )),
                 ],

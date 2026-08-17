@@ -89,7 +89,7 @@ class OrderDetailsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text("Order #${order.id.substring(0, 8).toUpperCase()}"),
+        title: Text("Order #${order.id.length >= 8 ? order.id.substring(0, 8).toUpperCase() : order.id.toUpperCase()}"),
         elevation: 0,
       ),
       body: SingleChildScrollView(

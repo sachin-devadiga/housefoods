@@ -72,13 +72,13 @@ def _send_otp_email_sync(email, otp_code):
     sender_name = os.getenv('BREVO_SENDER_NAME', 'Housefoods')
     sender_email = os.getenv('BREVO_SENDER_EMAIL', os.getenv('BREVO_FROM_EMAIL', ''))
 
-    subject = 'Your HouseFoods OTP Code'
+    subject = 'Your Mealin OTP Code'
     text_content = (
-        f'Your One-Time Password (OTP) for HouseFoods login is:\n\n'
+        f'Your One-Time Password (OTP) for Mealin login is:\n\n'
         f'   {otp_code}\n\n'
         f'This code is valid for 5 minutes.\n'
         f'If you did not request this, please ignore this email.\n\n'
-        f'Thank you,\nHouseFoods Team'
+        f'Thank you,\nMealin Team'
     )
     html_content = f'''<!DOCTYPE html>
 <html>
@@ -88,7 +88,7 @@ def _send_otp_email_sync(email, otp_code):
 <tr><td align="center">
 <table width="480" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;">
 <tr><td style="background:#FF6B35;padding:24px;text-align:center;">
-<h1 style="color:#ffffff;margin:0;font-size:24px;">HouseFoods</h1>
+<h1 style="color:#ffffff;margin:0;font-size:24px;">Mealin</h1>
 </td></tr>
 <tr><td style="padding:32px;">
 <p style="color:#333;font-size:16px;margin:0 0 16px 0;">Your One-Time Password (OTP) for login is:</p>
@@ -99,7 +99,7 @@ def _send_otp_email_sync(email, otp_code):
 <p style="color:#666;font-size:14px;margin:16px 0 0 0;">If you did not request this, please ignore this email.</p>
 </td></tr>
 <tr><td style="background:#fafafa;padding:16px;text-align:center;">
-<p style="color:#999;font-size:12px;margin:0;">HouseFoods - Connecting home kitchens with customers</p>
+<p style="color:#999;font-size:12px;margin:0;">Mealin - Connecting home kitchens with customers</p>
 </td></tr>
 </table>
 </td></tr>
@@ -144,8 +144,8 @@ def _send_otp_email_sync(email, otp_code):
     msg['From'] = f'{sender_name} <{sender_email}>'
     msg['To'] = email
     msg['Date'] = time.strftime('%a, %d %b %Y %H:%M:%S +0000', time.gmtime())
-    msg['Message-ID'] = f'<{time.time():.0f}.{hash(email)}@housefoods.app>'
-    msg['X-Mailer'] = 'HouseFoods OTP Service'
+    msg['Message-ID'] = f'<{time.time():.0f}.{hash(email)}@mealin.app>'
+    msg['X-Mailer'] = 'Mealin OTP Service'
     msg.attach(MIMEText(text_content, 'plain'))
     msg.attach(MIMEText(html_content, 'html'))
 

@@ -15,20 +15,19 @@ class AddressModel {
 
   Map<String, dynamic> toMap() {
     return {
-      'id': id,
       'label': label,
-      'fullAddress': fullAddress,
-      'houseNo': houseNo,
+      'address_line1': fullAddress,
+      'address_line2': houseNo,
       'landmark': landmark,
     };
   }
 
   factory AddressModel.fromMap(Map<String, dynamic> map) {
     return AddressModel(
-      id: map['id'] ?? '',
+      id: (map['id'] ?? '').toString(),
       label: map['label'] ?? 'Home',
-      fullAddress: map['fullAddress'] ?? '',
-      houseNo: map['houseNo'] ?? '',
+      fullAddress: map['fullAddress'] ?? map['address_line1'] ?? '',
+      houseNo: map['houseNo'] ?? map['address_line2'] ?? '',
       landmark: map['landmark'] ?? '',
     );
   }

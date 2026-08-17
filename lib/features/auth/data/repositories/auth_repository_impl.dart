@@ -15,12 +15,12 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<void> sendOtp({
     required String email,
-    required Function() onSuccess,
+    required Function(String? otpCode) onSuccess,
     required Function(String) onError,
   }) async {
     try {
-      await _authService.sendOtp(email);
-      onSuccess();
+      final data = await _authService.sendOtp(email);
+      onSuccess(data['otp_code'] as String?);
     } on ApiException catch (e) {
       onError(e.message);
     } catch (e) {

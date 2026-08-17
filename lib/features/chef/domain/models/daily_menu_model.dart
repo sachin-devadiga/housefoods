@@ -19,8 +19,7 @@ class DailyMenuModel {
 
   Map<String, dynamic> toMap() {
     return {
-      'kitchenId': kitchenId,
-      'date': DateTime(date.year, date.month, date.day), // Standardize to midnight
+      'date': DateTime(date.year, date.month, date.day).toIso8601String(),
       'mealTitle': mealTitle,
       'description': description,
       'imageUrl': imageUrl,
@@ -29,14 +28,15 @@ class DailyMenuModel {
   }
 
   factory DailyMenuModel.fromMap(Map<String, dynamic> map, String docId) {
+    final rawDate = map['date']?.toString() ?? '';
     return DailyMenuModel(
       id: docId,
-      kitchenId: map['kitchenId'] ?? '',
-      date: map['date'] as DateTime,
-      mealTitle: map['mealTitle'] ?? '',
+      kitchenId: map['kitchenId'] ?? map['kitchen'] ?? '',
+      date: DateTime.tryParse(rawDate) ?? DateTime.now(),
+      mealTitle: map['mealTitle'] ?? map['meal_title'] ?? '',
       description: map['description'] ?? '',
-      imageUrl: map['imageUrl'] ?? '',
-      isVeg: map['isVeg'] ?? true,
+      imageUrl: map['imageUrl'] ?? map['image_url'] ?? '',
+      isVeg: map['isVeg'] ?? map['is_veg'] ?? true,
     );
   }
 }

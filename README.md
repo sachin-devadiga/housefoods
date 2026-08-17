@@ -1,4 +1,4 @@
-# housefoods
+# mealin
 
 A new Flutter project.
 

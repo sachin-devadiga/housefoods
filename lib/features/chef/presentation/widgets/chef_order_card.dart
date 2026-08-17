@@ -82,7 +82,9 @@ class ChefOrderCard extends StatelessWidget {
                       MaterialPageRoute(
                         builder: (context) => ChatScreen(
                           receiverId: order.customerId,
-                          receiverName: "Customer", // In production, pass the actual name
+                          receiverName: order.customerName.isNotEmpty
+                              ? order.customerName
+                              : "Customer",
                         ),
                       ),
                     );

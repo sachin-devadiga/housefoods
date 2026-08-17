@@ -1,7 +1,7 @@
 abstract class AuthRepository {
   Future<void> sendOtp({
     required String email,
-    required Function() onSuccess,
+    required Function(String? otpCode) onSuccess,
     required Function(String) onError,
   });
 

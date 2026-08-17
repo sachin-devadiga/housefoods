@@ -20,11 +20,11 @@ class CouponModel {
   Map<String, dynamic> toMap() {
     return {
       'code': code.toUpperCase(),
-      'discountType': discountType,
-      'discountValue': discountValue,
-      'minOrderValue': minOrderValue,
-      'expiryDate': expiryDate,
-      'isActive': isActive,
+      'discount_type': discountType,
+      'discount_value': discountValue,
+      'min_order_value': minOrderValue,
+      'expiry_date': expiryDate.toIso8601String(),
+      'is_active': isActive,
     };
   }
 
@@ -32,11 +32,11 @@ class CouponModel {
     return CouponModel(
       id: docId,
       code: map['code'] ?? '',
-      discountType: map['discountType'] ?? 'flat',
-      discountValue: (map['discountValue'] ?? 0.0).toDouble(),
-      minOrderValue: (map['minOrderValue'] ?? 0.0).toDouble(),
-      expiryDate: map['expiryDate'] as DateTime,
-      isActive: map['isActive'] ?? true,
+      discountType: map['discount_type'] ?? map['discountType'] ?? 'flat',
+      discountValue: (map['discount_value'] ?? map['discountValue'] ?? 0.0).toDouble(),
+      minOrderValue: (map['min_order_value'] ?? map['minOrderValue'] ?? 0.0).toDouble(),
+      expiryDate: DateTime.tryParse(map['expiry_date']?.toString() ?? map['expiryDate']?.toString() ?? '') ?? DateTime.now(),
+      isActive: map['is_active'] ?? map['isActive'] ?? true,
     );
   }
 }

@@ -47,7 +47,6 @@ class _ChatScreenState extends State<ChatScreen> {
     if (uid.isEmpty) return const Scaffold(body: Center(child: Text("Please login")));
 
     final chatProvider = context.read<ChatProvider>();
-    final roomId = chatProvider.getChatRoomId(uid, widget.receiverId);
 
     return Scaffold(
       appBar: AppBar(
@@ -59,7 +58,7 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           Expanded(
             child: StreamBuilder<List<MessageModel>>(
-              stream: chatProvider.getMessages(roomId),
+              stream: chatProvider.getMessages(widget.receiverId),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());

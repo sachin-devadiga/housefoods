@@ -15,6 +15,7 @@ class _AddDishScreenState extends State<AddDishScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _descController = TextEditingController();
+  final _priceController = TextEditingController();
   bool _isVeg = true;
   String? _imageUrl;
 
@@ -43,6 +44,7 @@ class _AddDishScreenState extends State<AddDishScreen> {
         description: _descController.text.trim(),
         imageUrl: _imageUrl!,
         isVeg: _isVeg,
+        price: double.parse(_priceController.text.trim()),
       );
 
       try {
@@ -99,6 +101,22 @@ class _AddDishScreenState extends State<AddDishScreen> {
                   border: OutlineInputBorder(),
                 ),
                 validator: (v) => (v == null || v.isEmpty) ? "Required" : null,
+              ),
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: _priceController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: "Price (₹)",
+                  hintText: "e.g. 149",
+                  border: OutlineInputBorder(),
+                ),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return "Required";
+                  final price = double.tryParse(v);
+                  if (price == null || price <= 0) return "Enter a valid price";
+                  return null;
+                },
               ),
               const SizedBox(height: 24),
               Row(

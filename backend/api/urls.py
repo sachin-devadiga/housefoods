@@ -64,6 +64,8 @@ urlpatterns = [
     path('delivery/my-deliveries/', views.MyDeliveriesView.as_view(), name='my-deliveries'),
     path('delivery/history/', views.MyDeliveryHistoryView.as_view(), name='delivery-history'),
     path('delivery/<int:pk>/status/', views.UpdateDeliveryStatusView.as_view(), name='update-delivery-status'),
+    path('delivery/<int:pk>/verify-otp/', views.VerifyDeliveryOTPView.as_view(), name='verify-delivery-otp'),
+    path('orders/<int:pk>/generate-delivery-otp/', views.GenerateDeliveryOTPView.as_view(), name='generate-delivery-otp'),
     path('delivery/earnings/', views.DeliveryEarningsView.as_view(), name='delivery-earnings'),
     path('delivery/availability/', views.DeliveryAvailabilityView.as_view(), name='delivery-availability'),
 

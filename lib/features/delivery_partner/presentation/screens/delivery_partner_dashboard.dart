@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/api_service.dart';
+import '../../../../core/services/token_service.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../providers/delivery_partner_provider.dart';
 import 'delivery_partner_deliveries_tab.dart';
@@ -19,7 +20,8 @@ class DeliveryPartnerDashboard extends StatefulWidget {
 
 enum _BannerState { none, uploadRequired, pendingReview }
 
-class _DeliveryPartnerDashboardState extends State<DeliveryPartnerDashboard> {
+class _DeliveryPartnerDashboardState extends State<DeliveryPartnerDashboard>
+    with WidgetsBindingObserver {
   int _currentIndex = 0;
   _BannerState _bannerState = _BannerState.uploadRequired;
   bool _checkingDocs = true;
@@ -28,11 +30,34 @@ class _DeliveryPartnerDashboardState extends State<DeliveryPartnerDashboard> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _api = ApiService(baseUrl: AppConstants.apiBaseUrl);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initAuth();
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _api.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkDocuments();
+    }
+  }
+
+  Future<void> _initAuth() async {
+    final token = await TokenService().getAccessToken();
+    if (token != null) _api.setToken(token);
+    if (mounted) {
       context.read<DeliveryPartnerProvider>().fetchAllData();
       _checkDocuments();
-    });
+    }
   }
 
   Future<void> _checkDocuments() async {
@@ -43,7 +68,7 @@ class _DeliveryPartnerDashboardState extends State<DeliveryPartnerDashboard> {
         _bannerState = _BannerState.none;
       } else {
         final docData = await _api.get(AppConstants.deliveryDocumentsEndpoint);
-        final docs = docData['data'] as List? ?? [];
+        final docs = (docData['results'] ?? docData['data']) as List? ?? [];
         if (docs.isEmpty) {
           _bannerState = _BannerState.uploadRequired;
         } else {
@@ -77,7 +102,7 @@ class _DeliveryPartnerDashboardState extends State<DeliveryPartnerDashboard> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const DeliveryDocumentUploadScreen()),
-                  );
+                  ).then((_) => _checkDocuments());
                 },
                 child: Container(
                   width: double.infinity,

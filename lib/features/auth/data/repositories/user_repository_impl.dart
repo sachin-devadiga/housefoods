@@ -36,7 +36,7 @@ class UserRepositoryImpl implements UserRepository {
   Future<UserModel?> getUser(String uid) async {
     await _ensureAuthenticated();
     try {
-      final data = await _api.get(AppConstants.profileEndpoint);
+      final data = await _api.get('${AppConstants.userByUidEndpoint}/$uid/');
       if (data['uid'] != null) {
         return UserModel.fromMap(data);
       }
@@ -47,19 +47,24 @@ class UserRepositoryImpl implements UserRepository {
   @override
   Future<void> updateUser(UserModel user) async {
     await _ensureAuthenticated();
-    await _api.put(AppConstants.profileEndpoint, body: {
+    final body = <String, dynamic>{
+      'email': user.email,
       'name': user.name,
       'phone': user.phoneNumber,
-      'avatar_url': user.profileImage,
-    });
+    };
+    if (user.profileImage != null && user.profileImage!.isNotEmpty) {
+      body['avatar_url'] = user.profileImage;
+    }
+    await _api.put(AppConstants.profileEndpoint, body: body);
   }
 
   @override
   Future<void> updateAddresses(String uid, List<AddressModel> addresses) async {
     await _ensureAuthenticated();
-    await _api.post(AppConstants.addressesEndpoint, body: {
-      'addresses': addresses.map((e) => e.toMap()).toList(),
-    });
+    if (addresses.isNotEmpty) {
+      final lastAddress = addresses.last;
+      await _api.post(AppConstants.addressesEndpoint, body: lastAddress.toMap());
+    }
   }
 
   @override

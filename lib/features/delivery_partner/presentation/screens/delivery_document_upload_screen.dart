@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/api_service.dart';
+import '../../../../core/services/token_service.dart';
 import '../../../../core/theme/app_theme.dart';
 
 class DeliveryDocumentUploadScreen extends StatefulWidget {
@@ -35,6 +36,12 @@ class _DeliveryDocumentUploadScreenState extends State<DeliveryDocumentUploadScr
       _numberControllers[dt['type'] as String] = TextEditingController();
       _uploading[dt['type'] as String] = false;
     }
+    _initAuth();
+  }
+
+  Future<void> _initAuth() async {
+    final token = await TokenService().getAccessToken();
+    if (token != null) _api.setToken(token);
     _loadDocuments();
   }
 
@@ -51,7 +58,7 @@ class _DeliveryDocumentUploadScreenState extends State<DeliveryDocumentUploadScr
     setState(() => _isLoading = true);
     try {
       final data = await _api.get(AppConstants.deliveryDocumentsEndpoint);
-      final docs = data['data'] as List? ?? [];
+      final docs = (data['results'] ?? data['data']) as List? ?? [];
       _documents = docs.map((e) => Map<String, dynamic>.from(e as Map)).toList();
       for (final doc in _documents) {
         final type = doc['doc_type'] as String?;

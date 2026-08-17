@@ -52,62 +52,65 @@ class _VerifyKitchensScreenState extends State<VerifyKitchensScreen> {
             return const Center(child: Text("No pending applications"));
           }
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: provider.pendingKitchens.length,
-            itemBuilder: (context, index) {
-              final kitchen = provider.pendingKitchens[index];
-              return Card(
-                margin: const EdgeInsets.only(bottom: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    AppCachedImage(imageUrl: kitchen['image_url'] ?? '', height: 150, width: double.infinity, borderRadius: 16),
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(kitchen['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                          Text("Chef: ${kitchen['chef_details']?['name'] ?? 'Chef'}", style: TextStyle(color: Colors.grey[600])),
-                          const SizedBox(height: 12),
-                          const Divider(),
-                          const SizedBox(height: 12),
-                          const Text("KYC & COMPLIANCE", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.indigo)),
-                          const SizedBox(height: 8),
-                          Text("FSSAI No: ${kitchen['fssai_number'] ?? 'N/A'}", style: const TextStyle(fontWeight: FontWeight.w500)),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              _docButton("ID Proof", kitchen['id_proof_url']),
-                              const SizedBox(width: 12),
-                              _docButton("License", kitchen['license_url']),
-                            ],
-                          ),
-                          const SizedBox(height: 24),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              TextButton(
-                                onPressed: () => provider.updateKitchenStatus(kitchen['id'], 'rejected'),
-                                child: const Text("REJECT", style: TextStyle(color: Colors.red)),
-                              ),
-                              const SizedBox(width: 12),
-                              ElevatedButton(
-                                onPressed: () => provider.updateKitchenStatus(kitchen['id'], 'approved'),
-                                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                                child: const Text("APPROVE KITCHEN"),
-                              ),
-                            ],
-                          ),
-                        ],
+          return RefreshIndicator(
+            onRefresh: () => provider.fetchPendingKitchens(),
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: provider.pendingKitchens.length,
+              itemBuilder: (context, index) {
+                final kitchen = provider.pendingKitchens[index];
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AppCachedImage(imageUrl: kitchen['image_url'] ?? '', height: 150, width: double.infinity, borderRadius: 16),
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(kitchen['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                            Text("Chef: ${kitchen['chef_details']?['name'] ?? 'Chef'}", style: TextStyle(color: Colors.grey[600])),
+                            const SizedBox(height: 12),
+                            const Divider(),
+                            const SizedBox(height: 12),
+                            const Text("KYC & COMPLIANCE", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.indigo)),
+                            const SizedBox(height: 8),
+                            Text("FSSAI No: ${kitchen['fssai_number'] ?? 'N/A'}", style: const TextStyle(fontWeight: FontWeight.w500)),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                _docButton("ID Proof", kitchen['id_proof_url']),
+                                const SizedBox(width: 12),
+                                _docButton("License", kitchen['license_url']),
+                              ],
+                            ),
+                            const SizedBox(height: 24),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                TextButton(
+                                  onPressed: () => provider.updateKitchenStatus(kitchen['id'], 'rejected'),
+                                  child: const Text("REJECT", style: TextStyle(color: Colors.red)),
+                                ),
+                                const SizedBox(width: 12),
+                                ElevatedButton(
+                                  onPressed: () => provider.updateKitchenStatus(kitchen['id'], 'approved'),
+                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                                  child: const Text("APPROVE KITCHEN"),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              );
-            },
+                    ],
+                  ),
+                );
+              },
+            ),
           );
         },
       ),

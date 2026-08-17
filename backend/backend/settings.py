@@ -45,11 +45,11 @@ INSTALLED_APPS = [
 
 # Jazzmin Admin Theme
 JAZZMIN_SETTINGS = {
-    'site_title': 'HouseFoods Admin',
-    'site_header': 'HouseFoods',
-    'site_brand': '🏠 HouseFoods',
-    'welcome_sign': 'Welcome to HouseFoods Admin Panel',
-    'copyright': 'HouseFoods',
+    'site_title': 'Mealin Admin',
+    'site_header': 'Mealin',
+    'site_brand': '🏠 Mealin',
+    'welcome_sign': 'Welcome to Mealin Admin Panel',
+    'copyright': 'Mealin',
     'search_model': ['api.UserProfile', 'api.Kitchen', 'api.Order'],
     'topmenu_links': [
         {'name': '📊 Dashboard', 'url': 'admin_dashboard', 'permissions': ['auth.view_user']},
@@ -170,7 +170,7 @@ if DATABASE_URL:
 else:
     DATABASES = {'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', 'housefoods'),
+        'NAME': os.getenv('DB_NAME', 'mealin'),
         'USER': os.getenv('DB_USER', 'postgres'),
         'PASSWORD': os.getenv('DB_PASSWORD', 'postgres'),
         'HOST': os.getenv('DB_HOST', 'localhost'),
@@ -214,6 +214,17 @@ CORS_ALLOWED_ORIGINS = [
     if origin.strip()
 ]
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
@@ -222,7 +233,7 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STATICFILES_STORAGE = 'whitenoise.storage.StaticFilesStorage' if DEBUG else 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
@@ -246,6 +257,6 @@ EMAIL_PORT = int(os.getenv('BREVO_SMTP_PORT', '587'))
 EMAIL_USE_TLS = os.getenv('BREVO_SMTP_TLS', 'True').lower() == 'true'
 EMAIL_HOST_USER = os.getenv('BREVO_SMTP_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('BREVO_SMTP_PASSWORD', '')
-BREVO_SENDER_NAME = os.getenv('BREVO_SENDER_NAME', 'HouseFoods')
+BREVO_SENDER_NAME = os.getenv('BREVO_SENDER_NAME', 'Mealin')
 BREVO_SENDER_EMAIL = os.getenv('BREVO_SENDER_EMAIL', os.getenv('BREVO_FROM_EMAIL', ''))
 DEFAULT_FROM_EMAIL = f'{BREVO_SENDER_NAME} <{BREVO_SENDER_EMAIL}>'

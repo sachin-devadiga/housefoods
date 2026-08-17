@@ -1,6 +1,7 @@
 class OrderModel {
   final String id;
   final String customerId;
+  final String customerName;
   final String kitchenId;
   final String kitchenName;
   final String chefId;
@@ -21,6 +22,7 @@ class OrderModel {
   OrderModel({
     required this.id,
     required this.customerId,
+    this.customerName = '',
     required this.kitchenId,
     required this.kitchenName,
     this.chefId = '',
@@ -64,10 +66,12 @@ class OrderModel {
     }
 
     final kitchenDetails = map['kitchen_details'] as Map<String, dynamic>?;
+    final customerDetails = map['customer_details'] as Map<String, dynamic>?;
 
     return OrderModel(
       id: docId,
       customerId: (map['customer'] ?? map['customerId'] ?? '').toString(),
+      customerName: customerDetails?['name'] as String? ?? map['customerName'] ?? '',
       kitchenId: (map['kitchen'] ?? map['kitchenId'] ?? '').toString(),
       kitchenName: kitchenDetails?['name'] as String? ?? map['kitchenName'] ?? '',
       chefId: (kitchenDetails?['chef'] ?? '').toString(),

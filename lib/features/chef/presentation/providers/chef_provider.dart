@@ -4,13 +4,23 @@ import 'package:image_picker/image_picker.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/api_service.dart';
 import '../../../../core/services/storage_service.dart';
+import '../../../../core/services/token_service.dart';
 
 class ChefProvider extends ChangeNotifier {
   final ApiService _api;
+  final TokenService _tokenService;
   final StorageService _storageService = StorageService();
 
-  ChefProvider({ApiService? apiService})
-      : _api = apiService ?? ApiService(baseUrl: AppConstants.apiBaseUrl);
+  ChefProvider({ApiService? apiService, TokenService? tokenService})
+      : _api = apiService ?? ApiService(baseUrl: AppConstants.apiBaseUrl),
+        _tokenService = tokenService ?? TokenService();
+
+  Future<void> _ensureAuthenticated() async {
+    final token = await _tokenService.getAccessToken();
+    if (token != null) {
+      _api.setToken(token);
+    }
+  }
 
   Map<String, dynamic>? _myKitchen;
   Map<String, dynamic>? get myKitchen => _myKitchen;
@@ -30,6 +40,28 @@ class ChefProvider extends ChangeNotifier {
   double _monthlyEarnings = 0.0;
   double get monthlyEarnings => _monthlyEarnings;
 
+  double _dailyEarnings = 0.0;
+  double get dailyEarnings => _dailyEarnings;
+
+  double _pendingPayout = 0.0;
+  double get pendingPayout => _pendingPayout;
+
+  double get availableBalance {
+    double paidOut = 0;
+    for (final p in _payoutHistory) {
+      final status = p['status']?.toString().toLowerCase() ?? '';
+      if (status == 'approved' || status == 'paid') {
+        final raw = p['amount'];
+        final amt = (raw is num) ? raw.toDouble() : double.tryParse(raw?.toString() ?? '0') ?? 0.0;
+        paidOut += amt;
+      }
+    }
+    return _totalEarnings - paidOut;
+  }
+
+  List<Map<String, dynamic>> _weeklyEarnings = [];
+  List<Map<String, dynamic>> get weeklyEarnings => _weeklyEarnings;
+
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
@@ -44,6 +76,7 @@ class ChefProvider extends ChangeNotifier {
         await fetchMyPlans();
         await fetchDishes();
         await calculateEarnings();
+        await fetchPayoutHistory();
       } else {
         _myKitchen = null;
       }
@@ -59,6 +92,13 @@ class ChefProvider extends ChangeNotifier {
     try {
       final data = await _api.get(AppConstants.payoutsEndpoint);
       _payoutHistory = ((data['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      _pendingPayout = _payoutHistory
+          .where((p) => (p['status'] ?? '') == 'pending')
+          .fold(0.0, (sum, p) {
+        final raw = p['amount'];
+        final amt = (raw is num) ? raw.toDouble() : double.tryParse(raw?.toString() ?? '0') ?? 0.0;
+        return sum + amt;
+      });
       notifyListeners();
     } catch (e) {
       debugPrint("Error fetching payout history: $e");
@@ -88,7 +128,10 @@ class ChefProvider extends ChangeNotifier {
 
       double total = 0;
       double monthly = 0;
+      double daily = 0;
       final now = DateTime.now();
+      final todayStart = DateTime(now.year, now.month, now.day);
+      final weekTotals = List<double>.filled(7, 0);
 
       for (final order in orders) {
         final orderKitchenId = order['kitchen'];
@@ -102,12 +145,31 @@ class ChefProvider extends ChangeNotifier {
             if (date != null && date.month == now.month && date.year == now.year) {
               monthly += amount;
             }
+            if (date != null && date.isAfter(todayStart)) {
+              daily += amount;
+            }
+            if (date != null) {
+              final daysAgo = now.difference(date).inDays;
+              if (daysAgo >= 0 && daysAgo < 7) {
+                weekTotals[6 - daysAgo] += amount;
+              }
+            }
           }
         }
       }
 
       _totalEarnings = total;
       _monthlyEarnings = monthly;
+      _dailyEarnings = daily;
+      _weeklyEarnings = [
+        {'day': 'Mon', 'amount': weekTotals[0]},
+        {'day': 'Tue', 'amount': weekTotals[1]},
+        {'day': 'Wed', 'amount': weekTotals[2]},
+        {'day': 'Thu', 'amount': weekTotals[3]},
+        {'day': 'Fri', 'amount': weekTotals[4]},
+        {'day': 'Sat', 'amount': weekTotals[5]},
+        {'day': 'Sun', 'amount': weekTotals[6]},
+      ];
       notifyListeners();
     } catch (e) {
       debugPrint("Error calculating earnings: $e");
@@ -238,6 +300,7 @@ class ChefProvider extends ChangeNotifier {
 
   Future<String?> pickAndUploadImage(String folderPath) async {
     try {
+      await _ensureAuthenticated();
       final File? imageFile = await _storageService.pickImage(ImageSource.gallery);
       if (imageFile != null) {
         _isLoading = true;

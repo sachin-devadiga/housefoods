@@ -101,13 +101,13 @@ abstract class AppLocalizations {
   /// No description provided for @appName.
   ///
   /// In en, this message translates to:
-  /// **'HouseFoods'**
+  /// **'Mealin'**
   String get appName;
 
   /// No description provided for @welcomeTitle.
   ///
   /// In en, this message translates to:
-  /// **'Welcome to HouseFoods'**
+  /// **'Welcome to Mealin'**
   String get welcomeTitle;
 
   /// No description provided for @loginPrompt.

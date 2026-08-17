@@ -11,7 +11,7 @@ from .models import Order, PayoutRequest, UserProfile, DeliveryLog, Kitchen
 
 @method_decorator(staff_member_required, name='dispatch')
 class DashboardView(View):
-    template_name = 'admin/housefoods_dashboard.html'
+    template_name = 'admin/mealin_dashboard.html'
 
     def get(self, request):
         now = timezone.now()
@@ -107,7 +107,7 @@ class DashboardView(View):
 
 @method_decorator(staff_member_required, name='dispatch')
 class KitchenReportView(View):
-    template_name = 'admin/housefoods_report.html'
+    template_name = 'admin/mealin_report.html'
 
     def get(self, request):
         kitchens = Kitchen.objects.all().annotate(
@@ -134,7 +134,7 @@ class KitchenReportView(View):
 
 @method_decorator(staff_member_required, name='dispatch')
 class DeliveryPartnerReportView(View):
-    template_name = 'admin/housefoods_report.html'
+    template_name = 'admin/mealin_report.html'
 
     def get(self, request):
         dps = UserProfile.objects.filter(role='delivery_partner').annotate(

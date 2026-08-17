@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../auth/data/repositories/user_repository_impl.dart';
 import '../../../auth/domain/models/user_model.dart';
@@ -159,6 +160,15 @@ class _FulfillmentCardState extends State<FulfillmentCard> {
     }
   }
 
+  Future<void> _callCustomer() async {
+    final phone = _customerProfile?.phoneNumber ?? '';
+    if (phone.isEmpty) return;
+    final uri = Uri(scheme: 'tel', path: phone);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     bool hasRestrictions = _customerProfile != null && 
@@ -235,7 +245,7 @@ class _FulfillmentCardState extends State<FulfillmentCard> {
                     ),
                     const SizedBox(width: 12),
                     IconButton.filledTonal(
-                      onPressed: () {}, // Action for calling customer
+                      onPressed: _callCustomer,
                       icon: const Icon(Icons.call, size: 18),
                       style: IconButton.styleFrom(backgroundColor: Colors.blue.shade50, foregroundColor: Colors.blue),
                     ),

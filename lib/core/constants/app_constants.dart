@@ -1,21 +1,29 @@
 import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
 
 class AppConstants {
-  static const String appName = 'HouseFoods';
+  static const String appName = 'Mealin';
 
   // API Configuration
   // Override with: --dart-define=API_BASE_URL=http://YOUR_IP:8000
-  // For Android emulator the default (10.0.2.2) works.
-  // For a physical Android device you MUST set your computer's LAN IP.
-  static String apiBaseUrl = _resolveApiBaseUrl();
+  // Otherwise the app auto-tries localhost, emulator host (10.0.2.2),
+  // and your machine's LAN IP so it works on any device without rebuilds.
+  static List<String> apiBaseUrlCandidates = _resolveApiBaseUrlCandidates();
 
-  static String _resolveApiBaseUrl() {
+  static String apiBaseUrl = apiBaseUrlCandidates.first;
+
+  static List<String> _resolveApiBaseUrlCandidates() {
     const fromEnv = String.fromEnvironment('API_BASE_URL');
-    if (fromEnv.isNotEmpty) return fromEnv;
-    if (kIsWeb) return 'http://localhost:8000';
-    if (Platform.isAndroid) return 'http://10.0.2.2:8000';
-    return 'http://localhost:8000';
+    if (fromEnv.isNotEmpty) return [fromEnv];
+
+    const knownLanIp = String.fromEnvironment('LAN_IP');
+    final candidates = <String>[
+      'http://localhost:8000',
+      if (Platform.isAndroid) 'http://10.0.2.2:8000',
+      if (knownLanIp.isNotEmpty) 'http://$knownLanIp:8000',
+      'http://192.168.1.4:8000',
+    ];
+
+    return candidates.toSet().toList();
   }
 
   // Auth Endpoints
@@ -69,6 +77,8 @@ class AppConstants {
   static const String myDeliveriesEndpoint = '/api/auth/delivery/my-deliveries/';
   static const String deliveryHistoryEndpoint = '/api/auth/delivery/history/';
   static const String updateDeliveryStatusEndpoint = '/api/auth/delivery';
+  static const String verifyDeliveryOtpEndpoint = '/api/auth/delivery';
+  static const String generateDeliveryOtpEndpoint = '/api/auth/orders';
   static const String deliveryEarningsEndpoint = '/api/auth/delivery/earnings/';
   static const String deliveryAvailabilityEndpoint = '/api/auth/delivery/availability/';
 
@@ -108,6 +118,8 @@ class AppConstants {
   static const String adminOrdersEndpoint = '/api/auth/admin/orders/';
   static const String adminPayoutsEndpoint = '/api/auth/admin/payouts/';
   static const String adminSettingsEndpoint = '/api/auth/admin/settings/';
+  static const String adminDeliveryPartnersEndpoint = '/api/auth/admin/delivery-partners/';
+  static const String adminDeliveryDocumentsEndpoint = '/api/auth/admin/delivery-documents/';
 
   // Map
   static const String mapRouteEndpoint = '/api/auth/map/route/';
@@ -117,6 +129,10 @@ class AppConstants {
   static const String deliveryDocumentUploadEndpoint = '/api/auth/delivery/documents/upload/';
   static const String deliveryDocumentDetailEndpoint = '/api/auth/delivery/documents';
   static const String deliveryDocumentDeleteEndpoint = '/api/auth/delivery/documents';
+
+  // Razorpay
+  // Override with: --dart-define=RAZORPAY_KEY=rzp_live_xxxx
+  static const String razorpayKey = String.fromEnvironment('RAZORPAY_KEY', defaultValue: 'rzp_test_YOUR_KEY_HERE');
 
   // Upload
   static const String uploadEndpoint = '/api/auth/upload/';

@@ -5,6 +5,7 @@ class DishModel {
   final String description;
   final String imageUrl;
   final bool isVeg;
+  final double price;
 
   DishModel({
     required this.id,
@@ -13,6 +14,7 @@ class DishModel {
     required this.description,
     required this.imageUrl,
     required this.isVeg,
+    this.price = 0.0,
   });
 
   Map<String, dynamic> toMap() {
@@ -22,17 +24,19 @@ class DishModel {
       'description': description,
       'imageUrl': imageUrl,
       'isVeg': isVeg,
+      'price': price,
     };
   }
 
   factory DishModel.fromMap(Map<String, dynamic> map, String docId) {
     return DishModel(
       id: docId,
-      kitchenId: map['kitchenId'] ?? '',
+      kitchenId: map['kitchenId'] ?? map['kitchen'] ?? '',
       name: map['name'] ?? '',
       description: map['description'] ?? '',
-      imageUrl: map['imageUrl'] ?? '',
-      isVeg: map['isVeg'] ?? true,
+      imageUrl: map['imageUrl'] ?? map['image_url'] ?? '',
+      isVeg: map['isVeg'] ?? map['is_veg'] ?? true,
+      price: (map['price'] ?? 0.0).toDouble(),
     );
   }
 }

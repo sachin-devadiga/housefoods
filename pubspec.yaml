@@ -1,5 +1,5 @@
-name: housefoods
-description: HouseFoods - Connecting home kitchens with customers.
+name: mealin
+description: Mealin - Connecting home kitchens with customers.
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -53,6 +53,7 @@ dependencies:
 
   # Visual Analytics
   fl_chart: ^1.2.0
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

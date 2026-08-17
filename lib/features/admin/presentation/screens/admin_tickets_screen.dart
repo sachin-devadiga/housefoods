@@ -37,58 +37,60 @@ class _AdminTicketsScreenState extends State<AdminTicketsScreen> {
             return const Center(child: Text("No support tickets found."));
           }
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: provider.allTickets.length,
-            itemBuilder: (context, index) {
-              final ticket = provider.allTickets[index];
-              return Card(
-                margin: const EdgeInsets.only(bottom: 16),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(ticket['category'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          _buildStatusChip(ticket['status'] ?? ''),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text("Customer: ${ticket['user_details']?['name'] ?? 'User'}", style: const TextStyle(fontWeight: FontWeight.w500)),
-                      if (ticket['order'] != null) Text("Order ID: ${ticket['order']}", style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                      const Divider(height: 24),
-                      Text(ticket['description'] ?? '', style: const TextStyle(height: 1.4)),
-                      const SizedBox(height: 16),
-                      Text(
-                        "Received: ${DateFormat('dd MMM, hh:mm a').format(DateTime.parse(ticket['created_at'].toString()))}",
-                        style: TextStyle(color: Colors.grey[500], fontSize: 11),
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          if (ticket['status'] == 'open')
-                            TextButton(
-                              onPressed: () => provider.updateTicketStatus(ticket['id'], 'in_progress'),
-                              child: const Text("Mark In-Progress"),
-                            ),
-                          const SizedBox(width: 8),
-                          if (ticket['status'] != 'resolved')
-                            ElevatedButton(
-                              onPressed: () => provider.updateTicketStatus(ticket['id'], 'resolved'),
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                              child: const Text("Mark Resolved"),
-                            ),
-                        ],
-                      ),
-                    ],
+          return RefreshIndicator(
+            onRefresh: () => provider.fetchAllTickets(),
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: provider.allTickets.length,
+              itemBuilder: (context, index) {
+                final ticket = provider.allTickets[index];
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(ticket['subject'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            _buildStatusChip(ticket['status'] ?? ''),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text("Customer: ${ticket['user_details']?['name'] ?? ticket['user'] ?? 'User'}", style: const TextStyle(fontWeight: FontWeight.w500)),
+                        const Divider(height: 24),
+                        Text(ticket['message'] ?? '', style: const TextStyle(height: 1.4)),
+                        const SizedBox(height: 16),
+                        Text(
+                          "Received: ${DateFormat('dd MMM, hh:mm a').format(DateTime.parse(ticket['created_at'].toString()))}",
+                          style: TextStyle(color: Colors.grey[500], fontSize: 11),
+                        ),
+                        const SizedBox(height: 20),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            if (ticket['status'] == 'open')
+                              TextButton(
+                                onPressed: () => provider.updateTicketStatus(ticket['id'], 'in_progress'),
+                                child: const Text("Mark In-Progress"),
+                              ),
+                            const SizedBox(width: 8),
+                            if (ticket['status'] != 'resolved')
+                              ElevatedButton(
+                                onPressed: () => provider.updateTicketStatus(ticket['id'], 'resolved'),
+                                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                                child: const Text("Mark Resolved"),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           );
         },
       ),

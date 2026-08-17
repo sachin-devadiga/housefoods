@@ -25,10 +25,10 @@ class SubscriptionPlanModel {
       name: map['name'] ?? '',
       description: map['description'] ?? '',
       price: (map['price'] ?? 0.0).toDouble(),
-      durationDays: map['durationDays'] ?? 0,
+      durationDays: map['durationDays'] ?? map['duration_days'] ?? 0,
       inclusions: List<String>.from(map['inclusions'] ?? []),
-      isVeg: map['isVeg'] ?? true,
-      imageUrl: map['imageUrl'] ?? '',
+      isVeg: map['isVeg'] ?? map['is_veg'] ?? true,
+      imageUrl: map['imageUrl'] ?? map['image_url'] ?? '',
     );
   }
 

@@ -23,6 +23,9 @@ class DeliveryPartnerProvider extends ChangeNotifier {
   List<Map<String, dynamic>> _myDeliveries = [];
   List<Map<String, dynamic>> get myDeliveries => _myDeliveries;
 
+  List<Map<String, dynamic>> _deliveryHistory = [];
+  List<Map<String, dynamic>> get deliveryHistory => _deliveryHistory;
+
   double _totalEarnings = 0;
   double get totalEarnings => _totalEarnings;
   double _todayEarnings = 0;
@@ -46,7 +49,8 @@ class DeliveryPartnerProvider extends ChangeNotifier {
       await Future.wait([
         _fetchAvailableOrdersInternal(),
         _fetchMyDeliveriesInternal(),
-        _fetchEarnings(),
+        _fetchDeliveryHistoryInternal(),
+        fetchEarnings(),
       ]);
       _errorMessage = null;
     } catch (e) {
@@ -109,6 +113,16 @@ class DeliveryPartnerProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> _fetchDeliveryHistoryInternal() async {
+    try {
+      final data = await _api.get(AppConstants.deliveryHistoryEndpoint);
+      _deliveryHistory = _safeList(data['data']);
+    } catch (e) {
+      _deliveryHistory = [];
+      debugPrint("fetchDeliveryHistory error: $e");
+    }
+  }
+
   Future<void> updateDeliveryStatus(dynamic deliveryId, String status) async {
     final id = _parseId(deliveryId);
     if (id == null) return;
@@ -118,7 +132,11 @@ class DeliveryPartnerProvider extends ChangeNotifier {
         '${AppConstants.updateDeliveryStatusEndpoint}/$id/status/',
         body: {'delivery_status': status},
       );
-      await fetchMyDeliveries();
+      await Future.wait([
+        fetchMyDeliveries(),
+        _fetchDeliveryHistoryInternal(),
+        fetchEarnings(),
+      ]);
     } catch (e) {
       _errorMessage = 'Failed to update delivery status';
       notifyListeners();
@@ -126,7 +144,7 @@ class DeliveryPartnerProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _fetchEarnings() async {
+  Future<void> fetchEarnings() async {
     try {
       final data = await _api.get(AppConstants.deliveryEarningsEndpoint);
       _totalEarnings = _safeDouble(data['total_earnings']);

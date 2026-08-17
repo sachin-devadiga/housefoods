@@ -1,22 +1,59 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import '../constants/app_constants.dart';
 
 class ApiService {
-  late final Dio _dio;
-  final String baseUrl;
+  late Dio _dio;
+  final List<String> _candidateUrls;
+  int _current = 0;
 
-  ApiService({required this.baseUrl, String? token}) {
-    _dio = Dio(BaseOptions(
-      baseUrl: baseUrl,
-      connectTimeout: const Duration(seconds: 15),
-      receiveTimeout: const Duration(seconds: 15),
-      headers: {'Content-Type': 'application/json'},
-    ));
-
+  ApiService({required String baseUrl, String? token})
+      : _candidateUrls = _buildCandidates(baseUrl) {
+    _dio = _createDio(baseUrl);
     _dio.interceptors.add(ApiInterceptor());
     if (token != null && token.isNotEmpty) {
       setToken(token);
+    }
+  }
+
+  static List<String> _buildCandidates(String preferred) {
+    final list = <String>[preferred, ...AppConstants.apiBaseUrlCandidates];
+    return list.toSet().toList();
+  }
+
+  Dio _createDio(String url) {
+    return Dio(BaseOptions(
+      baseUrl: url,
+      connectTimeout: const Duration(seconds: 4),
+      receiveTimeout: const Duration(seconds: 4),
+      headers: {'Content-Type': 'application/json'},
+    ));
+  }
+
+  Future<bool> _probe(String url) async {
+    try {
+      final probe = Dio(BaseOptions(
+        baseUrl: url,
+        connectTimeout: const Duration(seconds: 2),
+        receiveTimeout: const Duration(seconds: 2),
+      ));
+      final resp = await probe.get('/api/auth/kitchen-categories/',
+          options: Options(
+              validateStatus: (status) =>
+                  status != null && status < 500 && status != 404));
+      return resp.statusCode != null && resp.statusCode! < 500;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  void _useBaseUrl(String url) {
+    final oldToken = _dio.options.headers['Authorization'];
+    _dio = _createDio(url);
+    _dio.interceptors.add(ApiInterceptor());
+    if (oldToken != null) {
+      _dio.options.headers['Authorization'] = oldToken;
     }
   }
 
@@ -32,15 +69,10 @@ class ApiService {
     String endpoint, {
     Map<String, dynamic>? queryParams,
   }) async {
-    try {
-      final response = await _dio.get(
-        endpoint,
-        queryParameters: queryParams,
-      );
-      return _handleResponse(response);
-    } on DioException catch (e) {
-      throw _handleDioError(e);
-    }
+    return _run(() => _dio.get(
+          endpoint,
+          queryParameters: queryParams,
+        ));
   }
 
   Future<Map<String, dynamic>> post(
@@ -48,16 +80,46 @@ class ApiService {
     Map<String, dynamic>? body,
     Map<String, dynamic>? queryParams,
   }) async {
-    try {
-      final response = await _dio.post(
-        endpoint,
-        data: body,
-        queryParameters: queryParams,
-      );
+    return _run(() => _dio.post(
+          endpoint,
+          data: body,
+          queryParameters: queryParams,
+        ));
+  }
+
+  Future<Map<String, dynamic>> _run(Future<Response> Function() fn) async {
+    DioException? lastError;
+
+    Future<Map<String, dynamic>> attempt() async {
+      final response = await fn();
       return _handleResponse(response);
-    } on DioException catch (e) {
-      throw _handleDioError(e);
     }
+
+    try {
+      return await attempt();
+    } on DioException catch (e) {
+      if (e.type != DioExceptionType.connectionError &&
+          e.type != DioExceptionType.connectionTimeout &&
+          e.type != DioExceptionType.receiveTimeout &&
+          e.type != DioExceptionType.sendTimeout) {
+        throw _handleDioError(e);
+      }
+      lastError = e;
+    }
+
+    for (var i = 0; i < _candidateUrls.length; i++) {
+      if (i == _current) continue;
+      final candidate = _candidateUrls[i];
+      if (!await _probe(candidate)) continue;
+      _current = i;
+      _useBaseUrl(candidate);
+      try {
+        return await attempt();
+      } on DioException catch (e2) {
+        lastError = e2;
+      }
+    }
+    throw _handleDioError(lastError!);
   }
 
   Future<Map<String, dynamic>> put(
@@ -126,7 +188,7 @@ class ApiService {
       final errorData = e.response!.data as Map<String, dynamic>;
       final message = errorData['error'] as String? ??
           errorData['detail'] as String? ??
-          'Something went wrong';
+          errorData.entries.map((e) => '${e.key}: ${e.value}').join(', ');
       return ApiException(message, e.response!.statusCode ?? 0);
     }
     switch (e.type) {
@@ -135,7 +197,9 @@ class ApiService {
       case DioExceptionType.receiveTimeout:
         return ApiException('Request timed out', 0);
       case DioExceptionType.connectionError:
-        return ApiException('No internet connection', 0);
+        final target = e.requestOptions.baseUrl + e.requestOptions.path;
+        return ApiException(
+            'No internet connection (failed: $target - ${e.message})', 0);
       default:
         return ApiException('Something went wrong', 0);
     }

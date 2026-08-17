@@ -1,6 +1,6 @@
 {
-    "name": "housefoods",
-    "short_name": "housefoods",
+    "name": "mealin",
+    "short_name": "mealin",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

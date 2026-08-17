@@ -46,68 +46,71 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
             );
           }
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: provider.pendingPayouts.length,
-            itemBuilder: (context, index) {
-              final request = provider.pendingPayouts[index];
-              return Card(
-                margin: const EdgeInsets.only(bottom: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            request['chef_details']?['name'] ?? 'Chef',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                          ),
-                          Text(
-                            "₹${(request['amount'] ?? 0).toStringAsFixed(0)}",
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                              color: Colors.green,
+          return RefreshIndicator(
+            onRefresh: () => provider.fetchPendingPayouts(),
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: provider.pendingPayouts.length,
+              itemBuilder: (context, index) {
+                final request = provider.pendingPayouts[index];
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              request['chef_details']?['name'] ?? 'Chef',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        "Requested on: ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.parse(request['requested_at'].toString()))}",
-                        style: TextStyle(color: Colors.grey[500], fontSize: 12),
-                      ),
-                      const Divider(height: 24),
-                      const Text("Bank Details:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                      const SizedBox(height: 8),
-                      _buildDetailRow("Bank", request['bank_details']?['bank_name'] ?? ''),
-                      _buildDetailRow("Account No", request['bank_details']?['account_number'] ?? ''),
-                      _buildDetailRow("IFSC", request['bank_details']?['ifsc_code'] ?? ''),
-                      const SizedBox(height: 20),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          TextButton(
-                            onPressed: () => provider.updatePayoutStatus(request['id'], 'rejected'),
-                            child: const Text("Reject", style: TextStyle(color: Colors.red)),
-                          ),
-                          const SizedBox(width: 8),
-                          ElevatedButton(
-                            onPressed: () => provider.updatePayoutStatus(request['id'], 'processed'),
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
-                            child: const Text("Mark as Processed"),
-                          ),
-                        ],
-                      ),
-                    ],
+                            Text(
+                              "₹${(request['amount'] ?? 0).toStringAsFixed(0)}",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                                color: Colors.green,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Requested on: ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.parse(request['requested_at'].toString()))}",
+                          style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                        ),
+                        const Divider(height: 24),
+                        const Text("Bank Details:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        const SizedBox(height: 8),
+                        _buildDetailRow("Bank", request['bank_details']?['bank_name'] ?? ''),
+                        _buildDetailRow("Account No", request['bank_details']?['account_number'] ?? ''),
+                        _buildDetailRow("IFSC", request['bank_details']?['ifsc_code'] ?? ''),
+                        const SizedBox(height: 20),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              onPressed: () => provider.updatePayoutStatus(request['id'], 'rejected'),
+                              child: const Text("Reject", style: TextStyle(color: Colors.red)),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              onPressed: () => provider.updatePayoutStatus(request['id'], 'paid'),
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
+                              child: const Text("Mark as Paid"),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           );
         },
       ),

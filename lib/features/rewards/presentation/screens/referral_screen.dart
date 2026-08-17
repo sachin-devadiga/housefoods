@@ -91,7 +91,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              "Invite your friends to HouseFoods. When they sign up using your code, both of you get ₹50 HouseCredits!",
+              "Invite your friends to Mealin. When they sign up using your code, both of you get ₹50 HouseCredits!",
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey[600], height: 1.5),
             ),

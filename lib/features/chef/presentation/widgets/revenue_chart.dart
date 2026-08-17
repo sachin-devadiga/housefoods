@@ -3,10 +3,20 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_theme.dart';
 
 class RevenueChart extends StatelessWidget {
-  const RevenueChart({super.key});
+  final List<Map<String, dynamic>> weeklyData;
+  const RevenueChart({super.key, this.weeklyData = const []});
 
   @override
   Widget build(BuildContext context) {
+    final data = weeklyData.length == 7 ? weeklyData : _emptyWeek();
+    double maxAmount = 0;
+    final spots = <FlSpot>[];
+    for (var i = 0; i < data.length; i++) {
+      final amount = (data[i]['amount'] ?? 0).toDouble();
+      if (amount > maxAmount) maxAmount = amount;
+      spots.add(FlSpot(i.toDouble(), amount));
+    }
+
     return Container(
       height: 200,
       padding: const EdgeInsets.only(right: 18, left: 12, top: 24, bottom: 12),
@@ -26,9 +36,12 @@ class RevenueChart extends StatelessWidget {
               sideTitles: SideTitles(
                 showTitles: true,
                 getTitlesWidget: (value, meta) {
-                  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-                  if (value.toInt() < 0 || value.toInt() >= days.length) return const SizedBox();
-                  return Text(days[value.toInt()], style: const TextStyle(fontSize: 10, color: Colors.grey));
+                  final index = value.toInt();
+                  if (index < 0 || index >= data.length) return const SizedBox();
+                  return Text(
+                    data[index]['day'].toString(),
+                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+                  );
                 },
               ),
             ),
@@ -36,15 +49,7 @@ class RevenueChart extends StatelessWidget {
           borderData: FlBorderData(show: false),
           lineBarsData: [
             LineChartBarData(
-              spots: [
-                const FlSpot(0, 1200),
-                const FlSpot(1, 1800),
-                const FlSpot(2, 1400),
-                const FlSpot(3, 2200),
-                const FlSpot(4, 1900),
-                const FlSpot(5, 2800),
-                const FlSpot(6, 3100),
-              ],
+              spots: spots,
               isCurved: true,
               color: AppTheme.secondaryColor,
               barWidth: 4,
@@ -59,5 +64,10 @@ class RevenueChart extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  List<Map<String, dynamic>> _emptyWeek() {
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return days.map((d) => {'day': d, 'amount': 0.0}).toList();
   }
 }

@@ -76,7 +76,10 @@ class SendOTPView(APIView):
         send_otp_email_async(otp.email, otp.code)
 
         tlog('Response sent')
-        return Response({'message': 'OTP sent successfully', 'email': email})
+        resp = {'message': 'OTP sent successfully', 'email': email}
+        if settings.DEBUG:
+            resp['otp_code'] = otp.code
+        return Response(resp)
 
 
 class VerifyOTPView(APIView):
@@ -186,6 +189,12 @@ class ProfileSetupView(APIView):
             profile.phone = serializer.validated_data.get('phone', '')
             profile.avatar_url = serializer.validated_data.get('avatar_url', '')
             profile.save()
+
+        if 'dietary_preferences' in serializer.validated_data:
+            profile.dietary_preferences = serializer.validated_data['dietary_preferences']
+        if 'allergies' in serializer.validated_data:
+            profile.allergies = serializer.validated_data['allergies']
+        profile.save()
 
         otp.delete()
 
@@ -407,9 +416,9 @@ class MenuCategoryViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         kitchen_id = self.kwargs.get('kitchen_pk')
         profile = self.request.user.profile
-        if profile.role == 'admin':
-            return MenuCategory.objects.filter(kitchen_id=kitchen_id).order_by('sort_order')
-        return MenuCategory.objects.filter(kitchen_id=kitchen_id, kitchen__chef=profile).order_by('sort_order')
+        if profile.role == 'chef':
+            return MenuCategory.objects.filter(kitchen_id=kitchen_id, kitchen__chef=profile).order_by('sort_order')
+        return MenuCategory.objects.filter(kitchen_id=kitchen_id).order_by('sort_order')
 
     def _get_kitchen(self):
         try:
@@ -441,9 +450,9 @@ class MenuItemViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         kitchen_id = self.kwargs.get('kitchen_pk')
         profile = self.request.user.profile
-        if profile.role == 'admin':
-            return MenuItem.objects.filter(kitchen_id=kitchen_id)
-        return MenuItem.objects.filter(kitchen_id=kitchen_id, kitchen__chef=profile)
+        if profile.role == 'chef':
+            return MenuItem.objects.filter(kitchen_id=kitchen_id, kitchen__chef=profile)
+        return MenuItem.objects.filter(kitchen_id=kitchen_id)
 
     def _get_kitchen(self):
         try:
@@ -475,9 +484,9 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         kitchen_id = self.kwargs.get('kitchen_pk')
         profile = self.request.user.profile
-        if profile.role == 'admin':
-            return SubscriptionPlan.objects.filter(kitchen_id=kitchen_id)
-        return SubscriptionPlan.objects.filter(kitchen_id=kitchen_id, kitchen__chef=profile)
+        if profile.role == 'chef':
+            return SubscriptionPlan.objects.filter(kitchen_id=kitchen_id, kitchen__chef=profile)
+        return SubscriptionPlan.objects.filter(kitchen_id=kitchen_id)
 
     def _get_kitchen(self):
         try:
@@ -509,10 +518,10 @@ class DailyMenuListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         kitchen_id = self.kwargs.get('kitchen_pk')
         profile = self.request.user.profile
-        if profile.role == 'admin':
-            qs = DailyMenu.objects.filter(kitchen_id=kitchen_id)
-        else:
+        if profile.role == 'chef':
             qs = DailyMenu.objects.filter(kitchen_id=kitchen_id, kitchen__chef=profile)
+        else:
+            qs = DailyMenu.objects.filter(kitchen_id=kitchen_id)
         start = self.request.query_params.get('start_date')
         end = self.request.query_params.get('end_date')
         if start:
@@ -567,6 +576,7 @@ class DailyMenuDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 class OrderListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
+    pagination_class = None
 
     def get_serializer_class(self):
         if self.request.method == 'POST':
@@ -617,10 +627,17 @@ class OrderDetailView(generics.RetrieveUpdateAPIView):
 class OrderStatusUpdateView(APIView):
     permission_classes = [IsAuthenticated]
 
+    DELIVERY_STATUS_MAP = {
+        'Preparing': 'ready_for_delivery',
+        'preparing': 'ready_for_delivery',
+        'Out for Delivery': 'picked_up',
+        'out for delivery': 'picked_up',
+        'Delivered': 'delivered',
+        'delivered': 'delivered',
+    }
+
     def post(self, request, pk):
         new_status = request.data.get('status')
-        if new_status not in ['active', 'paused', 'cancelled', 'completed']:
-            return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
         profile = request.user.profile
         try:
             order = Order.objects.get(pk=pk)
@@ -628,6 +645,18 @@ class OrderStatusUpdateView(APIView):
             return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
         if profile.role != 'admin' and order.customer != profile and order.kitchen.chef != profile:
             return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
+
+        if new_status in self.DELIVERY_STATUS_MAP:
+            order.delivery_status = self.DELIVERY_STATUS_MAP[new_status]
+            if order.delivery_status == 'delivered':
+                order.delivered_at = timezone.now()
+            elif order.delivery_status == 'picked_up':
+                order.picked_up_at = order.picked_up_at or timezone.now()
+            order.save()
+            return Response(OrderSerializer(order).data)
+
+        if new_status not in ['active', 'paused', 'cancelled', 'completed']:
+            return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
         order.status = new_status
         if new_status == 'paused':
             order.is_paused = True
@@ -708,8 +737,14 @@ class UpdateDeliveryStatusView(APIView):
 
     def post(self, request, pk):
         new_status = request.data.get('delivery_status')
+        otp_code = request.data.get('otp')
+
         if new_status not in ['picked_up', 'delivered']:
             return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if new_status == 'delivered' and not otp_code:
+            return Response({'error': 'OTP is required for delivery confirmation'}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             order = Order.objects.get(pk=pk, delivery_partner=request.user.profile)
             allowed = self.VALID_TRANSITIONS.get(order.delivery_status, [])
@@ -718,6 +753,12 @@ class UpdateDeliveryStatusView(APIView):
                     {'error': f'Cannot transition from {order.delivery_status} to {new_status}'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+
+            if new_status == 'delivered' and otp_code:
+                stored_otp = getattr(order, 'delivery_otp', None)
+                if stored_otp and stored_otp.strip() != otp_code.strip():
+                    return Response({'error': 'Invalid OTP. Please check the code and try again.'}, status=status.HTTP_400_BAD_REQUEST)
+
             order.delivery_status = new_status
             if new_status == 'picked_up':
                 order.picked_up_at = timezone.now()
@@ -727,6 +768,57 @@ class UpdateDeliveryStatusView(APIView):
             return Response(OrderSerializer(order).data)
         except Order.DoesNotExist:
             return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+class GenerateDeliveryOTPView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            order = Order.objects.get(pk=pk)
+        except Order.DoesNotExist:
+            return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if order.customer != request.user.profile:
+            return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
+
+        import random
+        otp = f'{random.randint(100000, 999999)}'
+        order.delivery_otp = otp
+        order.save(update_fields=['delivery_otp'])
+
+        return Response({
+            'message': 'OTP generated',
+            'otp': otp,
+            'hint': f'Your delivery OTP is {otp}',
+        })
+
+
+class VerifyDeliveryOTPView(APIView):
+    permission_classes = [IsDeliveryPartner]
+
+    def post(self, request, pk):
+        otp_code = request.data.get('otp', '').strip()
+        if not otp_code:
+            return Response({'error': 'OTP is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            order = Order.objects.get(pk=pk, delivery_partner=request.user.profile)
+        except Order.DoesNotExist:
+            return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        stored_otp = getattr(order, 'delivery_otp', None)
+        if not stored_otp:
+            return Response({'error': 'No OTP generated for this delivery'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if stored_otp.strip() != otp_code:
+            return Response({'error': 'Invalid OTP'}, status=status.HTTP_400_BAD_REQUEST)
+
+        order.delivery_status = 'delivered'
+        order.delivered_at = timezone.now()
+        order.save()
+
+        return Response(OrderSerializer(order).data)
 
 
 class DeliveryEarningsView(APIView):
@@ -938,6 +1030,23 @@ class DeliveryLogListView(generics.ListAPIView):
 
 class CreateDeliveryLogView(APIView):
     permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = request.user.profile
+        qs = DeliveryLog.objects.all()
+        if profile.role == 'chef':
+            qs = qs.filter(order__kitchen__chef=profile)
+        elif profile.role == 'delivery_partner':
+            qs = qs.filter(delivered_by=profile)
+        elif profile.role == 'customer':
+            qs = qs.filter(order__customer=profile)
+        status_filter = request.query_params.get('status')
+        if status_filter:
+            statuses = [s.strip() for s in status_filter.split(',') if s.strip()]
+            if statuses:
+                qs = qs.filter(status__in=statuses)
+        qs = qs.order_by('-date', '-id')
+        return Response(DeliveryLogSerializer(qs, many=True).data)
 
     def post(self, request):
         order_id = request.data.get('order')

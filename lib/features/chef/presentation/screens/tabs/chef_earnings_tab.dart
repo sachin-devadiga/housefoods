@@ -40,7 +40,7 @@ class ChefEarningsTab extends StatelessWidget {
                 children: [
                   _buildSmallCard("This Month", "₹${chefProvider.monthlyEarnings.toStringAsFixed(0)}", Colors.blue),
                   const SizedBox(width: 12),
-                  _buildSmallCard("Pending Payout", "₹0", Colors.orange),
+                  _buildSmallCard("Pending Payout", "₹${chefProvider.pendingPayout.toStringAsFixed(0)}", Colors.orange),
                 ],
               ),
 
@@ -51,8 +51,8 @@ class ChefEarningsTab extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               
-              // New Visual Analytics Chart
-              const RevenueChart(),
+              // Visual Analytics Chart (real data from orders)
+              RevenueChart(weeklyData: chefProvider.weeklyEarnings),
               
               const SizedBox(height: 32),
               const Text(
@@ -98,7 +98,7 @@ class ChefEarningsTab extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (context) => PayoutRequestScreen(
-                        availableBalance: chefProvider.totalEarnings,
+                        availableBalance: chefProvider.availableBalance,
                       ),
                     ),
                   );

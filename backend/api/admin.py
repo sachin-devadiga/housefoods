@@ -35,7 +35,7 @@ def veg_badge(is_veg):
 
 
 class BulkActionsAdmin(admin.ModelAdmin):
-    """Provides a useful action menu on every HouseFoods admin list page."""
+    """Provides a useful action menu on every Mealin admin list page."""
 
     actions = ['export_selected_records']
 

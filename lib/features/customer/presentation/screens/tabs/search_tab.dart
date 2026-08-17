@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../../core/theme/app_theme.dart';
@@ -17,6 +18,7 @@ class SearchTab extends StatefulWidget {
 class _SearchTabState extends State<SearchTab> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
+  Timer? _debounce;
 
   @override
   void initState() {
@@ -28,6 +30,7 @@ class _SearchTabState extends State<SearchTab> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _searchController.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -43,7 +46,10 @@ class _SearchTabState extends State<SearchTab> {
   }
 
   void _onSearch(String value) {
-    context.read<KitchenProvider>().searchKitchens(value);
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      context.read<KitchenProvider>().searchKitchens(value);
+    });
   }
 
   @override

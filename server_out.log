@@ -1,0 +1,120 @@
+Performing system checks...
+
+System check identified no issues (0 silenced).
+August 13, 2026 - 22:29:41
+Django version 4.2.30, using settings 'backend.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CTRL-BREAK.
+
+[TIMING] [0.000s] Request received
+[TIMING] [0.125s] OTP generated and saved: 594679
+[TIMING] [0.000s] Background email thread started[TIMING] [0.125s] Email thread dispatched to background
+
+[TIMING] [0.126s] Response sent
+[TIMING] [0.002s] Using Brevo REST API
+[TIMING] [0.003s] Sending HTTP POST to Brevo REST API...
+[TIMING] [1.128s] Brevo REST API status: 201
+[TIMING] [1.128s] Email sent via Brevo REST API
+[TIMING] [0.000s] Request received
+[TIMING] [0.124s] OTP generated and saved: 997511
+[TIMING] [0.000s] Background email thread started[TIMING] [0.125s] Email thread dispatched to background
+
+[TIMING] [0.126s] Response sent
+[TIMING] [0.001s] Using Brevo REST API
+[TIMING] [0.002s] Sending HTTP POST to Brevo REST API...
+[TIMING] [0.653s] Brevo REST API status: 201
+[TIMING] [0.654s] Email sent via Brevo REST API
+[TIMING] [0.000s] Request received
+[TIMING] [0.097s] OTP generated and saved: 188824
+[TIMING] [0.000s] Background email thread started[TIMING] [0.098s] Email thread dispatched to background
+
+[TIMING] [0.099s] Response sent
+[TIMING] [0.001s] Using Brevo REST API
+[TIMING] [0.002s] Sending HTTP POST to Brevo REST API...
+[TIMING] [0.622s] Brevo REST API status: 201
+[TIMING] [0.623s] Email sent via Brevo REST API
+[TIMING] [0.000s] Request received
+[TIMING] [0.110s] OTP generated and saved: 704389
+[TIMING] [0.000s] Background email thread started[TIMING] [0.111s] Email thread dispatched to background
+
+[TIMING] [0.112s] Response sent
+[TIMING] [0.002s] Using Brevo REST API
+[TIMING] [0.002s] Sending HTTP POST to Brevo REST API...
+[TIMING] [0.830s] Brevo REST API status: 201
+[TIMING] [0.831s] Email sent via Brevo REST API
+[TIMING] [0.000s] Request received
+[TIMING] [0.000s] Request received
+[TIMING] [0.000s] Request received
+[TIMING] [0.000s] Request received
+[TIMING] [0.105s] OTP generated and saved: 666832
+[TIMING] [0.000s] Background email thread started[TIMING] [0.106s] Email thread dispatched to background
+
+[TIMING] [0.107s] Response sent
+[TIMING] [0.001s] Using Brevo REST API
+[TIMING] [0.003s] Sending HTTP POST to Brevo REST API...
+[TIMING] [0.670s] Brevo REST API status: 201
+[TIMING] [0.670s] Email sent via Brevo REST API
+[TIMING] [0.000s] Request received
+[TIMING] [0.110s] OTP generated and saved: 526902
+[TIMING] [0.000s] Background email thread started[TIMING] [0.110s] Email thread dispatched to background
+
+[TIMING] [0.111s] Response sent
+[TIMING] [0.001s] Using Brevo REST API
+[TIMING] [0.002s] Sending HTTP POST to Brevo REST API...
+[TIMING] [0.758s] Brevo REST API status: 201
+[TIMING] [0.760s] Email sent via Brevo REST API
+[TIMING] [0.000s] Request received
+[TIMING] [0.208s] OTP generated and saved: 480711
+[TIMING] [0.000s] Background email thread started[TIMING] [0.209s] Email thread dispatched to background
+
+[TIMING] [0.210s] Response sent
+[TIMING] [0.001s] Using Brevo REST API
+[TIMING] [0.002s] Sending HTTP POST to Brevo REST API...
+[TIMING] [0.877s] Brevo REST API status: 201
+[TIMING] [0.878s] Email sent via Brevo REST API
+[TIMING] [0.000s] Request received
+[TIMING] [0.000s] Request received
+[TIMING] [0.104s] OTP generated and saved: 036392
+[TIMING] [0.000s] Background email thread started[TIMING] [0.105s] Email thread dispatched to background
+
+[TIMING] [0.106s] Response sent
+[TIMING] [0.002s] Using Brevo REST API
+[TIMING] [0.003s] Sending HTTP POST to Brevo REST API...
+[TIMING] [0.623s] Brevo REST API status: 201
+[TIMING] [0.625s] Email sent via Brevo REST API
+[TIMING] [0.000s] Request received
+[TIMING] [0.098s] OTP generated and saved: 360288
+[TIMING] [0.000s] Background email thread started[TIMING] [0.099s] Email thread dispatched to background
+
+[TIMING] [0.100s] Response sent[TIMING] [0.001s] Using Brevo REST API
+
+[TIMING] [0.003s] Sending HTTP POST to Brevo REST API...
+[TIMING] [0.686s] Brevo REST API status: 201
+[TIMING] [0.687s] Email sent via Brevo REST API
+[TIMING] [0.000s] Request received
+[TIMING] [0.098s] OTP generated and saved: 430329
+[TIMING] [0.000s] Background email thread started[TIMING] [0.099s] Email thread dispatched to background
+
+[TIMING] [0.099s] Response sent
+[TIMING] [0.001s] Using Brevo REST API
+[TIMING] [0.002s] Sending HTTP POST to Brevo REST API...
+[TIMING] [0.638s] Brevo REST API status: 201
+[TIMING] [0.639s] Email sent via Brevo REST API
+[TIMING] [0.000s] Request received
+[TIMING] [0.098s] OTP generated and saved: 623895
+[TIMING] [0.000s] Background email thread started[TIMING] [0.099s] Email thread dispatched to background
+
+[TIMING] [0.100s] Response sent
+[TIMING] [0.001s] Using Brevo REST API
+[TIMING] [0.002s] Sending HTTP POST to Brevo REST API...
+[TIMING] [0.621s] Brevo REST API status: 201
+[TIMING] [0.621s] Email sent via Brevo REST API
+[TIMING] [0.000s] Request received
+[TIMING] [0.107s] OTP generated and saved: 706070
+[TIMING] [0.000s] Background email thread started[TIMING] [0.108s] Email thread dispatched to background
+
+[TIMING] [0.109s] Response sent
+[TIMING] [0.001s] Using Brevo REST API
+[TIMING] [0.002s] Sending HTTP POST to Brevo REST API...
+[TIMING] [0.626s] Brevo REST API status: 201
+[TIMING] [0.627s] Email sent via Brevo REST API

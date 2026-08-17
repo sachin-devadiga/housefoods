@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/services/api_service.dart';
 import '../../../chef/presentation/providers/chef_provider.dart';
 import '../../data/repositories/user_repository_impl.dart';
 import '../../domain/models/user_model.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final UserModel user;
-  const EditProfileScreen({super.key, required this.user});
+  final ApiService? apiService;
+  const EditProfileScreen({super.key, required this.user, this.apiService});
 
   @override
   State<EditProfileScreen> createState() => _EditProfileScreenState();
@@ -29,11 +31,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _updatePhoto() async {
     final chefProvider = Provider.of<ChefProvider>(context, listen: false);
-    final url = await chefProvider.pickAndUploadImage(AppConstants.profileImagesPath);
-    if (url != null) {
-      setState(() {
-        _profileImageUrl = url;
-      });
+    try {
+      final url = await chefProvider.pickAndUploadImage(AppConstants.profileImagesPath);
+      if (url != null && url.isNotEmpty) {
+        setState(() {
+          _profileImageUrl = url;
+        });
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Failed to upload photo"), backgroundColor: AppTheme.errorColor),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Upload error: $e"), backgroundColor: AppTheme.errorColor),
+        );
+      }
     }
   }
 
@@ -53,7 +67,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           referralCode: widget.user.referralCode,
         );
 
-        await UserRepositoryImpl().updateUser(updatedUser);
+        await UserRepositoryImpl(apiService: widget.apiService).updateUser(updatedUser);
 
         if (mounted) {
           Navigator.pop(context);

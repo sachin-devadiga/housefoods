@@ -29,15 +29,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
       authProvider.sendOtp(
         email: email,
-        onSuccess: () {
+        onSuccess: (otpCode) {
+          if (!mounted) return;
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => OtpScreen(email: email, role: _selectedRole),
+              builder: (context) => OtpScreen(email: email, role: _selectedRole, otpCode: otpCode),
             ),
           );
         },
         onError: (error) {
+          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(error), backgroundColor: AppTheme.errorColor),
           );
@@ -62,7 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 const SizedBox(height: 40),
                 const Text(
-                  "Welcome to HouseFoods",
+                  "Welcome to Mealin",
                   style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),

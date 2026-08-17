@@ -53,14 +53,14 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   if (!kIsWeb && Platform.isAndroid) {
-    debugPrint('[HOUSEFOODS] Running on Android device');
-    debugPrint('[HOUSEFOODS] API URL: ${AppConstants.apiBaseUrl}');
+    debugPrint('[MEALIN] Running on Android device');
+    debugPrint('[MEALIN] API URL: ${AppConstants.apiBaseUrl}');
     if (AppConstants.apiBaseUrl.contains('10.0.2.2')) {
-      debugPrint('[HOUSEFOODS] For physical devices, run: flutter run --dart-define=API_BASE_URL=http://YOUR_LAN_IP:8000');
-      debugPrint('[HOUSEFOODS] Or use: adb reverse tcp:8000 tcp:8000  (then localhost works)');
+      debugPrint('[MEALIN] For physical devices, run: flutter run --dart-define=API_BASE_URL=http://YOUR_LAN_IP:8000');
+      debugPrint('[MEALIN] Or use: adb reverse tcp:8000 tcp:8000  (then localhost works)');
     }
   } else {
-    debugPrint('[HOUSEFOODS] API URL: ${AppConstants.apiBaseUrl}');
+    debugPrint('[MEALIN] API URL: ${AppConstants.apiBaseUrl}');
   }
 
   try {
@@ -72,11 +72,11 @@ void main() async {
     debugPrint("Critical initialization error: $e");
   }
 
-  runApp(const HouseFoodsApp());
+  runApp(const MealinApp());
 }
 
-class HouseFoodsApp extends StatelessWidget {
-  const HouseFoodsApp({super.key});
+class MealinApp extends StatelessWidget {
+  const MealinApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -99,7 +99,7 @@ class HouseFoodsApp extends StatelessWidget {
           ),
         ),
         ChangeNotifierProvider(create: (_) => KitchenProvider(kitchenRepository)),
-        ChangeNotifierProvider(create: (_) => OrderProvider(OrderRepositoryImpl(apiService: apiService))),
+        ChangeNotifierProvider(create: (_) => OrderProvider(OrderRepositoryImpl(apiService: apiService), apiService: apiService)),
         ChangeNotifierProvider(create: (_) => ChefProvider(apiService: apiService)),
         ChangeNotifierProvider(create: (_) => AdminProvider(apiService: apiService)),
         ChangeNotifierProvider(create: (_) => ReviewProvider(ReviewRepositoryImpl(apiService: apiService))),
@@ -119,7 +119,7 @@ class HouseFoodsApp extends StatelessWidget {
       child: Consumer2<ThemeProvider, LanguageProvider>(
         builder: (context, themeProvider, languageProvider, child) {
           return MaterialApp(
-            title: 'HouseFoods',
+            title: 'Mealin',
             debugShowCheckedModeBanner: false,
             navigatorKey: NavigationService.navigatorKey,
             theme: AppTheme.lightTheme,

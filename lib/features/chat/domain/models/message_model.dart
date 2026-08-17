@@ -25,10 +25,10 @@ class MessageModel {
   factory MessageModel.fromMap(Map<String, dynamic> map, String docId) {
     return MessageModel(
       id: docId,
-      senderId: map['senderId'] ?? '',
-      receiverId: map['receiverId'] ?? '',
-      text: map['text'] ?? '',
-      timestamp: map['timestamp'] as DateTime,
+      senderId: map['sender_details']?['uid'] ?? map['sender'].toString(),
+      receiverId: map['receiver_details']?['uid'] ?? map['receiver'].toString(),
+      text: map['message'] ?? map['text'] ?? '',
+      timestamp: DateTime.tryParse(map['created_at']?.toString() ?? map['timestamp']?.toString() ?? '') ?? DateTime.now(),
     );
   }
 }

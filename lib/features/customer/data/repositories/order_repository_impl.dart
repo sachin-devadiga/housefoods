@@ -26,8 +26,8 @@ class OrderRepositoryImpl implements OrderRepository {
 
   @override
   Future<List<OrderModel>> getCustomerOrders(String customerId) async {
-    final data = await _api.get(AppConstants.ordersEndpoint, queryParams: {'status': 'active'});
-    final list = (data['data'] as List?) ?? [];
+    final data = await _api.get(AppConstants.ordersEndpoint);
+    final list = (data['data'] as List?) ?? (data['results'] as List?) ?? [];
     return list
         .map((e) => OrderModel.fromMap(e as Map<String, dynamic>, e['id']?.toString() ?? ''))
         .toList();

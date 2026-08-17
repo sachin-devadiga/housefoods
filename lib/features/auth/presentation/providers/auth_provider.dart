@@ -27,15 +27,15 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> sendOtp({
     required String email,
-    required Function() onSuccess,
+    required Function(String? otpCode) onSuccess,
     required Function(String) onError,
   }) async {
     _setLoading(true);
     await _authRepository.sendOtp(
       email: email,
-      onSuccess: () {
+      onSuccess: (otpCode) {
         _setLoading(false);
-        onSuccess();
+        onSuccess(otpCode);
       },
       onError: (error) {
         _setLoading(false);
@@ -148,5 +148,15 @@ class AuthProvider extends ChangeNotifier {
     await _authService.logout();
     _userProfile = null;
     notifyListeners();
+  }
+
+  Future<void> refreshProfile() async {
+    try {
+      final profile = await _authService.tryAutoLogin();
+      if (profile != null) {
+        _userProfile = profile;
+        notifyListeners();
+      }
+    } catch (_) {}
   }
 }

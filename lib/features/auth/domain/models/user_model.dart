@@ -59,21 +59,23 @@ class UserModel {
     return UserModel(
       uid: map['uid'] ?? '',
       email: map['email'] ?? '',
-      phoneNumber: map['phoneNumber'] ?? '',
+      phoneNumber: map['phoneNumber'] ?? map['phone'] ?? '',
       name: map['name'] ?? '',
       role: map['role'] ?? 'customer',
-      profileImage: map['profileImage'],
-      createdAt: DateTime.parse(map['createdAt']),
+      profileImage: map['profileImage'] ?? map['avatar_url'],
+      createdAt: DateTime.tryParse(
+              map['createdAt']?.toString() ?? map['created_at']?.toString() ?? '') ??
+          DateTime.now(),
       addresses: (map['addresses'] as List? ?? [])
           .map((e) => AddressModel.fromMap(Map<String, dynamic>.from(e)))
           .toList(),
-      favoriteKitchenIds: List<String>.from(map['favoriteKitchenIds'] ?? []),
-      referralCode: map['referralCode'] ?? '',
-      referredBy: map['referredBy'],
-      walletBalance: (map['walletBalance'] ?? 0.0).toDouble(),
-      dietaryPreference: map['dietaryPreference'] ?? 'none',
+      favoriteKitchenIds: List<String>.from(map['favoriteKitchenIds'] ?? map['favorite_kitchen_ids'] ?? []),
+      referralCode: map['referralCode'] ?? map['referral_code'] ?? '',
+      referredBy: map['referredBy'] ?? map['referred_by'],
+      walletBalance: (map['walletBalance'] ?? map['wallet_balance'] ?? 0.0).toDouble(),
+      dietaryPreference: map['dietaryPreference'] ?? map['dietary_preference'] ?? 'none',
       allergies: List<String>.from(map['allergies'] ?? []),
-      fcmToken: map['fcmToken'],
+      fcmToken: map['fcmToken'] ?? map['fcm_token'],
     );
   }
 }

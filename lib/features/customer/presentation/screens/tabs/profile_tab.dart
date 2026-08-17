@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../../core/theme/app_theme.dart';
+import '../../../../../core/services/api_service.dart';
+import '../../../../../core/constants/app_constants.dart';
+import '../../../../../core/services/token_service.dart';
 import '../../../../auth/data/repositories/user_repository_impl.dart';
 import '../../../../auth/presentation/providers/auth_provider.dart';
 import '../../../../auth/presentation/screens/address_book_screen.dart';
@@ -21,14 +24,18 @@ class ProfileTab extends StatelessWidget {
     _showLoading(context);
 
     try {
-      final userModel = await UserRepositoryImpl().getUser(uid);
+      final api = ApiService(baseUrl: AppConstants.apiBaseUrl);
+      final token = await TokenService().getAccessToken();
+      if (token != null) api.setToken(token);
+      final userModel = await UserRepositoryImpl(apiService: api).getUser(uid);
       if (context.mounted) {
         Navigator.pop(context);
         if (userModel != null) {
-          Navigator.push(
+          await Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => EditProfileScreen(user: userModel)),
+            MaterialPageRoute(builder: (_) => EditProfileScreen(user: userModel, apiService: api)),
           );
+          await authProvider.refreshProfile();
         }
       }
     } catch (e) {
@@ -80,9 +87,9 @@ class ProfileTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final profile = authProvider.userProfile;
-    final name = profile?['name'] ?? 'HouseFoods User';
+    final name = profile?['name'] ?? 'Mealin User';
     final phone = profile?['phone'] ?? '';
-    final photoUrl = profile?['photoUrl'];
+    final photoUrl = profile?['avatar_url'] ?? profile?['avatarUrl'] ?? profile?['photoUrl'];
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20.0),

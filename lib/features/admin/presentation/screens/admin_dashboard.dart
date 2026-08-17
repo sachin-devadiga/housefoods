@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../../core/theme/app_theme.dart';
+import '../../../auth/presentation/screens/login_screen.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/admin_provider.dart';
-import '../widgets/platform_revenue_chart.dart';
-import '../widgets/user_distribution_chart.dart';
-import 'verify_kitchens_screen.dart';
-import 'payout_management_screen.dart';
-import 'admin_tickets_screen.dart';
-import 'manage_coupons_screen.dart';
-import 'manage_banners_screen.dart';
 import 'manage_users_screen.dart';
 import 'manage_kitchens_screen.dart';
+import 'payout_management_screen.dart';
+import 'verify_kitchens_screen.dart';
+import 'verify_delivery_partners_screen.dart';
+import 'manage_coupons_screen.dart';
+import 'manage_banners_screen.dart';
+import 'admin_tickets_screen.dart';
+import 'admin_orders_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -24,130 +27,188 @@ class _AdminDashboardState extends State<AdminDashboard> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AdminProvider>().fetchPlatformStats();
+      context.read<AdminProvider>().fetchPendingDocuments();
     });
+  }
+
+  void _showLogoutDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to log out?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await Provider.of<AuthProvider>(context, listen: false).logout();
+              if (mounted) {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (route) => false,
+                );
+              }
+            },
+            child: const Text('Logout', style: TextStyle(color: AppTheme.errorColor)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
-      appBar: AppBar(
-        title: const Text("HouseFoods Admin"),
-        backgroundColor: Colors.indigo,
-        foregroundColor: Colors.white,
-      ),
-      body: Consumer<AdminProvider>(
-        builder: (context, provider, child) {
-          if (provider.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "Executive Overview",
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 20),
-                
-                // KPI Row
-                Row(
-                  children: [
-                    _buildSmallStatCard(
-                      "Total Users", 
-                      provider.totalUsers.toString(), 
-                      Icons.people, 
-                      Colors.blue,
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ManageUsersScreen())),
+    return Consumer<AdminProvider>(
+      builder: (context, provider, child) {
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Admin Dashboard'),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: () {
+                  provider.fetchPlatformStats();
+                  provider.fetchPendingDocuments();
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.logout),
+                onPressed: _showLogoutDialog,
+              ),
+            ],
+          ),
+          body: provider.isLoading && provider.totalUsers == 0
+              ? const Center(child: CircularProgressIndicator())
+              : RefreshIndicator(
+                  onRefresh: () async {
+                    await provider.fetchPlatformStats();
+                    await provider.fetchPendingDocuments();
+                  },
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildKPIs(provider),
+                        const SizedBox(height: 20),
+                        _buildQuickActions(),
+                        const SizedBox(height: 20),
+                        _buildPendingSection(provider),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    _buildSmallStatCard(
-                      "Kitchens", 
-                      provider.totalKitchens.toString(), 
-                      Icons.restaurant, 
-                      Colors.orange,
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ManageKitchensScreen())),
-                    ),
-                  ],
+                  ),
                 ),
-                const SizedBox(height: 12),
-                _buildSmallStatCard(
-                  "Total GMV", 
-                  "₹${provider.totalPlatformRevenue.toStringAsFixed(0)}", 
-                  Icons.payments, 
-                  Colors.green,
-                  fullWidth: true,
-                ),
-                
-                const SizedBox(height: 32),
-                const Text("Marketplace Health", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 16),
-                
-                UserDistributionChart(
-                  totalCustomers: (provider.totalUsers - provider.totalKitchens).clamp(0, 999999),
-                  totalChefs: provider.totalKitchens,
-                ),
-
-                const SizedBox(height: 32),
-                const Text("Revenue Growth", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 16),
-                
-                const PlatformRevenueChart(),
-
-                const SizedBox(height: 32),
-                _buildSectionHeader("Quick Actions", () {}),
-                const SizedBox(height: 16),
-                _buildAdminActions(context),
-                
-                const SizedBox(height: 32),
-                _buildSectionHeader("Recent Activity", () {}),
-                const SizedBox(height: 16),
-                _buildActivityItem("Subscription #1024", "Customer: Sachin", "₹1,200", "2 mins ago"),
-                _buildActivityItem("Payout Request", "Chef: Rahul", "₹4,500", "1 hour ago", onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const PayoutManagementScreen()));
-                }),
-                const SizedBox(height: 20),
-              ],
-            ),
-          );
-        },
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildSectionHeader(String title, VoidCallback onTap) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildKPIs(AdminProvider provider) {
+    return GridView.count(
+      crossAxisCount: 3,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      childAspectRatio: 1.2,
       children: [
-        Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        TextButton(onPressed: onTap, child: const Text("View All")),
+        _kpiCard(Icons.person, '${provider.totalCustomers}', 'Customers', Colors.blue),
+        _kpiCard(Icons.restaurant, '${provider.totalChefs}', 'Chefs', Colors.orange),
+        _kpiCard(Icons.local_shipping, '${provider.totalDeliveryPartners}', 'Riders', Colors.green),
+        _kpiCard(Icons.receipt_long, '${provider.totalOrders}', 'Orders', Colors.purple),
+        _kpiCard(Icons.monetization_on, '₹${provider.totalPlatformRevenue.toStringAsFixed(0)}', 'Revenue', Colors.teal),
+        _kpiCard(Icons.pending_actions, '${provider.pendingKitchenCount + provider.pendingDocumentCount}', 'Pending', Colors.red),
       ],
     );
   }
 
-  Widget _buildSmallStatCard(String title, String value, IconData icon, Color color, {bool fullWidth = false, VoidCallback? onTap}) {
-    return Expanded(
-      flex: fullWidth ? 0 : 1,
-      child: GestureDetector(
+  Widget _kpiCard(IconData icon, String value, String label, Color color) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(height: 6),
+            Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+            const SizedBox(height: 2),
+            Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[600]), textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickActions() {
+    final actions = [
+      _actionTile(Icons.verified_user, 'Verify Kitchens', '${context.read<AdminProvider>().pendingKitchenCount} pending', Colors.orange, () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const VerifyKitchensScreen()));
+      }),
+      _actionTile(Icons.badge, 'Verify Riders', '${context.read<AdminProvider>().pendingDocumentCount} pending', Colors.blue, () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const VerifyDeliveryPartnersScreen()));
+      }),
+      _actionTile(Icons.receipt_long, 'Orders', 'View all orders', Colors.purple, () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminOrdersScreen()));
+      }),
+      _actionTile(Icons.monetization_on, 'Payouts', 'Manage payouts', Colors.green, () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const PayoutManagementScreen()));
+      }),
+      _actionTile(Icons.people, 'Users', 'Manage users', Colors.teal, () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const ManageUsersScreen()));
+      }),
+      _actionTile(Icons.restaurant_menu, 'Kitchens', 'Manage kitchens', Colors.deepOrange, () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const ManageKitchensScreen()));
+      }),
+      _actionTile(Icons.discount, 'Coupons', 'Manage coupons', Colors.indigo, () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const ManageCouponsScreen()));
+      }),
+      _actionTile(Icons.photo_library, 'Banners', 'Manage banners', Colors.pink, () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const ManageBannersScreen()));
+      }),
+      _actionTile(Icons.support_agent, 'Tickets', 'Support tickets', Colors.brown, () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminTicketsScreen()));
+      }),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Quick Actions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        GridView.count(
+          crossAxisCount: 3,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 1.1,
+          children: actions,
+        ),
+      ],
+    );
+  }
+
+  Widget _actionTile(IconData icon, String title, String subtitle, Color color, VoidCallback onTap) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
         onTap: onTap,
-        child: Container(
-          width: fullWidth ? double.infinity : null,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
-          ),
+        child: Padding(
+          padding: const EdgeInsets.all(10),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: color, size: 24),
-              const SizedBox(height: 12),
-              Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              Text(title, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+              Icon(icon, color: color, size: 28),
+              const SizedBox(height: 6),
+              Text(title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+              const SizedBox(height: 2),
+              Text(subtitle, style: TextStyle(fontSize: 9, color: Colors.grey[500]), textAlign: TextAlign.center),
             ],
           ),
         ),
@@ -155,67 +216,42 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  Widget _buildActivityItem(String title, String subtitle, String trailing, String time, {VoidCallback? onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text(subtitle, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-              ],
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(trailing, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
-                Text(time, style: TextStyle(color: Colors.grey[400], fontSize: 10)),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAdminActions(BuildContext context) {
+  Widget _buildPendingSection(AdminProvider provider) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _actionTile("Verify New Kitchens", Icons.verified_user, Colors.indigo, () {
-          Navigator.push(context, MaterialPageRoute(builder: (context) => const VerifyKitchensScreen()));
-        }),
-        _actionTile("Manage Payouts", Icons.account_balance_wallet, Colors.green, () {
-          Navigator.push(context, MaterialPageRoute(builder: (context) => const PayoutManagementScreen()));
-        }),
-        _actionTile("Home Screen Banners", Icons.add_photo_alternate, Colors.blue, () {
-          Navigator.push(context, MaterialPageRoute(builder: (context) => const ManageBannersScreen()));
-        }),
-        _actionTile("Promotions & Coupons", Icons.local_offer, Colors.orange, () {
-          Navigator.push(context, MaterialPageRoute(builder: (context) => const ManageCouponsScreen()));
-        }),
-        _actionTile("Support Tickets", Icons.support_agent, Colors.red, () {
-          Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminTicketsScreen()));
-        }),
+        const Text('Pending Reviews', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        if (provider.pendingKitchenCount > 0)
+          _pendingCard(Icons.restaurant, '${provider.pendingKitchenCount} kitchens awaiting approval', Colors.orange, () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const VerifyKitchensScreen()));
+          }),
+        if (provider.pendingDocumentCount > 0)
+          _pendingCard(Icons.badge, '${provider.pendingDocumentCount} rider documents awaiting review', Colors.blue, () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const VerifyDeliveryPartnersScreen()));
+          }),
+        if (provider.pendingKitchenCount == 0 && provider.pendingDocumentCount == 0)
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: const Padding(
+              padding: EdgeInsets.all(20),
+              child: Center(
+                child: Text('No pending reviews', style: TextStyle(color: Colors.grey)),
+              ),
+            ),
+          ),
       ],
     );
   }
 
-  Widget _actionTile(String title, IconData icon, Color color, VoidCallback onTap) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+  Widget _pendingCard(IconData icon, String text, Color color, VoidCallback onTap) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
-        tileColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         leading: Icon(icon, color: color),
-        title: Text(title),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+        title: Text(text, style: const TextStyle(fontSize: 14)),
+        trailing: const Icon(Icons.chevron_right),
         onTap: onTap,
       ),
     );

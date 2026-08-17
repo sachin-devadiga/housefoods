@@ -1,12 +1,12 @@
 databases:
-  - name: housefoods-db
+  - name: mealin-db
     plan: free
-    databaseName: housefoods
-    user: housefoods
+    databaseName: mealin
+    user: mealin
 
 services:
   - type: web
-    name: housefoods-api
+    name: mealin-api
     runtime: python
     rootDir: backend
     buildCommand: bash build.sh
@@ -14,9 +14,27 @@ services:
     envVars:
       - key: DATABASE_URL
         fromDatabase:
-          name: housefoods-db
+          name: mealin-db
           property: connectionString
       - key: DJANGO_SECRET_KEY
         generateValue: true
       - key: DEBUG
         value: "False"
+      - key: ALLOWED_HOSTS
+        value: "*"
+      - key: BREVO_SMTP_HOST
+        value: "smtp-relay.brevo.com"
+      - key: BREVO_SMTP_PORT
+        value: "587"
+      - key: BREVO_SMTP_TLS
+        value: "True"
+      - key: BREVO_SMTP_USER
+        sync: false
+      - key: BREVO_SMTP_PASSWORD
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        value: "sachins43270@gmail.com"
+      - key: BREVO_SENDER_NAME
+        value: "Housefoods"
+      - key: BREVO_API_KEY
+        sync: false

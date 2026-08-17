@@ -85,7 +85,7 @@ class _PayoutHistoryScreenState extends State<PayoutHistoryScreen> {
                         _buildInfoRow("Bank", _mapValue(request, 'bank_name', 'bankName')),
                         _buildInfoRow("Account", "****${_maskAccount(_mapValue(request, 'account_number', 'accountNumber'))}"),
                         _buildInfoRow("Requested", _formatDate(_mapValue(request, 'requested_at', 'requestedAt'))),
-                        if ((request['status'] ?? '') == 'processed')
+                        if ((request['status'] ?? '') == 'paid' || (request['status'] ?? '') == 'approved')
                           _buildInfoRow("Processed", _formatDate(_mapValue(request, 'processed_at', 'processedAt')), 
                                         isBold: true, color: Colors.green),
                       ],
@@ -140,7 +140,8 @@ class _PayoutHistoryScreenState extends State<PayoutHistoryScreen> {
   Widget _buildStatusBadge(String status) {
     Color color;
     switch (status.toLowerCase()) {
-      case 'processed':
+      case 'paid':
+      case 'approved':
         color = Colors.green;
         break;
       case 'rejected':

@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../../core/theme/app_theme.dart';
+import '../../../../../core/services/api_service.dart';
+import '../../../../../core/constants/app_constants.dart';
+import '../../../../../core/services/token_service.dart';
 import '../../../../auth/presentation/providers/auth_provider.dart';
 import '../../../../auth/presentation/screens/login_screen.dart';
+import '../../../../auth/presentation/screens/edit_profile_screen.dart';
+import '../../../../auth/domain/models/user_model.dart';
 import '../../../../customer/domain/models/kitchen_model.dart';
 import '../../providers/chef_provider.dart';
 import '../edit_kitchen_screen.dart';
 import '../manage_hours_screen.dart';
+import '../payout_history_screen.dart';
 
 class ChefProfileTab extends StatelessWidget {
   const ChefProfileTab({super.key});
@@ -62,14 +68,40 @@ class ChefProfileTab extends StatelessWidget {
             Icons.account_balance,
             "Bank Account",
             "Manage payout destinations",
-            () {},
+            () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PayoutHistoryScreen()),
+              );
+            },
           ),
           _buildOption(
             context,
             Icons.person_outline,
             "Personal Information",
             "Update your profile photo",
-            () {},
+            () async {
+              final uid = profile?['uid']?.toString() ?? '';
+              if (uid.isNotEmpty) {
+                final api = ApiService(baseUrl: AppConstants.apiBaseUrl);
+                final token = await TokenService().getAccessToken();
+                if (token != null) api.setToken(token);
+                if (!context.mounted) return;
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => EditProfileScreen(
+                      user: UserModel.fromMap(profile ?? const {}),
+                      apiService: api,
+                    ),
+                  ),
+                );
+                if (context.mounted) {
+                  final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                  await authProvider.refreshProfile();
+                }
+              }
+            },
           ),
           
           const SizedBox(height: 32),

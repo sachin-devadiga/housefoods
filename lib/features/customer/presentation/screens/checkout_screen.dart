@@ -97,7 +97,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (profile == null) return;
 
     final uid = profile['uid'] ?? '';
-    final email = profile['email'] ?? 'customer@housefoods.com';
+    final email = profile['email'] ?? 'customer@mealin.com';
     final phone = profile['phone'] ?? '';
 
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
@@ -125,6 +125,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       userEmail: email,
       userPhone: phone,
       onSuccess: (finalOrder) {
+        if (!mounted) return;
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -133,6 +134,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         );
       },
       onError: (error) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(error), backgroundColor: AppTheme.errorColor),
         );
@@ -263,7 +265,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (_user == null || _user!.addresses.isEmpty) {
       return InkWell(
         onTap: () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => AddAddressScreen(user: _user!))).then((_) => _loadUser());
+          if (_user != null) {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => AddAddressScreen(user: _user!))).then((_) => _loadUser());
+          }
         },
         child: Container(
           padding: const EdgeInsets.all(16),

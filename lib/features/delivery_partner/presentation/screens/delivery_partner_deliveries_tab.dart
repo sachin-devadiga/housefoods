@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../providers/delivery_partner_provider.dart';
+import 'delivery_otp_screen.dart';
+import 'delivery_tracking_map_screen.dart';
 
 String _shortId(dynamic id, {int length = 8}) {
   final s = id?.toString() ?? '';
@@ -41,8 +43,13 @@ class DeliveryPartnerDeliveriesTab extends StatelessWidget {
               itemCount: provider.myDeliveries.length,
               itemBuilder: (context, index) {
                 final delivery = provider.myDeliveries[index];
-                final deliveryId = delivery['deliveryId'] ?? delivery['id'];
-                final status = delivery['status'] ?? 'assigned';
+                final deliveryId = delivery['id'];
+                final status = delivery['delivery_status'] ?? 'assigned';
+                final customerDetails = delivery['customer_details'] as Map<String, dynamic>?;
+                final customerName = customerDetails?['name'] as String? ?? delivery['customer_name'] ?? 'Customer';
+                final deliveryAddress = delivery['delivery_address'] ?? '';
+                final kitchenName = delivery['kitchen_name'] ?? delivery['kitchen_details']?['name'] ?? 'Kitchen';
+                final deliveryFee = delivery['delivery_fee'] ?? 0;
 
                 Color statusColor;
                 String statusText;
@@ -84,59 +91,141 @@ class DeliveryPartnerDeliveriesTab extends StatelessWidget {
                             const SizedBox(width: 8),
                             Text(statusText, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold)),
                             const Spacer(),
-                            Text('#${_shortId(delivery['orderId'])}',
+                            Text('#${_shortId(delivery['id'])}',
                                 style: TextStyle(color: Colors.grey[500], fontSize: 12)),
                           ],
                         ),
                         const SizedBox(height: 12),
                         Row(
                           children: [
+                            const Icon(Icons.restaurant, color: Colors.orange, size: 18),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(kitchenName, style: const TextStyle(fontWeight: FontWeight.w500)),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
                             const Icon(Icons.location_on, color: AppTheme.primaryColor, size: 18),
                             const SizedBox(width: 6),
                             Expanded(
-                              child: Text(delivery['deliveryAddress'] ?? '',
+                              child: Text(deliveryAddress,
                                   style: const TextStyle(fontWeight: FontWeight.w500)),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         Row(
                           children: [
                             const Icon(Icons.person, color: Colors.grey, size: 18),
                             const SizedBox(width: 6),
-                            Text(delivery['customerName'] ?? 'Customer'),
+                            Text(customerName),
+                            const Spacer(),
+                            if (deliveryFee is num && deliveryFee > 0)
+                              Text('₹${deliveryFee.toStringAsFixed(0)}',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
                           ],
                         ),
                         if (status == 'assigned') ...[
                           const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: () {
-                                if (deliveryId != null) {
-                                  provider.updateDeliveryStatus(deliveryId, 'picked_up');
-                                }
-                              },
-                              icon: const Icon(Icons.delivery_dining),
-                              label: const Text('Mark Picked Up'),
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-                            ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: () {
+                                    if (deliveryId != null) {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => DeliveryTrackingMapScreen(
+                                            deliveryId: deliveryId,
+                                            kitchenName: kitchenName,
+                                            deliveryAddress: deliveryAddress,
+                                            status: status,
+                                            delivery: delivery,
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  icon: const Icon(Icons.map),
+                                  label: const Text('View Map'),
+                                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: () {
+                                    if (deliveryId != null) {
+                                      _confirmAction(
+                                        context,
+                                        title: 'Mark as Picked Up?',
+                                        message: 'Confirm you have picked up the meal from $kitchenName',
+                                        onConfirm: () => provider.updateDeliveryStatus(deliveryId, 'picked_up'),
+                                      );
+                                    }
+                                  },
+                                  icon: const Icon(Icons.delivery_dining),
+                                  label: const Text('Mark Picked Up'),
+                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                         if (status == 'picked_up') ...[
                           const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: () {
-                                if (deliveryId != null) {
-                                  provider.updateDeliveryStatus(deliveryId, 'delivered');
-                                }
-                              },
-                              icon: const Icon(Icons.check_circle),
-                              label: const Text('Mark Delivered'),
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                            ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => DeliveryTrackingMapScreen(
+                                          deliveryId: deliveryId,
+                                          kitchenName: kitchenName,
+                                          deliveryAddress: deliveryAddress,
+                                          status: status,
+                                          delivery: delivery,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.map),
+                                  label: const Text('View Map'),
+                                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: () async {
+                                    if (deliveryId != null) {
+                                      final result = await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => DeliveryOtpScreen(
+                                            deliveryId: deliveryId,
+                                            customerName: customerName,
+                                          ),
+                                        ),
+                                      );
+                                      if (result == true) {
+                                        provider.fetchMyDeliveries();
+                                      }
+                                    }
+                                  },
+                                  icon: const Icon(Icons.lock_outline),
+                                  label: const Text('Enter OTP & Deliver'),
+                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ],
@@ -147,6 +236,26 @@ class DeliveryPartnerDeliveriesTab extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+
+  void _confirmAction(BuildContext context, {required String title, required String message, required VoidCallback onConfirm}) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              onConfirm();
+            },
+            child: const Text('Confirm'),
+          ),
+        ],
       ),
     );
   }

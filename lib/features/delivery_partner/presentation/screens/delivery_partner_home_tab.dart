@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/api_service.dart';
+import '../../../../core/services/token_service.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../providers/delivery_partner_provider.dart';
 import 'delivery_document_upload_screen.dart';
@@ -15,12 +16,19 @@ class DeliveryPartnerHomeTab extends StatefulWidget {
 
 class _DeliveryPartnerHomeTabState extends State<DeliveryPartnerHomeTab> {
   bool? _isVerified;
+  String? _verificationError;
   late ApiService _api;
 
   @override
   void initState() {
     super.initState();
     _api = ApiService(baseUrl: AppConstants.apiBaseUrl);
+    _initAuth();
+  }
+
+  Future<void> _initAuth() async {
+    final token = await TokenService().getAccessToken();
+    if (token != null) _api.setToken(token);
     _checkVerification();
   }
 
@@ -34,8 +42,16 @@ class _DeliveryPartnerHomeTabState extends State<DeliveryPartnerHomeTab> {
     try {
       final data = await _api.get(AppConstants.deliveryAvailabilityEndpoint);
       if (mounted) setState(() => _isVerified = data['is_verified'] == true);
-    } catch (_) {
-      if (mounted) setState(() => _isVerified = false);
+    } catch (e) {
+      final msg = e.toString();
+      if (mounted) {
+        setState(() {
+          _isVerified = false;
+          _verificationError = msg.contains('404') || msg.contains('403')
+              ? 'Documents not submitted yet'
+              : 'Could not verify. Check connection and retry.';
+        });
+      }
     }
   }
 
@@ -60,11 +76,12 @@ class _DeliveryPartnerHomeTabState extends State<DeliveryPartnerHomeTab> {
                     const SizedBox(height: 16),
                     Text('Verification Pending', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.orange[700])),
                     const SizedBox(height: 8),
-                    Text('Upload your documents and wait for admin approval to start delivering.',
+                    Text(_verificationError ?? 'Upload your documents and wait for admin approval to start delivering.',
                         textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[600])),
                     const SizedBox(height: 24),
                     ElevatedButton.icon(
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DeliveryDocumentUploadScreen())),
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DeliveryDocumentUploadScreen()))
+                          .then((_) => _checkVerification()),
                       icon: const Icon(Icons.upload_file),
                       label: const Text('Upload Documents'),
                     ),
@@ -123,8 +140,10 @@ class _DeliveryPartnerHomeTabState extends State<DeliveryPartnerHomeTab> {
               itemCount: provider.availableOrders.length,
               itemBuilder: (context, index) {
                 final order = provider.availableOrders[index];
-                final orderId = order['orderId'];
+                final orderId = order['id'];
                 if (orderId == null) return const SizedBox.shrink();
+                final kitchenDetails = order['kitchen_details'] as Map<String, dynamic>?;
+                final deliveryFee = order['delivery_fee'];
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -138,7 +157,7 @@ class _DeliveryPartnerHomeTabState extends State<DeliveryPartnerHomeTab> {
                             const Icon(Icons.location_on, color: AppTheme.primaryColor, size: 20),
                             const SizedBox(width: 8),
                             Expanded(
-                              child: Text(order['deliveryAddress'] ?? 'Unknown address',
+                              child: Text(order['delivery_address'] ?? 'Unknown address',
                                   style: const TextStyle(fontWeight: FontWeight.bold)),
                             ),
                           ],
@@ -148,7 +167,7 @@ class _DeliveryPartnerHomeTabState extends State<DeliveryPartnerHomeTab> {
                           children: [
                             const Icon(Icons.restaurant, color: Colors.grey, size: 20),
                             const SizedBox(width: 8),
-                            Text('From: ${order['kitchenName'] ?? 'Kitchen'}'),
+                            Text('From: ${order['kitchen_name'] ?? kitchenDetails?['name'] ?? 'Kitchen'}'),
                           ],
                         ),
                         const SizedBox(height: 8),
@@ -156,7 +175,7 @@ class _DeliveryPartnerHomeTabState extends State<DeliveryPartnerHomeTab> {
                           children: [
                             const Icon(Icons.currency_rupee, color: Colors.green, size: 20),
                             const SizedBox(width: 8),
-                            Text('Delivery fee: ₹${order['deliveryFee'] ?? '0'}',
+                            Text('Delivery fee: ₹${deliveryFee ?? '0'}',
                                 style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
                           ],
                         ),

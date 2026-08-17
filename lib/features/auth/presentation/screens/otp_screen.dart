@@ -6,12 +6,14 @@ import '../providers/auth_provider.dart';
 import '../../../chef/presentation/screens/chef_dashboard.dart';
 import '../../../customer/presentation/screens/customer_dashboard.dart';
 import '../../../delivery_partner/presentation/screens/delivery_partner_dashboard.dart';
+import '../../../admin/presentation/screens/admin_dashboard.dart';
 import 'profile_setup_screen.dart';
 
 class OtpScreen extends StatefulWidget {
   final String email;
   final String role;
-  const OtpScreen({super.key, required this.email, required this.role});
+  final String? otpCode;
+  const OtpScreen({super.key, required this.email, required this.role, this.otpCode});
 
   @override
   State<OtpScreen> createState() => _OtpScreenState();
@@ -22,10 +24,12 @@ class _OtpScreenState extends State<OtpScreen> {
   bool _loading = false;
   int _secondsRemaining = 60;
   Timer? _timer;
+  String? _otpCode;
 
   @override
   void initState() {
     super.initState();
+    _otpCode = widget.otpCode;
     _startTimer();
   }
 
@@ -92,6 +96,9 @@ class _OtpScreenState extends State<OtpScreen> {
       case 'delivery_partner':
         destination = const DeliveryPartnerDashboard();
         break;
+      case 'admin':
+        destination = const AdminDashboard();
+        break;
       default:
         destination = const CustomerDashboard();
     }
@@ -117,10 +124,11 @@ class _OtpScreenState extends State<OtpScreen> {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       await authProvider.sendOtp(
         email: widget.email,
-        onSuccess: () {
+        onSuccess: (otpCode) {
           if (!mounted) return;
           _otpController.clear();
           _startTimer();
+          setState(() => _otpCode = otpCode);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('OTP resent'), backgroundColor: AppTheme.secondaryColor),
           );
@@ -148,6 +156,28 @@ class _OtpScreenState extends State<OtpScreen> {
               const Text('Verification Code', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Text('Sent to ${widget.email}', style: TextStyle(fontSize: 16, color: Colors.grey[600])),
+              if (_otpCode != null) ...[
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.green.shade200),
+                  ),
+                  child: Column(
+                    children: [
+                      Text('Your OTP', style: TextStyle(fontSize: 14, color: Colors.green.shade700)),
+                      const SizedBox(height: 4),
+                      Text(
+                        _otpCode!,
+                        style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, letterSpacing: 8, color: Colors.green.shade800, fontFamily: 'monospace'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 40),
               TextField(
                 controller: _otpController,

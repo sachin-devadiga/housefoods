@@ -54,12 +54,10 @@ class _AddAddressScreenState extends State<AddAddressScreen> {
         await UserRepositoryImpl().updateAddresses(widget.user.uid, updatedAddresses);
 
         if (mounted) {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Address saved successfully"), backgroundColor: AppTheme.secondaryColor),
-          );
+          Navigator.pop(context, true);
         }
       } catch (e) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Error: $e"), backgroundColor: AppTheme.errorColor),
         );

@@ -3,9 +3,11 @@ import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/api_service.dart';
+import '../../../../core/services/token_service.dart';
 import '../../../auth/data/repositories/user_repository_impl.dart';
 import '../../../auth/presentation/providers/auth_provider.dart' as app;
 import '../../../auth/presentation/screens/edit_profile_screen.dart';
+import '../../../auth/presentation/screens/login_screen.dart';
 import 'delivery_document_upload_screen.dart';
 
 class DeliveryPartnerProfileTab extends StatefulWidget {
@@ -18,6 +20,7 @@ class DeliveryPartnerProfileTab extends StatefulWidget {
 class _DeliveryPartnerProfileTabState extends State<DeliveryPartnerProfileTab> {
   String _name = 'Delivery Partner';
   String _email = '';
+  String? _avatarUrl;
   bool _isAvailable = true;
   bool _isVerified = false;
   late ApiService _api;
@@ -27,9 +30,21 @@ class _DeliveryPartnerProfileTabState extends State<DeliveryPartnerProfileTab> {
     super.initState();
     _api = ApiService(baseUrl: AppConstants.apiBaseUrl);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadProfile();
-      _loadAvailability();
+      _initAuth();
     });
+  }
+
+  @override
+  void dispose() {
+    _api.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initAuth() async {
+    final token = await TokenService().getAccessToken();
+    if (token != null) _api.setToken(token);
+    _loadProfile();
+    _loadAvailability();
   }
 
   void _loadProfile() {
@@ -39,6 +54,7 @@ class _DeliveryPartnerProfileTabState extends State<DeliveryPartnerProfileTab> {
       if (profile != null) {
         _name = profile['name']?.toString() ?? 'Delivery Partner';
         _email = profile['email']?.toString() ?? '';
+        _avatarUrl = profile['avatar_url']?.toString() ?? profile['avatarUrl']?.toString();
         _isVerified = profile['is_verified'] == true;
       }
     } catch (e) {
@@ -124,7 +140,12 @@ class _DeliveryPartnerProfileTabState extends State<DeliveryPartnerProfileTab> {
             CircleAvatar(
               radius: 48,
               backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.1),
-              child: const Icon(Icons.person, size: 48, color: AppTheme.primaryColor),
+              backgroundImage: _avatarUrl != null && _avatarUrl!.isNotEmpty
+                  ? NetworkImage(_avatarUrl!)
+                  : null,
+              child: _avatarUrl == null || _avatarUrl!.isEmpty
+                  ? const Icon(Icons.person, size: 48, color: AppTheme.primaryColor)
+                  : null,
             ),
             const SizedBox(height: 16),
             Text(_name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
@@ -162,11 +183,30 @@ class _DeliveryPartnerProfileTabState extends State<DeliveryPartnerProfileTab> {
             _menuItem(context, Icons.help, 'Help & Support', _showContactDialog),
             const Divider(),
             _menuItem(context, Icons.logout, 'Logout', () {
-              try {
-                Provider.of<app.AuthProvider>(context, listen: false).logout();
-              } catch (e) {
-                debugPrint("Logout error: $e");
-              }
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Logout'),
+                  content: const Text('Are you sure you want to log out?'),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                    TextButton(
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        await Provider.of<app.AuthProvider>(context, listen: false).logout();
+                        if (mounted) {
+                          Navigator.pushAndRemoveUntil(
+                            context,
+                            MaterialPageRoute(builder: (_) => const LoginScreen()),
+                            (route) => false,
+                          );
+                        }
+                      },
+                      child: const Text('Logout', style: TextStyle(color: Colors.red)),
+                    ),
+                  ],
+                ),
+              );
             }, color: Colors.red),
           ],
         ),
@@ -219,10 +259,13 @@ class _DeliveryPartnerProfileTabState extends State<DeliveryPartnerProfileTab> {
       if (uid == null) return;
       final userModel = await UserRepositoryImpl(apiService: _api).getUser(uid);
       if (mounted && userModel != null) {
-        Navigator.push(
+        await Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => EditProfileScreen(user: userModel)),
+          MaterialPageRoute(builder: (_) => EditProfileScreen(user: userModel, apiService: _api)),
         );
+        await authProvider.refreshProfile();
+        _loadProfile();
+        if (mounted) setState(() {});
       }
     } catch (e) {
       debugPrint("Edit profile error: $e");
