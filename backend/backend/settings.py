@@ -94,7 +94,6 @@ JAZZMIN_SETTINGS = {
         'api.AdminSetting': 'fas fa-cog',
         'api.PayoutRequest': 'fas fa-money-bill-wave',
         'api.DeliveryDocument': 'fas fa-id-card',
-        'api.ChatMessage': 'fas fa-comment-dots',
     },
 }
 
@@ -246,6 +245,26 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+        },
+        'api': {
+            'handlers': ['console'],
+            'level': 'INFO',
+        },
+    },
+}
 
 # Brevo SMTP Configuration
 EMAIL_BACKEND = os.getenv(

@@ -103,8 +103,8 @@ body { background: #15152b; }
       <div class="month-row">
         <div class="month-label">{{ m.label }}</div>
         <div class="month-track">
-          <div class="month-bar b1" style="width:{% widthratio m.revenue monthly_data.0.revenue 100 %}%"></div>
-          <div class="month-bar b2" style="width:{% widthratio m.fees monthly_data.0.revenue 100 %}%"></div>
+          <div class="month-bar b1" style="width:{% if monthly_data.0.revenue %}{% widthratio m.revenue monthly_data.0.revenue 100 %}{% else %}0{% endif %}%"></div>
+          <div class="month-bar b2" style="width:{% if monthly_data.0.revenue %}{% widthratio m.fees monthly_data.0.revenue 100 %}{% else %}0{% endif %}%"></div>
         </div>
         <div class="month-orders">{{ m.orders }}</div>
       </div>
@@ -118,7 +118,7 @@ body { background: #15152b; }
       <div class="bar">
         <div class="bar-label">{{ dp.delivery_partner__name|default:"—" }}</div>
         <div class="bar-track">
-          <div class="bar-fill" style="width:{% widthratio dp.earnings dp_earnings.0.earnings 100 %}%;background:var(--green)">₹{{ dp.earnings|floatformat:"0" }}</div>
+          <div class="bar-fill" style="width:{% if dp_earnings.0.earnings %}{% widthratio dp.earnings dp_earnings.0.earnings 100 %}{% else %}0{% endif %}%;background:var(--green)">₹{{ dp.earnings|floatformat:"0" }}</div>
         </div>
         <div class="bar-value">{{ dp.deliveries }} del</div>
       </div>
@@ -136,7 +136,7 @@ body { background: #15152b; }
       <div class="bar">
         <div class="bar-label">{{ k.kitchen__name }}</div>
         <div class="bar-track">
-          <div class="bar-fill" style="width:{% widthratio k.revenue top_kitchens.0.revenue 100 %}%;background:var(--blue)">₹{{ k.revenue|floatformat:"0" }}</div>
+          <div class="bar-fill" style="width:{% if top_kitchens.0.revenue %}{% widthratio k.revenue top_kitchens.0.revenue 100 %}{% else %}0{% endif %}%;background:var(--blue)">₹{{ k.revenue|floatformat:"0" }}</div>
         </div>
         <div class="bar-value">{{ k.order_count }} ord</div>
       </div>

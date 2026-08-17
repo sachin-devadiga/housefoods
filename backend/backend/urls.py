@@ -1,8 +1,11 @@
+import logging
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include
 from api.admin_views import DashboardView, KitchenReportView, DeliveryPartnerReportView
+
+logger = logging.getLogger(__name__)
 
 urlpatterns = [
     path('admin/dashboard/', DashboardView.as_view(), name='admin_dashboard'),
