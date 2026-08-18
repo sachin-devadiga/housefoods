@@ -124,6 +124,9 @@ urlpatterns = [
     path('admin/delivery-documents/', views.AdminDeliveryDocumentListView.as_view(), name='admin-delivery-documents'),
     path('admin/delivery-documents/<int:pk>/status/', views.AdminDeliveryDocumentUpdateView.as_view(), name='admin-delivery-document-status'),
 
+    # Debug (temporary)
+    path('_debug/test-email/', views.DebugTestEmailView.as_view(), name='debug-test-email'),
+
     # Map
     path('map/route/', views.MapRouteView.as_view(), name='map-route'),
 
