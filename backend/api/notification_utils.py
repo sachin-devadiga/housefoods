@@ -18,16 +18,24 @@ def _get_firebase_app():
         import firebase_admin
         from firebase_admin import credentials
 
+        service_account_json = os.getenv('FIREBASE_SERVICE_ACCOUNT', '')
         service_account_path = os.getenv(
-            'FIREBASE_SERVICE_ACCOUNT',
+            'FIREBASE_SERVICE_ACCOUNT_PATH',
             str(Path(__file__).resolve().parent.parent / 'firebase-service-account.json'),
         )
-        if os.path.exists(service_account_path):
+
+        if service_account_json:
+            import json as _json
+            cred_dict = _json.loads(service_account_json)
+            cred = credentials.Certificate(cred_dict)
+            _firebase_app = firebase_admin.initialize_app(cred)
+            logger.info('Firebase Admin SDK initialized from env var')
+        elif os.path.exists(service_account_path):
             cred = credentials.Certificate(service_account_path)
             _firebase_app = firebase_admin.initialize_app(cred)
             logger.info('Firebase Admin SDK initialized from %s', service_account_path)
         else:
-            logger.warning('Firebase service account not found at %s', service_account_path)
+            logger.warning('No Firebase credentials found')
             return None
     except Exception:
         logger.exception('Failed to initialize Firebase Admin SDK')
@@ -72,15 +80,15 @@ def _send_push_sync(tokens, title, body, data):
             android=messaging.AndroidConfig(
                 priority='high',
                 notification=messaging.AndroidNotification(
-                    sound='alarm',
                     channel_id='mealin_orders',
                     priority='MAX',
+                    default_sound=True,
                 ),
             ),
             apns=messaging.APNSConfig(
                 payload=messaging.APNSPayload(
                     aps=messaging.Aps(
-                        sound='alarm',
+                        sound='default',
                         badge=1,
                         content_available=True,
                     ),

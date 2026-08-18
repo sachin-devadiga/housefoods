@@ -48,7 +48,6 @@ class NotificationService {
       description: 'Notifications for new orders and deliveries',
       importance: Importance.max,
       playSound: true,
-      sound: RawResourceAndroidNotificationSound('alarm'),
     );
     await _localNotifications
         .resolvePlatformSpecificImplementation<
@@ -91,7 +90,7 @@ class NotificationService {
   static Future<void> _playAlarm() async {
     try {
       await _audioPlayer.stop();
-      await _audioPlayer.play(AssetSource('alarm.wav'));
+      await _audioPlayer.play(AssetSource('sounds/alarm.wav'));
     } catch (e) {
       debugPrint('Failed to play alarm: $e');
     }
@@ -109,7 +108,7 @@ class NotificationService {
       DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title,
       body,
-      NotificationDetails(
+      const NotificationDetails(
         android: AndroidNotificationDetails(
           'mealin_orders',
           'Mealin Orders',
@@ -117,7 +116,6 @@ class NotificationService {
           importance: Importance.max,
           priority: Priority.high,
           playSound: true,
-          sound: const RawResourceAndroidNotificationSound('alarm'),
           icon: '@mipmap/ic_launcher',
         ),
       ),

@@ -47,6 +47,8 @@ dependencies:
   cached_network_image: ^3.3.1
   package_info_plus: ^10.2.1
   connectivity_plus: ^7.3.0
+  flutter_local_notifications: ^18.0.1
+  audioplayers: ^6.1.0
   
   # Networking
   http: ^1.2.0
@@ -76,3 +78,4 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
+    - assets/sounds/
