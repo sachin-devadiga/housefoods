@@ -35,6 +35,6 @@ services:
       - key: BREVO_SENDER_EMAIL
         value: "sachins43270@gmail.com"
       - key: BREVO_SENDER_NAME
-        value: "Housefoods"
+        value: "Mealin"
       - key: BREVO_API_KEY
         sync: false
