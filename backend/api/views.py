@@ -1844,3 +1844,56 @@ class MapRouteView(APIView):
             'duration': duration_min,
             'route': [[lat, lng] for lng, lat in coordinates],
         })
+
+
+class DebugTestEmailView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        import json, urllib.request, urllib.error
+        api_key = os.getenv('BREVO_API_KEY', '')
+        sender_email = os.getenv('BREVO_SENDER_EMAIL', '')
+        sender_name = os.getenv('BREVO_SENDER_NAME', 'Mealin')
+        smtp_user = os.getenv('BREVO_SMTP_USER', '')
+        smtp_pass = os.getenv('BREVO_SMTP_PASSWORD', '')
+        smtp_host = os.getenv('BREVO_SMTP_HOST', '')
+        test_email = request.query_params.get('email', sender_email)
+
+        result = {
+            'api_key_set': bool(api_key),
+            'api_key_len': len(api_key),
+            'sender_email': sender_email,
+            'sender_name': sender_name,
+            'smtp_user': smtp_user,
+            'smtp_host': smtp_host,
+        }
+
+        if api_key and test_email:
+            url = 'https://api.brevo.com/v3/smtp/email'
+            payload = json.dumps({
+                'sender': {'name': sender_name, 'email': sender_email},
+                'to': [{'email': test_email}],
+                'subject': 'Mealin OTP Test',
+                'htmlContent': '<p>Test email from Mealin</p>',
+                'textContent': 'Test email from Mealin',
+            }).encode('utf-8')
+            headers = {
+                'Content-Type': 'application/json',
+                'api-key': api_key,
+                'Accept': 'application/json',
+            }
+            req = urllib.request.Request(url, data=payload, headers=headers, method='POST')
+            try:
+                with urllib.request.urlopen(req, timeout=30) as response:
+                    result['api_status'] = response.status
+                    result['api_response'] = response.read().decode('utf-8')
+                    result['email_sent'] = True
+            except urllib.error.HTTPError as e:
+                result['api_status'] = e.code
+                result['api_response'] = e.read().decode('utf-8')
+                result['email_sent'] = False
+            except Exception as e:
+                result['api_error'] = str(e)
+                result['email_sent'] = False
+
+        return Response(result)
