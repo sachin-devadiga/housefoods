@@ -9,3 +9,4 @@ gunicorn>=23.0
 whitenoise[brotli]>=6.8
 python-dotenv>=1.0
 requests>=2.31
+firebase-admin>=6.5

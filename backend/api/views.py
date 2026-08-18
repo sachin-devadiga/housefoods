@@ -29,6 +29,7 @@ from .models import (
     ChatMessage, DeliveryDocument,
 )
 from .otp_utils import send_otp_email, send_otp_email_async, t0, tlog, elapsed
+from .notification_utils import notify_chef_new_order, notify_delivery_partners
 from .serializers import (
     UserProfileSerializer, UserProfileMiniSerializer, AddressSerializer,
     KitchenCategorySerializer, KitchenSerializer, KitchenListSerializer,
@@ -650,6 +651,13 @@ class OrderStatusUpdateView(APIView):
             elif order.delivery_status == 'picked_up':
                 order.picked_up_at = order.picked_up_at or timezone.now()
             order.save()
+
+            if order.delivery_status == 'ready_for_delivery':
+                delivery_partners = UserProfile.objects.filter(
+                    role='delivery_partner', is_verified=True, is_available=True
+                ).exclude(fcm_token='')
+                notify_delivery_partners(order, delivery_partners)
+
             return Response(OrderSerializer(order).data)
 
         if new_status not in ['active', 'paused', 'cancelled', 'completed']:
@@ -1230,6 +1238,9 @@ class PlaceOrderView(APIView):
                 return Response({'error': 'Plan not found'}, status=status.HTTP_404_NOT_FOUND)
 
         order = serializer.save()
+
+        notify_chef_new_order(order.kitchen.chef, order)
+
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
 
@@ -1284,6 +1295,8 @@ class PlaceOrderWithWalletView(APIView):
             category='order_payment',
             description=f'Used credits for subscription to {order.kitchen.name}',
         )
+
+        notify_chef_new_order(order.kitchen.chef, order)
 
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 

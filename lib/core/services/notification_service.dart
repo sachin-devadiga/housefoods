@@ -1,5 +1,7 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'api_service.dart';
 import 'token_service.dart';
 import '../constants/app_constants.dart';
@@ -11,32 +13,116 @@ import '../../features/customer/presentation/screens/customer_dashboard.dart';
 
 class NotificationService {
   static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
+  static final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
   static OverlayEntry? _currentOverlay;
+  static final AudioPlayer _audioPlayer = AudioPlayer();
+
+  static const _alarmTypes = {'new_order', 'new_delivery'};
 
   static Future<void> initialize() async {
+    await _initLocalNotifications();
+    await _initFCM();
+  }
+
+  static Future<void> _initLocalNotifications() async {
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const initSettings = InitializationSettings(android: androidSettings);
+    await _localNotifications.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: (details) {
+        final data = <String, String>{};
+        if (details.payload != null && details.payload!.isNotEmpty) {
+          for (final part in details.payload!.split('&')) {
+            final kv = part.split('=');
+            if (kv.length == 2) data[kv[0]] = kv[1];
+          }
+        }
+        _handleData(data);
+      },
+    );
+
+    const androidChannel = AndroidNotificationChannel(
+      'mealin_orders',
+      'Mealin Orders',
+      description: 'Notifications for new orders and deliveries',
+      importance: Importance.max,
+      playSound: true,
+      sound: RawResourceAndroidNotificationSound('alarm'),
+    );
+    await _localNotifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(androidChannel);
+  }
+
+  static Future<void> _initFCM() async {
     NotificationSettings settings = await _messaging.requestPermission(
       alert: true,
       badge: true,
       sound: true,
     );
 
-    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      RemoteMessage? initialMessage = await _messaging.getInitialMessage();
-      if (initialMessage != null) {
-        _handleMessage(initialMessage);
-      }
+    if (settings.authorizationStatus != AuthorizationStatus.authorized) return;
 
-      FirebaseMessaging.onMessageOpenedApp.listen(_handleMessage);
-
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-        debugPrint('Foreground notification: ${message.notification?.title}');
-        _showInAppNotification(message);
-      });
-
-      _messaging.onTokenRefresh.listen((newToken) async {
-        await _uploadTokenToBackend(newToken);
-      });
+    RemoteMessage? initialMessage = await _messaging.getInitialMessage();
+    if (initialMessage != null) {
+      _handleMessage(initialMessage);
     }
+
+    FirebaseMessaging.onMessageOpenedApp.listen(_handleMessage);
+
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      debugPrint('Foreground notification: ${message.notification?.title}');
+      final type = message.data['type'] ?? '';
+      if (_alarmTypes.contains(type)) {
+        _playAlarm();
+        _showSystemNotification(message);
+      } else {
+        _showInAppNotification(message);
+      }
+    });
+
+    _messaging.onTokenRefresh.listen((newToken) async {
+      await _uploadTokenToBackend(newToken);
+    });
+  }
+
+  static Future<void> _playAlarm() async {
+    try {
+      await _audioPlayer.stop();
+      await _audioPlayer.play(AssetSource('alarm.wav'));
+    } catch (e) {
+      debugPrint('Failed to play alarm: $e');
+    }
+  }
+
+  static Future<void> _showSystemNotification(RemoteMessage message) async {
+    final title = message.notification?.title ?? message.data['title'] ?? '';
+    final body = message.notification?.body ?? message.data['body'] ?? '';
+    final type = message.data['type'] ?? '';
+    final orderId = message.data['order_id'] ?? '';
+
+    final payload = 'type=$type&order_id=$orderId';
+
+    await _localNotifications.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title,
+      body,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'mealin_orders',
+          'Mealin Orders',
+          channelDescription: 'Notifications for new orders and deliveries',
+          importance: Importance.max,
+          priority: Priority.high,
+          playSound: true,
+          sound: const RawResourceAndroidNotificationSound('alarm'),
+          icon: '@mipmap/ic_launcher',
+        ),
+      ),
+      payload: payload,
+    );
   }
 
   static void _showInAppNotification(RemoteMessage message) {
@@ -113,6 +199,7 @@ class NotificationService {
       case 'delivery_update': return Icons.delivery_dining;
       case 'order_update':
       case 'delivery_status_changed': return Icons.receipt_long;
+      case 'new_order': return Icons.restaurant;
       default: return Icons.notifications;
     }
   }
@@ -147,7 +234,10 @@ class NotificationService {
   }
 
   static void _handleMessage(RemoteMessage message) {
-    final data = message.data;
+    _handleData(message.data);
+  }
+
+  static void _handleData(Map<String, dynamic> data) {
     final type = data['type'];
 
     if (type == 'chat') {
@@ -168,7 +258,7 @@ class NotificationService {
       NavigationService.navigateTo(
         MaterialPageRoute(builder: (_) => const DeliveryPartnerDashboard()),
       );
-    } else if (type == 'order_update' || type == 'delivery_status_changed') {
+    } else if (type == 'new_order' || type == 'order_update' || type == 'delivery_status_changed') {
       NavigationService.navigateTo(
         MaterialPageRoute(builder: (_) => const CustomerDashboard()),
       );
