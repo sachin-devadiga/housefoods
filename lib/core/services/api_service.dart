@@ -25,8 +25,8 @@ class ApiService {
   Dio _createDio(String url) {
     return Dio(BaseOptions(
       baseUrl: url,
-      connectTimeout: const Duration(seconds: 4),
-      receiveTimeout: const Duration(seconds: 4),
+      connectTimeout: const Duration(seconds: 60),
+      receiveTimeout: const Duration(seconds: 60),
       headers: {'Content-Type': 'application/json'},
     ));
   }
@@ -35,8 +35,8 @@ class ApiService {
     try {
       final probe = Dio(BaseOptions(
         baseUrl: url,
-        connectTimeout: const Duration(seconds: 2),
-        receiveTimeout: const Duration(seconds: 2),
+        connectTimeout: const Duration(seconds: 60),
+        receiveTimeout: const Duration(seconds: 60),
       ));
       final resp = await probe.get('/api/auth/kitchen-categories/',
           options: Options(
