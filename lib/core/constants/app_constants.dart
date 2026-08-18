@@ -17,6 +17,7 @@ class AppConstants {
 
     const knownLanIp = String.fromEnvironment('LAN_IP');
     final candidates = <String>[
+      'https://housefoods.onrender.com',
       'http://localhost:8000',
       if (Platform.isAndroid) 'http://10.0.2.2:8000',
       if (knownLanIp.isNotEmpty) 'http://$knownLanIp:8000',
