@@ -139,7 +139,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'api.debug_middleware.DebugErrorMiddleware',
+    'api.middleware.ForceRenderMiddleware',
 ]
 
 ROOT_URLCONF = 'backend.urls'
