@@ -233,7 +233,6 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_STORAGE = 'whitenoise.storage.StaticFilesStorage'
 STORAGES = {
     'staticfiles': {
         'BACKEND': 'whitenoise.storage.StaticFilesStorage',
