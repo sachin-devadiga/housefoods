@@ -85,7 +85,6 @@ class UserProfileAdmin(BulkActionsAdmin):
     list_display = ['email', 'name', 'role_badge', 'phone', 'wallet_balance', 'is_active', 'is_verified', 'is_available', 'created_at']
     list_filter = ['role', 'is_active', 'is_verified', 'is_available']
     search_fields = ['email', 'name', 'phone', 'uid']
-    list_editable = ['is_active']
     readonly_fields = ['uid', 'created_at', 'updated_at']
     fieldsets = [
         ('Account Info', {'fields': ['email', 'name', 'phone', 'role']}),
@@ -96,7 +95,8 @@ class UserProfileAdmin(BulkActionsAdmin):
 
     def role_badge(self, obj):
         colors = {'customer': 'info', 'chef': 'primary', 'delivery_partner': 'warning', 'admin': 'danger'}
-        return format_html('<span class="badge badge-{}">{}</span>', colors.get(obj.role, 'secondary'), obj.role.replace('_', ' ').title())
+        role = obj.role or 'customer'
+        return format_html('<span class="badge badge-{}">{}</span>', colors.get(role, 'secondary'), role.replace('_', ' ').title())
     role_badge.short_description = 'Role'
 
 
