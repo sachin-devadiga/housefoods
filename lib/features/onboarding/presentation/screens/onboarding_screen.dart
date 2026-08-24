@@ -23,18 +23,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final List<OnboardingInfo> _items = [
     OnboardingInfo(
       imagePath: 'assets/images/onboarding1.png',
-      title: 'Fresh Home Cooked Food Based on Your Region/State',
-      description: 'Enjoy healthy and delicious meals prepared by home chefs with love.',
+      title: 'Discover Restaurants Near You',
+      description: 'Browse hundreds of restaurants and home kitchens serving delicious food in your area.',
     ),
     OnboardingInfo(
       imagePath: 'assets/images/onboarding2.png',
-      title: 'Weekly/Monthly/Quarterly Subscriptions',
-      description: 'Subscribe once and get your meals delivered daily at your doorstep. Available for all cuisines.',
+      title: 'Order or Subscribe',
+      description: 'Order your favorite meals anytime or subscribe for weekly/monthly meal plans. Fast delivery to your doorstep.',
     ),
     OnboardingInfo(
       imagePath: 'assets/images/onboarding3.png',
-      title: 'Support Home Kitchens',
-      description: 'Empower local home kitchens and grow your community.',
+      title: 'Fresh Food, Fast Delivery',
+      description: 'Get hot, fresh food delivered in minutes. Track your order in real-time.',
     ),
   ];
 

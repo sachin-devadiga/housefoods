@@ -126,7 +126,7 @@ class _SplashScreenState extends State<SplashScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Order/subscribe anything you prefer for instant delivery',
+              'Order food from your favorite restaurants',
               style: TextStyle(
                 color: Colors.white70,
                 fontSize: 14,

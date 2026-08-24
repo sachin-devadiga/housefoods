@@ -96,14 +96,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 16),
                 _buildRoleCard(
                   title: "Order Food",
-                  subtitle: "Looking for fresh home-cooked meals",
+                  subtitle: "Browse restaurants & get food delivered",
                   role: 'customer',
                   icon: Icons.fastfood,
                 ),
                 const SizedBox(height: 16),
                 _buildRoleCard(
-                  title: "Start a Kitchen",
-                  subtitle: "Share my cooking with others",
+                  title: "Sell Food",
+                  subtitle: "List your kitchen & reach more customers",
                   role: 'chef',
                   icon: Icons.restaurant,
                 ),

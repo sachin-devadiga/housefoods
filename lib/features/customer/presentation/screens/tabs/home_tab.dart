@@ -66,20 +66,67 @@ class _HomeTabState extends State<HomeTab> {
             return CustomScrollView(
               controller: _scrollController,
               slivers: [
-                // 1. Top Navigation & Banners
+                // 1. Location + Search Header
+                SliverToBoxAdapter(
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.location_on, color: AppTheme.primaryColor, size: 20),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                'Delivering to your location',
+                                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'What would you like to eat?',
+                          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // 2. Category Filter
                 const SliverToBoxAdapter(child: CategorySelector()),
+
+                // 3. Promo Banners
                 const SliverToBoxAdapter(child: PromoCarousel()),
-                
-                // 2. Curated Collection: Top Rated
+
+                // 4. Quick Cuisine Grid
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "What's on your mind?",
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // 5. Curated Collection: Top Rated
                 if (provider.topRatedKitchens.isNotEmpty && !provider.isLoading)
                   SliverToBoxAdapter(
                     child: KitchenHorizontalList(
-                      title: "Top Rated Kitchens",
+                      title: "Top Rated Near You",
                       kitchens: provider.topRatedKitchens,
                     ),
                   ),
 
-                // 3. Curated Collection: Healthy Picks
+                // 6. Curated Collection: Healthy Picks
                 if (provider.healthyKitchens.isNotEmpty && !provider.isLoading)
                   SliverToBoxAdapter(
                     child: KitchenHorizontalList(
@@ -88,18 +135,18 @@ class _HomeTabState extends State<HomeTab> {
                     ),
                   ),
 
-                // 4. Main Feed Header
+                // 7. Main Feed Header
                 const SliverToBoxAdapter(
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(16, 24, 16, 12),
                     child: Text(
-                      "All Kitchens Near You",
+                      "All Restaurants Near You",
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
 
-                // 5. Initial Loading State (Shimmers)
+                // 8. Initial Loading State (Shimmers)
                 if (provider.isLoading && provider.kitchens.isEmpty)
                   SliverPadding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -111,7 +158,7 @@ class _HomeTabState extends State<HomeTab> {
                     ),
                   ),
 
-                // 6. Error State
+                // 9. Error State
                 if (provider.error != null && provider.kitchens.isEmpty)
                   SliverFillRemaining(
                     child: Center(
@@ -130,7 +177,7 @@ class _HomeTabState extends State<HomeTab> {
                     ),
                   ),
 
-                // 7. Kitchen List
+                // 10. Kitchen/Restaurant List
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   sliver: SliverList(
@@ -154,7 +201,7 @@ class _HomeTabState extends State<HomeTab> {
                   ),
                 ),
 
-                // 8. Pagination Loading Footer
+                // 11. Pagination Loading Footer
                 if (provider.isLoading && provider.kitchens.isNotEmpty)
                   const SliverToBoxAdapter(
                     child: Padding(
