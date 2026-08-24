@@ -10,7 +10,7 @@ services:
     runtime: python
     rootDir: backend
     buildCommand: bash build.sh
-    startCommand: python manage.py migrate --noinput && python manage.py create_admin && gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT
+    startCommand: python manage.py migrate auth --noinput && python manage.py migrate --noinput && python manage.py create_admin && gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT
     envVars:
       - key: DATABASE_URL
         fromDatabase:
