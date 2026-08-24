@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../providers/delivery_partner_provider.dart';
+import 'delivery_payout_screen.dart';
 
 String _shortId(dynamic id, {int length = 8}) {
   final s = id?.toString() ?? '';
@@ -58,6 +60,23 @@ class DeliveryPartnerEarningsTab extends StatelessWidget {
                             ],
                           ),
                         ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const DeliveryPayoutScreen()),
+                      ),
+                      icon: const Icon(Icons.account_balance_wallet, color: Colors.white),
+                      label: const Text('Withdraw Earnings', style: TextStyle(color: Colors.white)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.secondaryColor,
+                        minimumSize: const Size(double.infinity, 50),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
                   ),

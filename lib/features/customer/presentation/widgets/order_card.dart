@@ -20,10 +20,11 @@ class OrderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     bool isActive = order.status == 'active';
     bool isCompleted = order.status == 'completed';
+    bool isOneTime = order.orderType == 'one_time';
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
 
     final daysRemaining = order.endDate.difference(DateTime.now()).inDays;
-    bool isExpiringSoon = isActive && daysRemaining <= 3 && daysRemaining >= 0;
+    bool isExpiringSoon = !isOneTime && isActive && daysRemaining <= 3 && daysRemaining >= 0;
 
     return GestureDetector(
       onTap: () {
@@ -85,16 +86,69 @@ class OrderCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              "${order.planName} Subscription",
+              isOneTime ? "One-Time Order" : "${order.planName} Subscription",
               style: TextStyle(color: Colors.grey[700], fontSize: 14),
             ),
             const SizedBox(height: 4),
-            Text(
-              "Valid until: ${DateFormat('dd MMM yyyy').format(order.endDate)}",
-              style: TextStyle(color: Colors.grey[600], fontSize: 12),
-            ),
+            if (isOneTime)
+              Text(
+                "Amount: ₹${order.amount.toStringAsFixed(0)}",
+                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              )
+            else
+              Text(
+                "Valid until: ${DateFormat('dd MMM yyyy').format(order.endDate)}",
+                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              ),
             const Divider(height: 24),
-            if (isActive)
+            if (isOneTime)
+              Row(
+                children: [
+                  if (isActive)
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => LiveTrackingScreen(order: order),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.location_on_outlined, size: 18),
+                        label: const Text("Track Order"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.secondaryColor,
+                          minimumSize: const Size(0, 40),
+                        ),
+                      ),
+                    ),
+                  if (isActive) const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ChatScreen(
+                              receiverId: order.chefId.isNotEmpty ? order.chefId : order.kitchenId,
+                              receiverName: order.chefName.isNotEmpty ? order.chefName : order.kitchenName,
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                      label: const Text("Message"),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 40),
+                        foregroundColor: AppTheme.primaryColor,
+                        side: const BorderSide(color: AppTheme.primaryColor),
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            else if (isActive)
               Column(
                 children: [
                   Row(

@@ -5,6 +5,7 @@ import '../../../../customer/presentation/providers/order_provider.dart';
 import '../../providers/chef_provider.dart';
 import '../manage_daily_menu_screen.dart';
 import '../daily_fulfillment_screen.dart';
+import '../dispatch_history_screen.dart';
 
 class ChefHomeTab extends StatefulWidget {
   const ChefHomeTab({super.key});
@@ -109,6 +110,15 @@ class _ChefHomeTabState extends State<ChefHomeTab> {
                   Icons.delivery_dining,
                   Colors.blue,
                   () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DailyFulfillmentScreen())),
+                ),
+                const SizedBox(height: 12),
+                _buildControlTile(
+                  context,
+                  "Dispatch History",
+                  "View past deliveries",
+                  Icons.history,
+                  Colors.teal,
+                  () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DispatchHistoryScreen())),
                 ),
               ],
             ),

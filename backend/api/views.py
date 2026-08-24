@@ -858,6 +858,46 @@ class DeliveryEarningsView(APIView):
         })
 
 
+class DeliveryPartnerPayoutView(APIView):
+    permission_classes = [IsDeliveryPartner]
+
+    def get(self, request):
+        profile = request.user.profile
+        payouts = PayoutRequest.objects.filter(delivery_partner=profile)
+        data = []
+        for p in payouts:
+            data.append({
+                'id': p.id,
+                'amount': float(p.amount),
+                'status': p.status,
+                'bank_details': p.bank_details,
+                'requested_at': p.requested_at.isoformat() if p.requested_at else None,
+                'processed_at': p.processed_at.isoformat() if p.processed_at else None,
+            })
+        return Response({'data': data})
+
+    def post(self, request):
+        profile = request.user.profile
+        amount = request.data.get('amount')
+        bank_details = request.data.get('bank_details', {})
+        if not amount or float(amount) < 100:
+            return Response({'error': 'Minimum payout is ₹100'}, status=400)
+        delivered = Order.objects.filter(delivery_partner=profile, delivery_status='delivered')
+        total = delivered.aggregate(total=Sum('delivery_fee'))['total'] or 0
+        paid_out = PayoutRequest.objects.filter(
+            delivery_partner=profile, status__in=['approved', 'paid']
+        ).aggregate(total=Sum('amount'))['total'] or 0
+        available = float(total) - float(paid_out)
+        if float(amount) > available:
+            return Response({'error': f'Insufficient balance. Available: ₹{available}'}, status=400)
+        payout = PayoutRequest.objects.create(
+            delivery_partner=profile,
+            amount=amount,
+            bank_details=bank_details,
+        )
+        return Response({'id': payout.id, 'status': payout.status, 'message': 'Payout request submitted'}, status=201)
+
+
 class DeliveryAvailabilityView(APIView):
     permission_classes = [IsDeliveryPartner]
 

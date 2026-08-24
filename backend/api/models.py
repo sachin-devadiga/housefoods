@@ -560,7 +560,8 @@ class PayoutRequest(models.Model):
         ('paid', 'Paid'),
     ]
 
-    chef = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='payout_requests')
+    chef = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='payout_requests', null=True, blank=True)
+    delivery_partner = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='delivery_payout_requests', null=True, blank=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     bank_details = models.JSONField(default=dict, blank=True)
@@ -572,7 +573,8 @@ class PayoutRequest(models.Model):
         ordering = ['-requested_at']
 
     def __str__(self):
-        return f'{self.chef.email} - {self.amount} - {self.status}'
+        payer = self.chef or self.delivery_partner
+        return f'{payer.email} - {self.amount} - {self.status}'
 
 
 class DeliveryDocument(models.Model):

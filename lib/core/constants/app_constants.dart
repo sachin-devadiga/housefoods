@@ -146,6 +146,9 @@ class AppConstants {
   // Chef Payouts
   static const String payoutsEndpoint = '/api/auth/payouts/';
 
+  // Delivery Partner Payouts
+  static const String deliveryPayoutsEndpoint = '/api/auth/delivery/payouts/';
+
   // Shared Preferences Keys
   static const String isFirstRun = 'is_first_run';
   static const String userRole = 'user_role';

@@ -365,4 +365,58 @@ class ChefProvider extends ChangeNotifier {
       debugPrint("Fetch plans error: $e");
     }
   }
+
+  Future<void> deletePlan(dynamic planId) async {
+    if (_myKitchen == null) return;
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final kitchenId = _myKitchen!['id'];
+      await _api.delete('${AppConstants.plansEndpoint}/$kitchenId/plans/$planId/');
+      await fetchMyPlans();
+    } catch (e) {
+      debugPrint("Delete plan error: $e");
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> updatePlan(dynamic planId, Map<String, dynamic> planData) async {
+    if (_myKitchen == null) return;
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final kitchenId = _myKitchen!['id'];
+      await _api.put(
+        '${AppConstants.plansEndpoint}/$kitchenId/plans/$planId/',
+        body: planData,
+      );
+      await fetchMyPlans();
+    } catch (e) {
+      debugPrint("Update plan error: $e");
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> updateDish(dynamic dishId, Map<String, dynamic> dishData) async {
+    if (_myKitchen == null) return;
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final kitchenId = _myKitchen!['id'];
+      await _api.put(
+        '${AppConstants.menuItemsEndpoint}/$kitchenId/menu-items/$dishId/',
+        body: dishData,
+      );
+      await fetchDishes();
+    } catch (e) {
+      debugPrint("Update dish error: $e");
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 }

@@ -351,6 +351,10 @@ class OrderProvider extends ChangeNotifier {
   }
 
   void _handlePaymentSuccess(PaymentSuccessResponse response) async {
+    if (_pendingOrder != null && _pendingOrder!.orderType == 'one_time') {
+      _handleOneTimePaymentSuccess(response);
+      return;
+    }
     if (_pendingOrder != null) {
       _isLoading = true;
       notifyListeners();
@@ -406,6 +410,86 @@ class OrderProvider extends ChangeNotifier {
   }
 
   void _handleExternalWallet(ExternalWalletResponse response) {}
+
+  void openCheckoutForOneTime({
+    required OrderModel order,
+    required List<Map<String, dynamic>> items,
+    double tip = 0,
+    required String userEmail,
+    required String userPhone,
+    required Function(OrderModel) onSuccess,
+    required Function(String) onError,
+  }) {
+    _pendingOrder = order;
+    _onSuccessCallback = onSuccess;
+    _onErrorCallback = onError;
+    _pendingOneTimeItems = items;
+    _pendingOneTimeTip = tip;
+    if (order.amount == 0) {
+      _handleOneTimePaymentSuccess(PaymentSuccessResponse(null, null, null, null));
+      return;
+    }
+    var options = {
+      'key': AppConstants.razorpayKey,
+      'amount': (order.amount * 100).toInt(),
+      'name': 'Mealin',
+      'description': 'Food Order',
+      'prefill': {'contact': userPhone, 'email': userEmail}
+    };
+    try {
+      _razorpay.open(options);
+    } catch (e) {
+      debugPrint('Razorpay error: $e');
+    }
+  }
+
+  List<Map<String, dynamic>> _pendingOneTimeItems = [];
+  double _pendingOneTimeTip = 0;
+
+  void _handleOneTimePaymentSuccess(PaymentSuccessResponse response) async {
+    if (_pendingOrder != null && _pendingOrder!.orderType == 'one_time') {
+      _isLoading = true;
+      notifyListeners();
+      try {
+        final orderData = {
+          'kitchen': _pendingOrder!.kitchenId,
+          'order_type': 'one_time',
+          'amount': _pendingOrder!.amount.toString(),
+          'delivery_address': _pendingOrder!.deliveryAddress,
+          'items': _pendingOneTimeItems,
+          'tip': _pendingOneTimeTip.toString(),
+          'payment_id': response.paymentId ?? 'COD',
+        };
+        await _orderRepository.placeOrder(orderData);
+        final finalOrder = OrderModel(
+          id: '',
+          customerId: _pendingOrder!.customerId,
+          kitchenId: _pendingOrder!.kitchenId,
+          kitchenName: _pendingOrder!.kitchenName,
+          amount: _pendingOrder!.amount,
+          deliveryAddress: _pendingOrder!.deliveryAddress,
+          startDate: DateTime.now(),
+          endDate: DateTime.now(),
+          status: 'active',
+          paymentId: response.paymentId ?? 'COD',
+          createdAt: DateTime.now(),
+          orderType: 'one_time',
+        );
+        _pendingOneTimeItems = [];
+        _pendingOneTimeTip = 0;
+        removeCoupon();
+        if (_onSuccessCallback != null) _onSuccessCallback!(finalOrder);
+      } catch (e) {
+        if (_onErrorCallback != null) _onErrorCallback!(e.toString());
+      } finally {
+        _isLoading = false;
+        _pendingOrder = null;
+        notifyListeners();
+      }
+    } else {
+      _handlePaymentSuccess(response);
+    }
+  }
 
   Future<bool> placeOneTimeOrder({
     required String kitchenId,

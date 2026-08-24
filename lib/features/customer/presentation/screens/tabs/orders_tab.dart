@@ -40,7 +40,7 @@ class _OrdersTabState extends State<OrdersTab> {
                 Icon(Icons.receipt_long_outlined, size: 64, color: Colors.grey[400]),
                 const SizedBox(height: 16),
                 const Text(
-                  "No subscriptions yet.",
+                  "No orders yet.",
                   style: TextStyle(fontSize: 18, color: Colors.grey),
                 ),
               ],

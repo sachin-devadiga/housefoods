@@ -35,6 +35,9 @@ class DeliveryPartnerProvider extends ChangeNotifier {
   int _totalDeliveries = 0;
   int get totalDeliveries => _totalDeliveries;
 
+  List<Map<String, dynamic>> _payoutHistory = [];
+  List<Map<String, dynamic>> get payoutHistory => _payoutHistory;
+
   Future<void> _ensureAuthenticated() async {
     final token = await _tokenService.getAccessToken();
     if (token != null) {
@@ -191,5 +194,46 @@ class DeliveryPartnerProvider extends ChangeNotifier {
   void clearError() {
     _errorMessage = null;
     notifyListeners();
+  }
+
+  Future<void> fetchPayoutHistory() async {
+    await _ensureAuthenticated();
+    try {
+      final data = await _api.get(AppConstants.deliveryPayoutsEndpoint);
+      _payoutHistory = _safeList(data['data']);
+      notifyListeners();
+    } catch (e) {
+      debugPrint("fetchPayoutHistory error: $e");
+    }
+  }
+
+  double get availableBalance {
+    double paidOut = 0;
+    for (final p in _payoutHistory) {
+      final status = p['status']?.toString().toLowerCase() ?? '';
+      if (status == 'approved' || status == 'paid') {
+        final raw = p['amount'];
+        final amt = (raw is num) ? raw.toDouble() : double.tryParse(raw?.toString() ?? '0') ?? 0.0;
+        paidOut += amt;
+      }
+    }
+    return _totalEarnings - paidOut;
+  }
+
+  Future<void> requestPayout(double amount, Map<String, dynamic> bankDetails) async {
+    await _ensureAuthenticated();
+    _setLoading(true);
+    try {
+      await _api.post(AppConstants.deliveryPayoutsEndpoint, body: {
+        'amount': amount,
+        'bank_details': bankDetails,
+      });
+      await fetchPayoutHistory();
+    } catch (e) {
+      _errorMessage = 'Failed to submit payout request';
+      notifyListeners();
+      debugPrint("requestPayout error: $e");
+    }
+    _setLoading(false);
   }
 }

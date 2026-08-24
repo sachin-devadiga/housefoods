@@ -12,6 +12,8 @@ import '../../../../auth/presentation/screens/login_screen.dart';
 import '../../../../auth/presentation/screens/settings_screen.dart';
 import '../../../../auth/presentation/screens/dietary_setup_screen.dart';
 import '../../../../support/presentation/screens/user_tickets_screen.dart';
+import '../my_favorites_screen.dart';
+import '../../../../rewards/presentation/screens/wallet_screen.dart';
 
 class ProfileTab extends StatelessWidget {
   const ProfileTab({super.key});
@@ -124,11 +126,20 @@ class ProfileTab extends StatelessWidget {
             () => _navigateToDietarySetup(context)
           ),
           _buildProfileOption(
+            Icons.favorite_border, 
+            "My Favorites", 
+            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyFavoritesScreen()))
+          ),
+          _buildProfileOption(
             Icons.location_on, 
             "Saved Addresses", 
             () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddressBookScreen()))
           ),
-          _buildProfileOption(Icons.payment, "Payment Methods", () {}),
+          _buildProfileOption(
+            Icons.account_balance_wallet, 
+            "My Wallet", 
+            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WalletScreen()))
+          ),
           _buildProfileOption(
             Icons.help_outline, 
             "Help & Support", 

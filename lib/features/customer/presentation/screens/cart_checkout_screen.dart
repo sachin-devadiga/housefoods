@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../auth/data/repositories/user_repository_impl.dart';
 import '../../../auth/domain/models/user_model.dart';
@@ -313,6 +314,11 @@ class _CartCheckoutScreenState extends State<CartCheckoutScreen> {
     try {
       final orderProvider = Provider.of<OrderProvider>(context, listen: false);
       final cartProvider = Provider.of<CartProvider>(context, listen: false);
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final profile = authProvider.userProfile;
+      final email = profile?['email'] ?? 'customer@mealin.com';
+      final phone = profile?['phone'] ?? '';
+      final uid = profile?['uid'] ?? '';
 
       final itemsData = widget.items.map((item) => {
         'menu_item': int.tryParse(item.menuItemId) ?? 0,
@@ -320,40 +326,45 @@ class _CartCheckoutScreenState extends State<CartCheckoutScreen> {
         'special_instructions': item.specialInstructions,
       }).toList();
 
-      final success = await orderProvider.placeOneTimeOrder(
+      final order = OrderModel(
+        id: '',
+        customerId: uid,
         kitchenId: widget.kitchenId,
+        kitchenName: widget.kitchenName,
         amount: total,
         deliveryAddress: _selectedAddress!.fullAddress,
-        items: itemsData,
-        tip: tip,
+        startDate: DateTime.now(),
+        endDate: DateTime.now(),
+        status: 'active',
+        paymentId: '',
+        createdAt: DateTime.now(),
+        orderType: 'one_time',
       );
 
-      if (success && mounted) {
-        await cartProvider.clearCart();
-        final dummyOrder = OrderModel(
-          id: '',
-          customerId: '',
-          kitchenId: widget.kitchenId,
-          kitchenName: widget.kitchenName,
-          amount: total,
-          deliveryAddress: _selectedAddress!.fullAddress,
-          startDate: DateTime.now(),
-          endDate: DateTime.now(),
-          status: 'active',
-          paymentId: '',
-          createdAt: DateTime.now(),
-          orderType: 'one_time',
-        );
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => OrderSuccessScreen(order: dummyOrder)),
-          (route) => route.isFirst,
-        );
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(orderProvider.errorMessage ?? 'Failed to place order')),
-        );
-      }
+      orderProvider.openCheckoutForOneTime(
+        order: order,
+        items: itemsData,
+        tip: tip,
+        userEmail: email,
+        userPhone: phone,
+        onSuccess: (finalOrder) async {
+          await cartProvider.clearCart();
+          if (mounted) {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (_) => OrderSuccessScreen(order: finalOrder)),
+              (route) => route.isFirst,
+            );
+          }
+        },
+        onError: (error) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(error), backgroundColor: AppTheme.errorColor),
+            );
+          }
+        },
+      );
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }

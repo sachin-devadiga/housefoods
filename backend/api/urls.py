@@ -73,6 +73,7 @@ urlpatterns = [
     path('delivery/<int:pk>/verify-otp/', views.VerifyDeliveryOTPView.as_view(), name='verify-delivery-otp'),
     path('orders/<int:pk>/generate-delivery-otp/', views.GenerateDeliveryOTPView.as_view(), name='generate-delivery-otp'),
     path('delivery/earnings/', views.DeliveryEarningsView.as_view(), name='delivery-earnings'),
+    path('delivery/payouts/', views.DeliveryPartnerPayoutView.as_view(), name='delivery-payouts'),
     path('delivery/availability/', views.DeliveryAvailabilityView.as_view(), name='delivery-availability'),
 
     # Wallet
