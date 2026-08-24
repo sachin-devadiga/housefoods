@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../../../../../core/theme/app_theme.dart';
 import '../../../../auth/presentation/providers/auth_provider.dart';
 import '../../../../customer/domain/models/subscription_plan_model.dart';
-import '../../../../customer/presentation/widgets/subscription_plan_card.dart';
 import '../../providers/chef_provider.dart';
 import '../add_plan_screen.dart';
 import '../kitchen_setup_screen.dart';
