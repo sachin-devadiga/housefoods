@@ -1,53 +1,37 @@
-"""Safe migration management command that handles corrupted database state."""
+"""Safe migration: drops django_migrations table if DB is corrupted, then migrates fresh."""
 import os
 import sys
 from django.core.management.base import BaseCommand
+from django.core.management import call_command
 from django.db import connection
 
 
 class Command(BaseCommand):
-    help = 'Safe migrate that handles missing tables from wiped databases'
+    help = 'Safe migrate that handles wiped databases by dropping migration history'
 
     def handle(self, *args, **options):
         self.stdout.write('Checking database state...')
 
-        # Check if critical tables exist
-        tables_needed = ['auth_user', 'django_migrations']
-        missing = []
         with connection.cursor() as cursor:
-            for table in tables_needed:
-                cursor.execute(
-                    "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = %s)",
-                    [table]
-                )
-                exists = cursor.fetchone()[0]
-                if not exists:
-                    missing.append(table)
-                    self.stdout.write(self.style.WARNING(f'  Table {table} is MISSING'))
+            # Check if auth_user table exists
+            cursor.execute(
+                "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'auth_user')"
+            )
+            auth_exists = cursor.fetchone()[0]
 
-        if missing:
-            self.stdout.write(self.style.WARNING(
-                f'Database appears wiped. Missing tables: {missing}. '
-                'Resetting migration state...'
-            ))
+            if not auth_exists:
+                self.stdout.write(self.style.WARNING(
+                    'auth_user table MISSING. Dropping django_migrations to start fresh...'
+                ))
+                cursor.execute('DROP TABLE IF EXISTS django_migrations CASCADE')
+                self.stdout.write(self.style.SUCCESS('Dropped django_migrations table.'))
+            else:
+                self.stdout.write('auth_user exists. Running normal migrate...')
+                call_command('migrate', '--noinput', verbosity=1)
+                self.stdout.write(self.style.SUCCESS('Done!'))
+                return
 
-            # Fake unapply all known apps
-            from django.core.management import call_command
-            apps = ['token_blacklist', 'admin', 'sessions', 'contenttypes', 'auth', 'api']
-            for app in apps:
-                try:
-                    call_command('migrate', app, 'zero', '--fake', verbosity=0)
-                except Exception:
-                    pass
-
-            # Fake apply all
-            try:
-                call_command('migrate', '--fake', verbosity=0)
-            except Exception:
-                pass
-
-        # Now do a real migrate
-        self.stdout.write('Running migrate...')
-        from django.core.management import call_command
+        # Run migrations from scratch
+        self.stdout.write('Running fresh migrate...')
         call_command('migrate', '--noinput', verbosity=1)
         self.stdout.write(self.style.SUCCESS('Migrations complete!'))
