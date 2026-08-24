@@ -55,6 +55,9 @@ class OrderProvider extends ChangeNotifier {
   double _walletRedemptionAmount = 0.0;
   double get walletRedemptionAmount => _walletRedemptionAmount;
 
+  String? _error;
+  String? get errorMessage => _error;
+
   OrderModel? _pendingOrder;
   Function(OrderModel)? _onSuccessCallback;
   Function(String)? _onErrorCallback;
@@ -403,6 +406,49 @@ class OrderProvider extends ChangeNotifier {
   }
 
   void _handleExternalWallet(ExternalWalletResponse response) {}
+
+  Future<bool> placeOneTimeOrder({
+    required String kitchenId,
+    required double amount,
+    required String deliveryAddress,
+    required List<Map<String, dynamic>> items,
+    double tip = 0,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final orderData = {
+        'kitchen': kitchenId,
+        'order_type': 'one_time',
+        'amount': amount.toString(),
+        'delivery_address': deliveryAddress,
+        'items': items,
+        'tip': tip.toString(),
+      };
+
+      if (_isWalletApplied && _walletRedemptionAmount > 0) {
+        orderData['wallet_deduction'] = _walletRedemptionAmount.toString();
+        await _orderRepository.placeOrderWithWallet(
+          orderData: orderData,
+          walletDeduction: _walletRedemptionAmount,
+        );
+      } else {
+        await _orderRepository.placeOrder(orderData);
+      }
+
+      removeCoupon();
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
 
   @override
   void dispose() {

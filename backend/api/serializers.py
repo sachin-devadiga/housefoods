@@ -1,8 +1,9 @@
 from rest_framework import serializers
+from django.utils import timezone
 from .models import (
     UserProfile, Address, Kitchen, KitchenImage, KitchenCategory,
-    MenuCategory, MenuItem, SubscriptionPlan, DailyMenu, Order,
-    DeliveryLog, Payment, WalletTransaction, Review, Coupon,
+    MenuCategory, MenuItem, SubscriptionPlan, DailyMenu, Order, OrderItem,
+    Cart, CartItem, DeliveryLog, Payment, WalletTransaction, Review, Coupon,
     Notification, SupportTicket, Banner, AdminSetting, PayoutRequest,
     ChatMessage, DeliveryDocument,
 )
@@ -211,12 +212,23 @@ class KitchenListSerializer(CamelCaseModelSerializer):
         ]
 
 
+class OrderItemSerializer(CamelCaseModelSerializer):
+    menu_item_name = serializers.CharField(source='menu_item.name', read_only=True)
+    menu_item_image = serializers.CharField(source='menu_item.image_url', read_only=True)
+
+    class Meta:
+        model = OrderItem
+        fields = ['id', 'menu_item', 'menu_item_name', 'menu_item_image', 'quantity', 'price_at_order', 'special_instructions']
+        read_only_fields = ['price_at_order']
+
+
 class OrderSerializer(CamelCaseModelSerializer):
     kitchen_details = KitchenListSerializer(source='kitchen', read_only=True)
     customer_details = UserProfileMiniSerializer(source='customer', read_only=True)
     delivery_partner_details = UserProfileMiniSerializer(source='delivery_partner', read_only=True)
     kitchen_name = serializers.CharField(source='kitchen.name', read_only=True)
     customer_name = serializers.CharField(source='customer.name', read_only=True)
+    items = OrderItemSerializer(many=True, read_only=True)
 
     class Meta:
         model = Order
@@ -225,21 +237,73 @@ class OrderSerializer(CamelCaseModelSerializer):
 
 
 class OrderCreateSerializer(serializers.ModelSerializer):
+    items_data = OrderItemSerializer(many=True, required=False, write_only=True)
+
     class Meta:
         model = Order
         fields = [
-            'kitchen', 'plan', 'plan_name', 'amount', 'delivery_address',
-            'start_date', 'end_date', 'delivery_slot_id', 'meal_type',
+            'kitchen', 'order_type', 'plan', 'plan_name', 'amount', 'subtotal',
+            'tax', 'platform_fee', 'tip', 'delivery_address', 'delivery_time',
+            'start_date', 'end_date', 'delivery_slot_id', 'meal_type', 'items_data',
         ]
         read_only_fields = ['plan_name']
 
     def create(self, validated_data):
+        items_data = validated_data.pop('items_data', [])
         validated_data['customer'] = self.context['request'].user.profile
-        validated_data['status'] = 'active'
-        plan = validated_data.get('plan')
-        if plan and not validated_data.get('plan_name'):
-            validated_data['plan_name'] = plan.name
-        return super().create(validated_data)
+
+        order_type = validated_data.get('order_type', 'subscription')
+        if order_type == 'one_time':
+            validated_data['status'] = 'active'
+            validated_data['start_date'] = validated_data.get('delivery_time', timezone.now()).date() if not validated_data.get('start_date') else validated_data['start_date']
+            validated_data['end_date'] = validated_data.get('start_date')
+        else:
+            validated_data['status'] = 'active'
+            plan = validated_data.get('plan')
+            if plan and not validated_data.get('plan_name'):
+                validated_data['plan_name'] = plan.name
+
+        order = super().create(validated_data)
+
+        if order_type == 'one_time' and items_data:
+            for item_data in items_data:
+                menu_item = item_data['menu_item']
+                OrderItem.objects.create(
+                    order=order,
+                    menu_item=menu_item,
+                    quantity=item_data.get('quantity', 1),
+                    price_at_order=menu_item.price,
+                    special_instructions=item_data.get('special_instructions', ''),
+                )
+
+        return order
+
+
+class CartItemSerializer(CamelCaseModelSerializer):
+    menu_item_name = serializers.CharField(source='menu_item.name', read_only=True)
+    menu_item_image = serializers.CharField(source='menu_item.image_url', read_only=True)
+    menu_item_price = serializers.DecimalField(source='menu_item.price', max_digits=10, decimal_places=2, read_only=True)
+    item_total = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CartItem
+        fields = ['id', 'menu_item', 'menu_item_name', 'menu_item_image', 'menu_item_price', 'quantity', 'special_instructions', 'item_total']
+        read_only_fields = ['item_total']
+
+    def get_item_total(self, obj):
+        return float(obj.menu_item.price * obj.quantity)
+
+
+class CartSerializer(CamelCaseModelSerializer):
+    items = CartItemSerializer(many=True, read_only=True)
+    total_item_count = serializers.IntegerField(read_only=True)
+    subtotal = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    kitchen_name = serializers.CharField(source='kitchen.name', read_only=True)
+
+    class Meta:
+        model = Cart
+        fields = ['id', 'kitchen', 'kitchen_name', 'items', 'total_item_count', 'subtotal', 'updated_at']
+        read_only_fields = ['subtotal', 'total_item_count']
 
 
 class DeliveryLogSerializer(serializers.ModelSerializer):

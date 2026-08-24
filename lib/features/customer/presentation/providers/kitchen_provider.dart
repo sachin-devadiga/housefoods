@@ -4,6 +4,7 @@ import '../../../../core/services/location_service.dart';
 import '../../../../core/services/prefs_service.dart';
 import '../../../../features/customer/domain/models/kitchen_model.dart';
 import '../../../../features/customer/domain/models/subscription_plan_model.dart';
+import '../../../../features/customer/domain/models/menu_item_model.dart';
 import '../../../../features/customer/domain/repositories/kitchen_repository.dart';
 import '../../../../features/chef/domain/models/daily_menu_model.dart';
 
@@ -61,6 +62,12 @@ class KitchenProvider extends ChangeNotifier {
 
   List<SubscriptionPlanModel> _plans = [];
   List<SubscriptionPlanModel> get plans => _plans;
+
+  List<MenuItemModel> _menuItems = [];
+  List<MenuItemModel> get menuItems => _menuItems;
+
+  bool _isMenuItemsLoading = false;
+  bool get isMenuItemsLoading => _isMenuItemsLoading;
 
   Future<void> fetchKitchens() async {
     _isLoading = true;
@@ -188,6 +195,13 @@ class KitchenProvider extends ChangeNotifier {
       final menus = await _repository.getDailyMenus(kitchenId);
       _dailyMenus = { for (var menu in menus) DateTime(menu.date.year, menu.date.month, menu.date.day): menu };
     } catch (e) { debugPrint("Menus error: $e"); } finally { _isMenusLoading = false; notifyListeners(); }
+  }
+
+  Future<void> fetchMenuItems(String kitchenId) async {
+    _isMenuItemsLoading = true; _menuItems = []; notifyListeners();
+    try {
+      _menuItems = await _repository.getMenuItems(kitchenId);
+    } catch (e) { debugPrint("Menu items error: $e"); } finally { _isMenuItemsLoading = false; notifyListeners(); }
   }
 
   Future<void> searchKitchens(String query) async {

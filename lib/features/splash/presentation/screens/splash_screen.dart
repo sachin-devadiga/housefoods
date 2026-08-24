@@ -124,6 +124,16 @@ class _SplashScreenState extends State<SplashScreen> {
                 letterSpacing: 1.5,
               ),
             ),
+            const SizedBox(height: 8),
+            const Text(
+              'Order/subscribe anything you prefer for instant delivery',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 14,
+                fontStyle: FontStyle.italic,
+              ),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 20),
             const CircularProgressIndicator(
               valueColor: AlwaysStoppedAnimation<Color>(Colors.white),

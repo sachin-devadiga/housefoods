@@ -2,6 +2,7 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/api_service.dart';
 import '../../../../features/customer/domain/models/kitchen_model.dart';
 import '../../../../features/customer/domain/models/subscription_plan_model.dart';
+import '../../../../features/customer/domain/models/menu_item_model.dart';
 import '../../../../features/customer/domain/repositories/kitchen_repository.dart';
 import '../../../../features/chef/domain/models/daily_menu_model.dart';
 
@@ -73,6 +74,15 @@ class KitchenRepositoryImpl implements KitchenRepository {
     final list = (data['data'] as List?) ?? [];
     return list
         .map((e) => DailyMenuModel.fromMap(e as Map<String, dynamic>, e['id'].toString()))
+        .toList();
+  }
+
+  @override
+  Future<List<MenuItemModel>> getMenuItems(String kitchenId) async {
+    final data = await _api.get('${AppConstants.menuItemsEndpoint}/$kitchenId/menu-items/');
+    final list = (data['data'] as List?) ?? [];
+    return list
+        .map((e) => MenuItemModel.fromMap(e as Map<String, dynamic>, e['id'].toString()))
         .toList();
   }
 }

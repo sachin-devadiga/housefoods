@@ -53,6 +53,12 @@ urlpatterns = [
     path('orders/skip-meal/', views.SkipMealView.as_view(), name='skip-meal'),
     path('orders/cancel-subscription/', views.CancelSubscriptionView.as_view(), name='cancel-subscription'),
 
+    # Cart
+    path('cart/', views.CartView.as_view(), name='cart'),
+    path('cart/items/', views.CartItemAddView.as_view(), name='cart-item-add'),
+    path('cart/items/<int:pk>/', views.CartItemDetailView.as_view(), name='cart-item-detail'),
+    path('cart/clear/', views.CartClearView.as_view(), name='cart-clear'),
+
     # Delivery Logs
     path('orders/<int:order_id>/delivery-logs/', views.DeliveryLogListView.as_view(), name='delivery-log-list'),
     path('delivery-logs/', views.CreateDeliveryLogView.as_view(), name='create-delivery-log'),

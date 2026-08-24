@@ -3,13 +3,16 @@ import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_cached_image.dart';
 import '../../domain/models/kitchen_model.dart';
+import '../../domain/models/menu_item_model.dart';
 import '../providers/kitchen_provider.dart';
 import '../providers/review_provider.dart';
+import '../providers/cart_provider.dart';
 import '../widgets/subscription_plan_card.dart';
 import '../widgets/review_card.dart';
 import '../widgets/meal_calendar_widget.dart';
 import '../../../chat/presentation/screens/chat_screen.dart';
 import 'checkout_screen.dart';
+import 'cart_screen.dart';
 
 class KitchenDetailsScreen extends StatefulWidget {
   final KitchenModel kitchen;
@@ -28,7 +31,9 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
       final provider = context.read<KitchenProvider>();
       provider.fetchSubscriptionPlans(widget.kitchen.id);
       provider.fetchDailyMenus(widget.kitchen.id);
+      provider.fetchMenuItems(widget.kitchen.id);
       context.read<ReviewProvider>().fetchKitchenReviews(widget.kitchen.id);
+      context.read<CartProvider>().loadCart();
     });
   }
 
@@ -37,6 +42,27 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
     final bool isOpen = widget.kitchen.isOpen;
 
     return Scaffold(
+      floatingActionButton: Consumer<CartProvider>(
+        builder: (context, cartProvider, _) {
+          if (cartProvider.isNotEmpty) {
+            return FloatingActionButton.extended(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CartScreen()),
+                );
+              },
+              backgroundColor: AppTheme.primaryColor,
+              icon: const Icon(Icons.shopping_cart, color: Colors.white),
+              label: Text(
+                'Cart (${cartProvider.itemCount}) - ₹${cartProvider.subtotal.toStringAsFixed(0)}',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            );
+          }
+          return const SizedBox.shrink();
+        },
+      ),
       body: CustomScrollView(
         slivers: [
           _buildAppBar(),
@@ -77,6 +103,10 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
                       _buildSectionTitle("Available Subscription Plans"),
                       const SizedBox(height: 16),
                       _buildPlansList(isOpen),
+                      const SizedBox(height: 32),
+                      _buildSectionTitle("Order Now (One-Time)"),
+                      const SizedBox(height: 16),
+                      _buildMenuItemsList(isOpen),
                       const SizedBox(height: 32),
                       _buildSectionTitle("Customer Reviews"),
                       const SizedBox(height: 16),
@@ -220,6 +250,179 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
           },
         );
       },
+    );
+  }
+
+  Widget _buildMenuItemsList(bool isOpen) {
+    return Consumer<KitchenProvider>(
+      builder: (context, provider, child) {
+        if (provider.isMenuItemsLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (provider.menuItems.isEmpty) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Text("No menu items available."),
+            ),
+          );
+        }
+
+        return ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: provider.menuItems.length,
+          itemBuilder: (context, index) {
+            final item = provider.menuItems[index];
+            return _buildMenuItemCard(item, isOpen);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildMenuItemCard(MenuItemModel item, bool isOpen) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: item.imageUrl.isNotEmpty
+                  ? Image.network(
+                      item.imageUrl,
+                      width: 80,
+                      height: 80,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 80,
+                        height: 80,
+                        color: Colors.grey[200],
+                        child: const Icon(Icons.fastfood, color: Colors.grey),
+                      ),
+                    )
+                  : Container(
+                      width: 80,
+                      height: 80,
+                      color: Colors.grey[200],
+                      child: const Icon(Icons.fastfood, color: Colors.grey),
+                    ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      if (item.isVeg)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.green,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text('VEG', style: TextStyle(color: Colors.white, fontSize: 9)),
+                        )
+                      else
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text('NON-VEG', style: TextStyle(color: Colors.white, fontSize: 9)),
+                        ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${item.preparationTime} min',
+                        style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    item.name,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    item.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '₹${item.price.toStringAsFixed(0)}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: AppTheme.primaryColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isOpen)
+              Consumer<CartProvider>(
+                builder: (context, cartProvider, _) {
+                  final isInCart = cartProvider.cart?.items.any((ci) => ci.menuItemId == item.id) ?? false;
+                  final cartItem = isInCart
+                      ? cartProvider.cart?.items.firstWhere((ci) => ci.menuItemId == item.id)
+                      : null;
+
+                  if (isInCart && cartItem != null) {
+                    return Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppTheme.primaryColor),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          InkWell(
+                            onTap: () => cartProvider.updateItemQuantity(cartItem.id, cartItem.quantity - 1),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              child: Icon(Icons.remove, size: 18, color: AppTheme.primaryColor),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            child: Text('${cartItem.quantity}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                          InkWell(
+                            onTap: () => cartProvider.updateItemQuantity(cartItem.id, cartItem.quantity + 1),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              child: Icon(Icons.add, size: 18, color: AppTheme.primaryColor),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryColor,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () => cartProvider.addItem(
+                      menuItemId: item.id,
+                      quantity: 1,
+                    ),
+                    child: const Text('ADD', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  );
+                },
+              ),
+          ],
+        ),
+      ),
     );
   }
 

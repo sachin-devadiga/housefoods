@@ -33,6 +33,7 @@ import 'features/customer/presentation/providers/kitchen_provider.dart';
 import 'features/customer/presentation/providers/order_provider.dart';
 import 'features/customer/presentation/providers/review_provider.dart';
 import 'features/customer/presentation/providers/favorites_provider.dart';
+import 'features/customer/presentation/providers/cart_provider.dart';
 import 'features/notifications/data/repositories/notification_repository_impl.dart';
 import 'features/notifications/presentation/providers/notification_provider.dart';
 import 'features/support/presentation/providers/support_provider.dart';
@@ -115,6 +116,7 @@ class MealinApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => NotificationProvider(notificationRepository)),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => LanguageProvider()),
+        ChangeNotifierProvider(create: (_) => CartProvider()),
       ],
       child: Consumer2<ThemeProvider, LanguageProvider>(
         builder: (context, themeProvider, languageProvider, child) {

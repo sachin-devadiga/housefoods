@@ -23,8 +23,8 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from .models import (
     OTP, UserProfile, Address, Kitchen, KitchenImage, KitchenCategory,
-    MenuCategory, MenuItem, SubscriptionPlan, DailyMenu, Order,
-    DeliveryLog, Payment, WalletTransaction, Review, Coupon,
+    MenuCategory, MenuItem, SubscriptionPlan, DailyMenu, Order, OrderItem,
+    Cart, CartItem, DeliveryLog, Payment, WalletTransaction, Review, Coupon,
     Notification, SupportTicket, Banner, AdminSetting, PayoutRequest,
     ChatMessage, DeliveryDocument,
 )
@@ -34,7 +34,8 @@ from .serializers import (
     UserProfileSerializer, UserProfileMiniSerializer, AddressSerializer,
     KitchenCategorySerializer, KitchenSerializer, KitchenListSerializer,
     MenuCategorySerializer, MenuItemSerializer, SubscriptionPlanSerializer,
-    DailyMenuSerializer, OrderSerializer, OrderCreateSerializer,
+    DailyMenuSerializer, OrderSerializer, OrderCreateSerializer, OrderItemSerializer,
+    CartSerializer, CartItemSerializer,
     DeliveryLogSerializer, PaymentSerializer, WalletTransactionSerializer,
     ReviewSerializer, ReviewCreateSerializer, CouponSerializer,
     CouponValidateSerializer, NotificationSerializer,
@@ -1201,6 +1202,99 @@ class CancelSubscriptionView(APIView):
 
 
 # ──────────────────────────────────────────────
+# CART VIEWS
+# ──────────────────────────────────────────────
+
+class CartView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cart, _ = Cart.objects.get_or_create(user=request.user.profile)
+        return Response(CartSerializer(cart).data)
+
+
+class CartItemAddView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        cart, _ = Cart.objects.get_or_create(user=request.user.profile)
+        menu_item_id = request.data.get('menu_item')
+        quantity = int(request.data.get('quantity', 1))
+        special_instructions = request.data.get('special_instructions', '')
+
+        if not menu_item_id:
+            return Response({'error': 'menu_item is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            menu_item = MenuItem.objects.get(pk=menu_item_id, is_available=True)
+        except MenuItem.DoesNotExist:
+            return Response({'error': 'Menu item not found or unavailable'}, status=status.HTTP_404_NOT_FOUND)
+
+        if cart.kitchen and cart.kitchen.pk != menu_item.kitchen.pk:
+            return Response({'error': 'Cannot add items from different kitchens. Clear cart first.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        cart.kitchen = menu_item.kitchen
+        cart.save()
+
+        cart_item, created = CartItem.objects.get_or_create(
+            cart=cart, menu_item=menu_item,
+            defaults={'quantity': quantity, 'special_instructions': special_instructions}
+        )
+        if not created:
+            cart_item.quantity += quantity
+            cart_item.special_instructions = special_instructions or cart_item.special_instructions
+            cart_item.save()
+
+        return Response(CartSerializer(cart).data, status=status.HTTP_201_CREATED)
+
+
+class CartItemDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, pk):
+        cart, _ = Cart.objects.get_or_create(user=request.user.profile)
+        try:
+            cart_item = CartItem.objects.get(pk=pk, cart=cart)
+        except CartItem.DoesNotExist:
+            return Response({'error': 'Cart item not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        quantity = int(request.data.get('quantity', cart_item.quantity))
+        if quantity <= 0:
+            cart_item.delete()
+        else:
+            cart_item.quantity = quantity
+            cart_item.special_instructions = request.data.get('special_instructions', cart_item.special_instructions)
+            cart_item.save()
+
+        return Response(CartSerializer(cart).data)
+
+    def delete(self, request, pk):
+        cart, _ = Cart.objects.get_or_create(user=request.user.profile)
+        try:
+            cart_item = CartItem.objects.get(pk=pk, cart=cart)
+            cart_item.delete()
+        except CartItem.DoesNotExist:
+            return Response({'error': 'Cart item not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if cart.items.count() == 0:
+            cart.kitchen = None
+            cart.save()
+
+        return Response(CartSerializer(cart).data)
+
+
+class CartClearView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        cart, _ = Cart.objects.get_or_create(user=request.user.profile)
+        cart.items.all().delete()
+        cart.kitchen = None
+        cart.save()
+        return Response({'success': True})
+
+
+# ──────────────────────────────────────────────
 # PAYMENT VIEWS
 # ──────────────────────────────────────────────
 
@@ -1210,6 +1304,8 @@ class PlaceOrderView(APIView):
     @transaction.atomic
     def post(self, request):
         kitchen_id = request.data.get('kitchen')
+        order_type = request.data.get('order_type', 'subscription')
+
         if kitchen_id:
             try:
                 kitchen = Kitchen.objects.get(pk=kitchen_id)
@@ -1219,6 +1315,25 @@ class PlaceOrderView(APIView):
                     return Response({'error': 'Kitchen is currently closed'}, status=status.HTTP_400_BAD_REQUEST)
             except Kitchen.DoesNotExist:
                 return Response({'error': 'Kitchen not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if order_type == 'one_time':
+            items_data = request.data.get('items', [])
+            if not items_data:
+                return Response({'error': 'items are required for one-time orders'}, status=status.HTTP_400_BAD_REQUEST)
+
+            serializer = OrderCreateSerializer(data=request.data, context={'request': request})
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            order = serializer.save()
+
+            cart, _ = Cart.objects.get_or_create(user=request.user.profile)
+            cart.items.all().delete()
+            cart.kitchen = None
+            cart.save()
+
+            notify_chef_new_order(order.kitchen.chef, order)
+            return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
         serializer = OrderCreateSerializer(data=request.data, context={'request': request})
         if not serializer.is_valid():
@@ -1250,6 +1365,8 @@ class PlaceOrderWithWalletView(APIView):
     @transaction.atomic
     def post(self, request):
         kitchen_id = request.data.get('kitchen')
+        order_type = request.data.get('order_type', 'subscription')
+
         if kitchen_id:
             try:
                 kitchen = Kitchen.objects.get(pk=kitchen_id)
@@ -1259,6 +1376,42 @@ class PlaceOrderWithWalletView(APIView):
                     return Response({'error': 'Kitchen is currently closed'}, status=status.HTTP_400_BAD_REQUEST)
             except Kitchen.DoesNotExist:
                 return Response({'error': 'Kitchen not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if order_type == 'one_time':
+            items_data = request.data.get('items', [])
+            if not items_data:
+                return Response({'error': 'items are required for one-time orders'}, status=status.HTTP_400_BAD_REQUEST)
+
+            serializer = OrderCreateSerializer(data=request.data, context={'request': request})
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            raw_deduction = request.data.get('wallet_deduction')
+            wallet_deduction = Decimal(str(raw_deduction)) if raw_deduction else Decimal('0')
+            profile = UserProfile.objects.select_for_update().get(pk=request.user.profile.pk)
+
+            if wallet_deduction > profile.wallet_balance:
+                return Response({'error': 'Insufficient wallet balance'}, status=status.HTTP_400_BAD_REQUEST)
+
+            order = serializer.save()
+            profile.wallet_balance -= wallet_deduction
+            profile.save()
+
+            WalletTransaction.objects.create(
+                user=profile,
+                amount=wallet_deduction,
+                type='debit',
+                category='order_payment',
+                description=f'Used credits for order from {order.kitchen.name}',
+            )
+
+            cart, _ = Cart.objects.get_or_create(user=request.user.profile)
+            cart.items.all().delete()
+            cart.kitchen = None
+            cart.save()
+
+            notify_chef_new_order(order.kitchen.chef, order)
+            return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
         serializer = OrderCreateSerializer(data=request.data, context={'request': request})
         if not serializer.is_valid():

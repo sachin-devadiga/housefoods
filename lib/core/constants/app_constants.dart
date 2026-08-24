@@ -131,6 +131,11 @@ class AppConstants {
   static const String deliveryDocumentDetailEndpoint = '/api/auth/delivery/documents';
   static const String deliveryDocumentDeleteEndpoint = '/api/auth/delivery/documents';
 
+  // Cart
+  static const String cartEndpoint = '/api/auth/cart/';
+  static const String cartItemsEndpoint = '/api/auth/cart/items/';
+  static const String cartClearEndpoint = '/api/auth/cart/clear/';
+
   // Razorpay
   // Override with: --dart-define=RAZORPAY_KEY=rzp_live_xxxx
   static const String razorpayKey = String.fromEnvironment('RAZORPAY_KEY', defaultValue: 'rzp_test_YOUR_KEY_HERE');

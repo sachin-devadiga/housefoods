@@ -272,14 +272,25 @@ class Order(models.Model):
         ('delivered', 'Delivered'),
     ]
 
+    ORDER_TYPE_CHOICES = [
+        ('one_time', 'One-Time Order'),
+        ('subscription', 'Subscription'),
+    ]
+
     customer = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='orders')
     kitchen = models.ForeignKey(Kitchen, on_delete=models.CASCADE, related_name='orders')
+    order_type = models.CharField(max_length=20, choices=ORDER_TYPE_CHOICES, default='subscription')
     plan = models.ForeignKey(SubscriptionPlan, on_delete=models.SET_NULL, null=True, blank=True)
     plan_name = models.CharField(max_length=255, blank=True, default='')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    tax = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    platform_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    tip = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
     delivery_address = models.TextField()
-    start_date = models.DateField()
-    end_date = models.DateField()
+    delivery_time = models.DateTimeField(null=True, blank=True)
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     delivery_status = models.CharField(max_length=20, choices=DELIVERY_STATUS_CHOICES, default='pending')
     payment_id = models.CharField(max_length=255, blank=True, default='')
@@ -308,6 +319,58 @@ class Order(models.Model):
 
     def __str__(self):
         return f'Order #{self.id} - {self.customer.email}'
+
+
+class OrderItem(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
+    menu_item = models.ForeignKey(MenuItem, on_delete=models.CASCADE)
+    quantity = models.IntegerField(default=1)
+    price_at_order = models.DecimalField(max_digits=10, decimal_places=2)
+    special_instructions = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'order_items'
+
+    def __str__(self):
+        return f'{self.quantity}x {self.menu_item.name} (Order #{self.order.id})'
+
+
+class Cart(models.Model):
+    user = models.OneToOneField(UserProfile, on_delete=models.CASCADE, related_name='cart')
+    kitchen = models.ForeignKey(Kitchen, on_delete=models.SET_NULL, null=True, blank=True, related_name='carts')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'carts'
+
+    def __str__(self):
+        return f'Cart for {self.user.email}'
+
+    @property
+    def total_item_count(self):
+        return sum(item.quantity for item in self.items.all())
+
+    @property
+    def subtotal(self):
+        return sum(item.quantity * item.menu_item.price for item in self.items.all())
+
+
+class CartItem(models.Model):
+    cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name='items')
+    menu_item = models.ForeignKey(MenuItem, on_delete=models.CASCADE)
+    quantity = models.IntegerField(default=1)
+    special_instructions = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'cart_items'
+        unique_together = ['cart', 'menu_item']
+
+    def __str__(self):
+        return f'{self.quantity}x {self.menu_item.name}'
 
 
 class DeliveryLog(models.Model):
