@@ -40,6 +40,7 @@ import 'features/support/presentation/providers/support_provider.dart';
 import 'features/rewards/presentation/providers/reward_provider.dart';
 import 'features/delivery_partner/presentation/providers/delivery_partner_provider.dart';
 import 'features/splash/presentation/screens/splash_screen.dart';
+import 'meal_voice/meal_voice_controller.dart';
 
 void main() async {
   FlutterError.onError = (details) {
@@ -117,6 +118,7 @@ class MealinApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => LanguageProvider()),
         ChangeNotifierProvider(create: (_) => CartProvider()),
+        ChangeNotifierProvider(create: (_) => MealVoiceController()),
       ],
       child: Consumer2<ThemeProvider, LanguageProvider>(
         builder: (context, themeProvider, languageProvider, child) {

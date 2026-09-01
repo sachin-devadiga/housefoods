@@ -14,6 +14,7 @@ import '../../../../auth/presentation/screens/dietary_setup_screen.dart';
 import '../../../../support/presentation/screens/user_tickets_screen.dart';
 import '../my_favorites_screen.dart';
 import '../../../../rewards/presentation/screens/wallet_screen.dart';
+import '../../../../../meal_voice/meal_voice_screen.dart';
 
 class ProfileTab extends StatelessWidget {
   const ProfileTab({super.key});
@@ -139,6 +140,11 @@ class ProfileTab extends StatelessWidget {
             Icons.account_balance_wallet, 
             "My Wallet", 
             () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WalletScreen()))
+          ),
+          _buildProfileOption(
+            Icons.mic, 
+            "MEAL Voice Assistant", 
+            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MealVoiceTestScreen()))
           ),
           _buildProfileOption(
             Icons.help_outline, 
