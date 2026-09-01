@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'meal_voice_service.dart';
 import 'meal_voice_state.dart';
 
@@ -39,6 +40,10 @@ class MealVoiceController extends ChangeNotifier {
 
     // Check microphone availability
     _microphoneAvailable = await _service.isMicrophoneAvailable();
+
+    // Check current permission status
+    _permissionGranted = await Permission.microphone.isGranted;
+
     notifyListeners();
   }
 
@@ -69,12 +74,14 @@ class MealVoiceController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Request microphone permission
+  /// Request microphone permission using permission_handler
   Future<void> requestPermission() async {
     _state = MealVoiceState.initializing;
+    _lastEvent = 'Requesting permission...';
     notifyListeners();
 
-    _permissionGranted = await _service.requestMicrophonePermission();
+    final status = await Permission.microphone.request();
+    _permissionGranted = status.isGranted;
     _lastEvent = _permissionGranted ? 'Permission granted' : 'Permission denied';
     _state = _permissionGranted ? MealVoiceState.idle : MealVoiceState.error;
     notifyListeners();

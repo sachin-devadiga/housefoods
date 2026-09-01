@@ -13,11 +13,7 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.housefoods.MainActivity
-import io.flutter.embedding.engine.FlutterEngineCache
 
-/**
- * Foreground Service for MEAL wake-word detection.
- */
 class MealVoiceService : Service() {
 
     companion object {
@@ -27,9 +23,6 @@ class MealVoiceService : Service() {
 
         var isRunning = false
             private set
-
-        private var flutterEngine: io.flutter.embedding.engine.FlutterEngine? = null
-        private var bridge: MealVoiceBridge? = null
     }
 
     private var wakeWordEngine: WakeWordEngine? = null
@@ -70,50 +63,33 @@ class MealVoiceService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
 
-        flutterEngine = FlutterEngineCache.getInstance().get("main_engine")
-        if (flutterEngine == null) {
-            Log.e(TAG, "Flutter engine not cached")
-            stopSelf()
-            return false
-        }
-
-        bridge = MealVoiceBridge(flutterEngine!!, this)
-        bridge?.attach()
-
         wakeWordEngine = SpeechRecognizerWakeWordEngine()
         wakeWordEngine!!.initialize(
             context = this,
             onDetected = WakeWordEngine.OnWakeWordDetected { onWakeWordDetected() },
-            onEvent = WakeWordEngine.OnEngineEvent { type, data -> bridge?.sendLog("$type: $data") }
+            onEvent = WakeWordEngine.OnEngineEvent { type, data -> sendEvent(type, data?.toString() ?: "") }
         )
 
         val started = wakeWordEngine!!.start()
         if (!started) {
-            Log.e(TAG, "Failed to start wake word engine")
-            bridge?.sendError("Failed to start microphone")
+            Log.e(TAG, "Failed to start")
+            sendEvent("error", "Failed to start microphone")
             stopSelf()
             return false
         }
 
         isRunning = true
-        bridge?.sendStateChanged(MealVoiceState.LISTENING_FOR_WAKE_WORD.ordinal)
-        Log.i(TAG, "Wake-word detection started")
+        sendEvent("stateChanged", com.example.housefoods.mealvoice.MealVoiceState.LISTENING_FOR_WAKE_WORD.ordinal.toString())
+        Log.i(TAG, "Started successfully")
         return true
     }
 
     fun stopVoiceService() {
-        if (!isRunning && wakeWordEngine == null) return
-
-        Log.i(TAG, "Stopping wake-word detection")
-
         wakeWordEngine?.stop()
         wakeWordEngine?.release()
         wakeWordEngine = null
 
-        bridge?.sendStateChanged(MealVoiceState.STOPPED.ordinal)
-        bridge?.detach()
-        bridge = null
-
+        sendEvent("stateChanged", MealVoiceState.STOPPED.ordinal.toString())
         isRunning = false
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -121,8 +97,15 @@ class MealVoiceService : Service() {
 
     private fun onWakeWordDetected() {
         Log.i(TAG, "=== WAKE WORD DETECTED ===")
-        bridge?.sendWakeWordDetected()
+        sendEvent("wakeWordDetected", System.currentTimeMillis().toString())
         updateNotification("Wake word detected! Listening...")
+    }
+
+    private fun sendEvent(type: String, data: String) {
+        val intent = Intent("com.mealin.VOICE_EVENT")
+        intent.putExtra("event_type", type)
+        intent.putExtra("event_data", data)
+        sendBroadcast(intent)
     }
 
     private fun createNotificationChannel() {
