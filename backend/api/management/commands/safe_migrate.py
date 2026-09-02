@@ -13,7 +13,6 @@ class Command(BaseCommand):
         self.stdout.write('Checking database state...')
 
         with connection.cursor() as cursor:
-            # Check if auth_user table exists
             cursor.execute(
                 "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'auth_user')"
             )
@@ -29,9 +28,31 @@ class Command(BaseCommand):
                 self.stdout.write('auth_user exists. Running normal migrate...')
                 call_command('migrate', '--noinput', verbosity=1)
                 self.stdout.write(self.style.SUCCESS('Done!'))
+                self._seed_app_version()
                 return
 
-        # Run migrations from scratch
         self.stdout.write('Running fresh migrate...')
         call_command('migrate', '--noinput', verbosity=1)
         self.stdout.write(self.style.SUCCESS('Migrations complete!'))
+        self._seed_app_version()
+
+    def _seed_app_version(self):
+        """Seed app version settings if they don't exist."""
+        from api.models import AdminSetting
+
+        defaults = {
+            'app_latest_version': os.environ.get('APP_LATEST_VERSION', '1.0.2'),
+            'app_min_version': os.environ.get('APP_MIN_VERSION', '1.0.0'),
+            'app_update_url': os.environ.get('APP_UPDATE_URL', ''),
+            'app_update_message': os.environ.get('APP_UPDATE_MESSAGE', ''),
+            'app_force_update': os.environ.get('APP_FORCE_UPDATE', 'false'),
+        }
+
+        for key, default in defaults.items():
+            obj, created = AdminSetting.objects.get_or_create(
+                key=key, defaults={'value': default}
+            )
+            if created:
+                self.stdout.write(self.style.SUCCESS(f'Created {key} = {default}'))
+            else:
+                self.stdout.write(f'{key} already exists = {obj.value}')
