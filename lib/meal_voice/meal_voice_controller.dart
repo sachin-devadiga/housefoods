@@ -7,6 +7,8 @@ import 'meal_voice_service.dart';
 import 'meal_voice_state.dart';
 import 'meal_voice_command.dart';
 import 'meal_voice_command_parser.dart';
+import 'meal_voice_gemini_parser.dart';
+import 'meal_voice_parser_factory.dart';
 import 'meal_voice_tts_service.dart';
 import 'meal_voice_order_handler.dart';
 
@@ -21,7 +23,7 @@ import 'meal_voice_order_handler.dart';
 class MealVoiceController extends ChangeNotifier {
   final MealVoiceService _service = MealVoiceService.instance;
   final MealVoiceTtsService _tts = MealVoiceTtsService();
-  late final MealVoiceCommandParser _parser;
+  MealVoiceCommandParser? _parser;
   MealVoiceOrderHandler? _orderHandler;
 
   // State
@@ -88,7 +90,16 @@ class MealVoiceController extends ChangeNotifier {
     CartProvider? cartProvider,
     MealVoiceCommandParser? parser,
   }) async {
-    _parser = parser ?? RegexMealVoiceCommandParser();
+    _parser = parser ?? MealVoiceParserFactory.getParser();
+
+    // Initialize Gemini parser in background
+    MealVoiceParserFactory.initializeGemini().then((available) {
+      if (available) {
+        _parser = MealVoiceParserFactory.getParser();
+        _addLog('Gemini parser available');
+        notifyListeners();
+      }
+    });
 
     if (kitchenProvider != null && cartProvider != null) {
       _orderHandler = MealVoiceOrderHandler(
@@ -106,7 +117,7 @@ class MealVoiceController extends ChangeNotifier {
 
     _ttsAvailable = await _tts.initialize();
 
-    _addLog('Engine initialized (parser: ${_parser.parserName}, TTS: $_ttsAvailable)');
+    _addLog('Engine initialized (parser: ${_parser?.parserName ?? "unknown"}, TTS: $_ttsAvailable)');
     notifyListeners();
   }
 
@@ -214,12 +225,24 @@ class MealVoiceController extends ChangeNotifier {
   }
 
   /// Parse the transcription and process the command.
+  /// Uses Gemini if available, falls back to regex.
   Future<void> _parseAndProcess(String transcript) async {
     _isProcessing = true;
     _state = MealVoiceState.parsingCommand;
     notifyListeners();
 
-    final command = _parser.parse(transcript);
+    MealVoiceCommand command;
+
+    // Try Gemini async parse if available
+    final currentParser = _parser ?? MealVoiceParserFactory.getParser();
+    if (currentParser is GeminiMealVoiceCommandParser && currentParser.isAvailable) {
+      _addLog('Parsing with Gemini...');
+      command = await currentParser.parseAsync(transcript);
+    } else {
+      _addLog('Parsing with Regex...');
+      command = currentParser.parse(transcript);
+    }
+
     _lastCommand = command;
     _addLog('Parsed: ${command.intent.name} | ${command.items.length} item(s)');
 
@@ -375,7 +398,7 @@ class MealVoiceController extends ChangeNotifier {
   void _handleConfirmationResponse(String transcript) {
     _confirmationTimeout?.cancel();
 
-    final response = _parser.parseConfirmation(transcript);
+    final response = (_parser ?? MealVoiceParserFactory.getParser()).parseConfirmation(transcript);
     _addLog('Confirmation: ${response.name}');
 
     switch (response) {

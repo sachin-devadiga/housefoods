@@ -140,6 +140,10 @@ class AppConstants {
   // Override with: --dart-define=RAZORPAY_KEY=rzp_live_xxxx
   static const String razorpayKey = String.fromEnvironment('RAZORPAY_KEY', defaultValue: 'rzp_test_YOUR_KEY_HERE');
 
+  // Gemini AI
+  // Override with: --dart-define=GEMINI_API_KEY=your_key_here
+  static const String geminiApiKey = String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
+
   // Upload
   static const String uploadEndpoint = '/api/auth/upload/';
 
