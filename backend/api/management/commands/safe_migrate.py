@@ -49,10 +49,10 @@ class Command(BaseCommand):
         }
 
         for key, default in defaults.items():
-            obj, created = AdminSetting.objects.get_or_create(
+            obj, created = AdminSetting.objects.update_or_create(
                 key=key, defaults={'value': default}
             )
             if created:
                 self.stdout.write(self.style.SUCCESS(f'Created {key} = {default}'))
             else:
-                self.stdout.write(f'{key} already exists = {obj.value}')
+                self.stdout.write(f'Updated {key} = {default} (was {obj.value})')
