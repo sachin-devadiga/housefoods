@@ -2065,7 +2065,7 @@ class AppVersionView(APIView):
     permission_classes = [AllowAny]
 
     DEFAULTS = {
-        'app_latest_version': '1.0.0',
+        'app_latest_version': '1.0.2',
         'app_min_version': '1.0.0',
         'app_update_url': '',
         'app_update_message': '',
