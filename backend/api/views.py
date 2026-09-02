@@ -2050,3 +2050,41 @@ class MapRouteView(APIView):
             'duration': duration_min,
             'route': [[lat, lng] for lng, lat in coordinates],
         })
+
+
+# ──────────────────────────────────────────────
+# APP VERSION CHECK (public — no auth needed)
+# ──────────────────────────────────────────────
+
+class AppVersionView(APIView):
+    """Public endpoint: check latest app version from AdminSetting keys.
+    
+    Required AdminSetting keys (set via Django admin):
+      app_latest_version  — e.g. "1.0.6"
+      app_min_version     — e.g. "1.0.4"  (force-update threshold)
+      app_update_url      — direct APK download link
+      app_update_message  — "What's new" text
+      app_force_update    — "true" / "false"
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        def _get(key, default=''):
+            try:
+                return AdminSetting.objects.get(key=key).value
+            except AdminSetting.DoesNotExist:
+                return default
+
+        latest = _get('app_latest_version', '1.0.0')
+        min_ver = _get('app_min_version', '1.0.0')
+        update_url = _get('app_update_url', '')
+        message = _get('app_update_message', '')
+        force = _get('app_force_update', 'false').lower() == 'true'
+
+        return Response({
+            'latestVersion': latest,
+            'minVersion': min_ver,
+            'updateUrl': update_url,
+            'updateMessage': message,
+            'forceUpdate': force,
+        })

@@ -8,6 +8,9 @@ router.register(r'kitchens/(?P<kitchen_pk>[^/.]+)/menu-items', views.MenuItemVie
 router.register(r'kitchens/(?P<kitchen_pk>[^/.]+)/plans', views.SubscriptionPlanViewSet, basename='subscription-plan')
 
 urlpatterns = [
+    # App Version (public)
+    path('app-version/', views.AppVersionView.as_view(), name='app-version'),
+
     # Auth
     path('send-otp/', views.SendOTPView.as_view(), name='send-otp'),
     path('verify-otp/', views.VerifyOTPView.as_view(), name='verify-otp'),

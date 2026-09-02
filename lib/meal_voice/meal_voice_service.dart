@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'meal_voice_state.dart';
 
@@ -200,7 +201,7 @@ class MealVoiceService {
 
   void _log(String message, {String level = 'info'}) {
     final timestamp = DateTime.now().toIso8601String().substring(11, 19);
-    print('[MEAL][$timestamp][$level] $message');
+    debugPrint('[MEAL][$timestamp][$level] $message');
   }
 
   /// FIX #19: Reset singleton on dispose so next access creates fresh instance.

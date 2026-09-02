@@ -58,12 +58,23 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
     override fun start(): Boolean {
         if (!isInitialized) {
             Log.e(TAG, "Engine not initialized")
+            onEventCallback?.onEvent("error", "Voice engine not initialized")
             return false
         }
 
-        if (!SpeechRecognizer.isRecognitionAvailable(context!!)) {
-            Log.e(TAG, "Speech recognition not available")
-            onEventCallback?.onEvent("error", "Speech recognition not available")
+        // Check if speech recognition is available
+        val recognitionAvailable = try {
+            SpeechRecognizer.isRecognitionAvailable(context!!)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking recognition availability", e)
+            false
+        }
+
+        if (!recognitionAvailable) {
+            val msg = "Speech recognition not available on this device. " +
+                "Please ensure Google app or a speech recognition service is installed."
+            Log.e(TAG, msg)
+            onEventCallback?.onEvent("error", msg)
             return false
         }
 

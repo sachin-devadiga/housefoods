@@ -8,8 +8,8 @@ class RemoteConfigService {
 
   Future<void> initialize() async {
     try {
-      // In production, fetch from your own backend API
-      // e.g., using ApiService to GET /api/auth/admin/settings/
+      // Maintenance mode check — kept local for now.
+      // Version checking is handled by UpdateService via /api/auth/app-version/
     } catch (e) {
       debugPrint("Remote Config Initialization Error: $e");
     }

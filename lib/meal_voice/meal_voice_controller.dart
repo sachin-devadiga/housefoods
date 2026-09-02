@@ -345,18 +345,6 @@ class MealVoiceController extends ChangeNotifier {
   Future<void> _generateConfirmation(MealVoiceCommand command) async {
     if (_searchResults.isEmpty) return;
 
-    // Check cart compatibility
-    final firstKitchen = _searchResults.first.kitchen;
-    bool hasConflict = false;
-
-    if (_orderHandler != null && !_orderHandler!.isCartEmpty) {
-      // Check if any search result kitchen differs from cart kitchen
-      for (final result in _searchResults) {
-        // The order handler will check cart compatibility on add
-        // For now, just note the potential conflict
-      }
-    }
-
     // Build confirmation message
     final items = _pendingItems;
     final results = _searchResults;
@@ -434,7 +422,6 @@ class MealVoiceController extends ChangeNotifier {
 
     int addedCount = 0;
     int failedCount = 0;
-    double addedTotal = 0;
 
     for (int i = 0; i < _searchResults.length; i++) {
       final result = _searchResults[i];
@@ -448,7 +435,6 @@ class MealVoiceController extends ChangeNotifier {
       switch (addResult) {
         case CartAddResult.success:
           addedCount++;
-          addedTotal += result.menuItem.price * item.quantity;
           break;
         case CartAddResult.cartConflict:
           // FIX #6: Ask user to clear cart, then re-add
@@ -480,8 +466,8 @@ class MealVoiceController extends ChangeNotifier {
       final total = _orderHandler!.cartTotal;
       _ttsResponse = 'Added $addedCount item${addedCount > 1 ? 's' : ''}, but $failedCount item${failedCount > 1 ? 's' : ''} could not be added. Cart total is ₹$total.';
       _state = MealVoiceState.commandSuccess;
-      _addLog(_ttsResponse!);
-      await _tts.speak(_ttsResponse!);
+      _addLog(_ttsResponse);
+      await _tts.speak(_ttsResponse);
     } else {
       _handleError('Could not add any items to your cart. Please try again.');
       return;
@@ -499,7 +485,7 @@ class MealVoiceController extends ChangeNotifier {
     _state = MealVoiceState.confirmationRequired;
     _awaitingConfirmation = true;
     notifyListeners();
-    await _tts.speak(_ttsResponse!);
+    await _tts.speak(_ttsResponse);
     _startConfirmationTimeout();
   }
 
@@ -513,7 +499,6 @@ class MealVoiceController extends ChangeNotifier {
 
     // Now add all items
     int addedCount = 0;
-    double addedTotal = 0;
 
     for (int i = 0; i < _searchResults.length; i++) {
       final result = _searchResults[i];
@@ -526,7 +511,6 @@ class MealVoiceController extends ChangeNotifier {
 
       if (addResult == CartAddResult.success) {
         addedCount++;
-        addedTotal += result.menuItem.price * item.quantity;
       }
     }
 
@@ -535,8 +519,8 @@ class MealVoiceController extends ChangeNotifier {
       final count = _orderHandler!.cartItemCount;
       _ttsResponse = 'Cart cleared and items added. Your cart total is ₹$total with $count item${count > 1 ? 's' : ''}.';
       _state = MealVoiceState.commandSuccess;
-      _addLog(_ttsResponse!);
-      await _tts.speak(_ttsResponse!);
+      _addLog(_ttsResponse);
+      await _tts.speak(_ttsResponse);
     } else {
       _handleError('Could not add items after clearing cart.');
       return;
@@ -561,7 +545,7 @@ class MealVoiceController extends ChangeNotifier {
         '"Order one chicken biryani" or "Add two burgers".';
     _state = MealVoiceState.commandUnknown;
     _addLog('Unknown command');
-    _speakAndReturn(_ttsResponse!);
+    _speakAndReturn(_ttsResponse);
   }
 
   /// Handle item not found in search.
@@ -570,7 +554,7 @@ class MealVoiceController extends ChangeNotifier {
         'Would you like to try something else?';
     _state = MealVoiceState.commandError;
     _addLog('Item not found: $itemName');
-    _speakAndReturn(_ttsResponse!);
+    _speakAndReturn(_ttsResponse);
   }
 
   /// Handle listening timeout (no speech after wake word).
@@ -586,7 +570,7 @@ class MealVoiceController extends ChangeNotifier {
     }
 
     _addLog('Timeout: $reason');
-    _speakAndReturn(_ttsResponse!);
+    _speakAndReturn(_ttsResponse);
   }
 
   /// Handle confirmation timeout.
@@ -604,7 +588,7 @@ class MealVoiceController extends ChangeNotifier {
     _ttsResponse = 'Sorry, I didn\'t catch that. Please say "yes" or "no".';
     _addLog('Unknown confirmation: $transcript');
     // Don't restart timeout — just re-listen
-    _speakAndReturn(_ttsResponse!);
+    _speakAndReturn(_ttsResponse);
   }
 
   /// Handle general errors.
@@ -615,7 +599,7 @@ class MealVoiceController extends ChangeNotifier {
     _ttsResponse = 'Sorry, something went wrong. $message';
     _state = MealVoiceState.commandError;
     _addLog('Error: $message');
-    _speakAndReturn(_ttsResponse!);
+    _speakAndReturn(_ttsResponse);
   }
 
   /// Speak a message and return to wake-word listening.
@@ -684,8 +668,10 @@ class MealVoiceController extends ChangeNotifier {
       _addLog('Started listening for wake word');
     } else {
       _lastTranscript = 'Failed to start';
+      _ttsResponse = 'Voice recognition not available on this device. '
+          'Please ensure Google app or a speech service is installed.';
       _state = MealVoiceState.error;
-      _addLog('Failed to start listening');
+      _addLog('Failed to start listening — speech recognition unavailable');
     }
     notifyListeners();
   }

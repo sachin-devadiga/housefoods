@@ -150,6 +150,9 @@ class AppConstants {
   // Chef Payouts
   static const String payoutsEndpoint = '/api/auth/payouts/';
 
+  // App Version
+  static const String appVersionEndpoint = '/api/auth/app-version/';
+
   // Delivery Partner Payouts
   static const String deliveryPayoutsEndpoint = '/api/auth/delivery/payouts/';
 

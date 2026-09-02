@@ -4,8 +4,10 @@ import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/remote_config_service.dart';
+import '../../../../core/services/update_service.dart';
 import '../../../../core/screens/maintenance_screen.dart';
 import '../../../../core/screens/force_update_screen.dart';
+import '../../../../core/widgets/update_dialog.dart';
 import '../../../admin/presentation/screens/admin_dashboard.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../chef/presentation/screens/chef_dashboard.dart';
@@ -56,6 +58,29 @@ class _SplashScreenState extends State<SplashScreen> {
       return;
     }
 
+    // Check for app update from backend (non-blocking)
+    final updateInfo = await UpdateService.checkForUpdate();
+    if (mounted && updateInfo != null) {
+      final forceUpdate = UpdateService.isForceRequired(updateInfo.minVersion, currentVersion);
+      if (forceUpdate) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ForceUpdateScreen(
+              updateUrl: updateInfo.updateUrl,
+              updateMessage: updateInfo.updateMessage,
+            ),
+          ),
+        );
+        return;
+      }
+      // Show optional update dialog (non-blocking)
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) UpdateDialog.show(context, updateInfo, currentVersion);
+      });
+    }
+
+    if (!mounted) return;
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final profile = await authProvider.tryAutoLogin();
 
