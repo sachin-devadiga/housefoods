@@ -25,7 +25,7 @@ class MealVoiceService : Service() {
             private set
     }
 
-    private var wakeWordEngine: WakeWordEngine? = null
+    private var wakeWordEngine: SpeechRecognizerWakeWordEngine? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -38,6 +38,9 @@ class MealVoiceService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             "ACTION_STOP" -> stopVoiceService()
+            "ACTION_START" -> startVoiceService()
+            "ACTION_START_COMMAND_CAPTURE" -> startCommandCapture()
+            "ACTION_STOP_COMMAND_CAPTURE" -> stopCommandCapture()
             else -> startVoiceService()
         }
         return START_STICKY
@@ -79,7 +82,7 @@ class MealVoiceService : Service() {
         }
 
         isRunning = true
-        sendEvent("stateChanged", com.example.housefoods.mealvoice.MealVoiceState.LISTENING_FOR_WAKE_WORD.ordinal.toString())
+        sendEvent("stateChanged", "3") // LISTENING_FOR_WAKE_WORD
         Log.i(TAG, "Started successfully")
         return true
     }
@@ -89,16 +92,47 @@ class MealVoiceService : Service() {
         wakeWordEngine?.release()
         wakeWordEngine = null
 
-        sendEvent("stateChanged", MealVoiceState.STOPPED.ordinal.toString())
+        sendEvent("stateChanged", "14") // STOPPED
         isRunning = false
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
+    /**
+     * Called when "Hi MEAL" is detected.
+     * Switches the SpeechRecognizer from wake-word mode to command capture mode.
+     */
     private fun onWakeWordDetected() {
         Log.i(TAG, "=== WAKE WORD DETECTED ===")
         sendEvent("wakeWordDetected", System.currentTimeMillis().toString())
-        updateNotification("Wake word detected! Listening...")
+        updateNotification("Wake word detected! Listening for command...")
+
+        // Switch to command capture mode
+        wakeWordEngine?.startCommandCapture()
+    }
+
+    /**
+     * Start command capture mode (called from Flutter via MethodChannel).
+     */
+    fun startCommandCapture() {
+        wakeWordEngine?.startCommandCapture()
+    }
+
+    /**
+     * Stop command capture and return to wake-word mode.
+     */
+    fun stopCommandCapture() {
+        wakeWordEngine?.stopCommandCapture()
+    }
+
+    /**
+     * Restart wake-word detection after command processing.
+     */
+    fun restartWakeWordListening() {
+        Log.i(TAG, "Restarting wake-word detection")
+        updateNotification("Listening for 'Hi MEAL'...")
+        wakeWordEngine?.stopCommandCapture()
+        // The wake word engine auto-restarts listening after command finalization
     }
 
     private fun sendEvent(type: String, data: String) {
@@ -144,9 +178,4 @@ class MealVoiceService : Service() {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(NOTIFICATION_ID, buildNotification(text))
     }
-}
-
-enum class MealVoiceState {
-    IDLE, INITIALIZING, LISTENING_FOR_WAKE_WORD, WAKE_DETECTED,
-    LISTENING_TO_USER, PROCESSING, SPEAKING, ERROR, STOPPED
 }

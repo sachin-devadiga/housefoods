@@ -26,9 +26,27 @@ class MealVoiceBridge(
             when (call.method) {
                 "requestMicrophonePermission" -> result.success(true)
                 "startListening" -> result.success(service.startVoiceService())
-                "stopListening" -> { service.stopVoiceService(); result.success(true) }
+                "stopListening" -> {
+                    service.stopVoiceService()
+                    result.success(true)
+                }
+                "startCommandCapture" -> {
+                    service.startCommandCapture()
+                    result.success(true)
+                }
+                "stopCommandCapture" -> {
+                    service.stopCommandCapture()
+                    result.success(true)
+                }
+                "restartWakeWordListening" -> {
+                    service.restartWakeWordListening()
+                    result.success(true)
+                }
                 "isMicrophoneAvailable" -> result.success(true)
-                "getStatus" -> result.success(mapOf("running" to MealVoiceService.isRunning, "engine" to "SpeechRecognizer"))
+                "getStatus" -> result.success(mapOf(
+                    "running" to MealVoiceService.isRunning,
+                    "engine" to "SpeechRecognizer"
+                ))
                 else -> result.notImplemented()
             }
         }
@@ -57,7 +75,10 @@ class MealVoiceBridge(
     }
 
     fun sendWakeWordDetected() { sendEvent("wakeWordDetected", System.currentTimeMillis()) }
-    fun sendStateChanged(stateIndex: Int) { sendEvent("stateChanged", stateIndex) }
+    fun sendStateChanged(stateIndex: Int) { sendEvent("stateChanged", stateIndex.toString()) }
     fun sendError(message: String) { sendEvent("error", message) }
     fun sendLog(message: String) { sendEvent("log", message) }
+    fun sendCommandTranscription(text: String) { sendEvent("commandTranscription", text) }
+    fun sendSpeechPartial(text: String) { sendEvent("speechPartial", text) }
+    fun sendCommandTimeout(reason: String) { sendEvent("commandTimeout", reason) }
 }
