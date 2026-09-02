@@ -2058,28 +2058,33 @@ class MapRouteView(APIView):
 
 class AppVersionView(APIView):
     """Public endpoint: check latest app version from AdminSetting keys.
-    
-    Required AdminSetting keys (set via Django admin):
-      app_latest_version  — e.g. "1.0.6"
-      app_min_version     — e.g. "1.0.4"  (force-update threshold)
-      app_update_url      — direct APK download link
-      app_update_message  — "What's new" text
-      app_force_update    — "true" / "false"
+
+    Auto-creates default settings on first call if they don't exist.
+    Override via Django admin → Admin settings.
     """
     permission_classes = [AllowAny]
 
+    DEFAULTS = {
+        'app_latest_version': '1.0.0',
+        'app_min_version': '1.0.0',
+        'app_update_url': '',
+        'app_update_message': '',
+        'app_force_update': 'false',
+    }
+
     def get(self, request):
-        def _get(key, default=''):
+        def _get_or_create(key, default):
             try:
                 return AdminSetting.objects.get(key=key).value
             except AdminSetting.DoesNotExist:
+                AdminSetting.objects.create(key=key, value=default)
                 return default
 
-        latest = _get('app_latest_version', '1.0.0')
-        min_ver = _get('app_min_version', '1.0.0')
-        update_url = _get('app_update_url', '')
-        message = _get('app_update_message', '')
-        force = _get('app_force_update', 'false').lower() == 'true'
+        latest = _get_or_create('app_latest_version', self.DEFAULTS['app_latest_version'])
+        min_ver = _get_or_create('app_min_version', self.DEFAULTS['app_min_version'])
+        update_url = _get_or_create('app_update_url', self.DEFAULTS['app_update_url'])
+        message = _get_or_create('app_update_message', self.DEFAULTS['app_update_message'])
+        force = _get_or_create('app_force_update', self.DEFAULTS['app_force_update']).lower() == 'true'
 
         return Response({
             'latestVersion': latest,
