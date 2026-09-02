@@ -30,7 +30,7 @@ class RegexMealVoiceCommandParser implements MealVoiceCommandParser {
   // Intent detection keywords
   static const Map<MealVoiceIntent, List<String>> _intentKeywords = {
     MealVoiceIntent.add: [
-      'order', 'get', 'get me', 'i want', 'i\'d like', 'i would like',
+      'order', 'get me', 'get', 'i want', 'i\'d like', 'i would like',
       'add', 'buy', 'bring', 'give me', 'have', 'grab',
       'can i get', 'let me get', 'i\'ll have', 'i\'ll take',
       'send me', 'fetch',
@@ -202,16 +202,15 @@ class RegexMealVoiceCommandParser implements MealVoiceCommandParser {
     return MealVoiceItem(itemName: itemName, quantity: quantity);
   }
 
+  /// FIX #7: Only strip intent from the beginning of text, never mid-sentence.
+  /// This prevents corrupting item names like "noodles" or "a burger".
   String _stripIntent(String lower) {
     for (final keywords in _intentKeywords.values) {
       for (final keyword in keywords) {
+        // FIX #7: Only strip from the start — never remove mid-sentence keywords
         if (lower.startsWith(keyword)) {
-          return lower.substring(keyword.length).trim();
-        }
-        // Remove mid-sentence intent keywords
-        final pattern = RegExp('\\b${RegExp.escape(keyword)}\\b');
-        if (pattern.hasMatch(lower)) {
-          return lower.replaceAll(pattern, '').trim();
+          final stripped = lower.substring(keyword.length).trim();
+          if (stripped.isNotEmpty) return stripped;
         }
       }
     }
@@ -232,27 +231,45 @@ class RegexMealVoiceCommandParser implements MealVoiceCommandParser {
   }
 
   String _cleanItemName(String name) {
-    // Remove common STT misrecognitions
-    final replacements = {
-      'biryani': 'biryani',
+    // Known singular/plural mappings
+    final singularMap = {
       'biriyani': 'biryani',
       'biriani': 'biryani',
-      'burger': 'burger',
+      'biryanis': 'biryani',
       'burgers': 'burger',
-      'masala dosa': 'masala dosa',
       'masala dosas': 'masala dosa',
       'black forest': 'black forest cake',
+      'black forest cake': 'black forest cake',
+      'pizzas': 'pizza',
+      'pastas': 'pasta',
+      'momos': 'momo',
+      'samosas': 'samosa',
+      'cokes': 'coke',
     };
 
-    for (final entry in replacements.entries) {
-      if (name == entry.key || name.endsWith(entry.key)) {
+    // Try exact match first
+    for (final entry in singularMap.entries) {
+      if (name == entry.key) {
         return entry.value;
       }
     }
 
-    // Plural to singular for common suffixes
-    if (name.endsWith('s') && !name.endsWith('ss') && !name.endsWith('us')) {
-      // Simple heuristic — keep as is to avoid breaking names
+    // Try suffix replacement (e.g., "chicken biryanis" → "chicken biryani")
+    for (final entry in singularMap.entries) {
+      if (name.endsWith(' ${entry.key}')) {
+        final prefix = name.substring(0, name.length - entry.key.length);
+        return '$prefix${entry.value}';
+      }
+    }
+
+    // Handle trailing "s" plural → singular
+    if (name.length > 4 &&
+        name.endsWith('s') &&
+        !name.endsWith('ss') &&
+        !name.endsWith('us') &&
+        !name.endsWith('is') &&
+        !name.endsWith('es')) {
+      return name.substring(0, name.length - 1);
     }
 
     return name;

@@ -28,8 +28,8 @@ enum CartAddResult {
 
 /// Handles voice command execution — searching menus and modifying cart.
 ///
-/// Does NOT care whether the command came from regex or Gemini parser.
-/// Only interacts with existing CartProvider and KitchenProvider.
+/// FIX #11: Snapshots kitchen list before iteration to avoid mutation issues.
+/// FIX #14: Better exception mapping.
 class MealVoiceOrderHandler {
   final KitchenProvider _kitchenProvider;
   final CartProvider _cartProvider;
@@ -42,8 +42,7 @@ class MealVoiceOrderHandler {
 
   /// Search for a menu item across available kitchens.
   ///
-  /// If [restaurantName] is provided, searches that specific kitchen first.
-  /// Returns the best match or null if not found.
+  /// FIX #11: Takes a snapshot of kitchens before iterating.
   Future<SearchResult?> searchItem({
     required String itemName,
     String? restaurantName,
@@ -52,7 +51,9 @@ class MealVoiceOrderHandler {
       // 1. If restaurant specified, search that kitchen first
       if (restaurantName != null && restaurantName.isNotEmpty) {
         await _kitchenProvider.searchKitchens(restaurantName);
-        for (final kitchen in _kitchenProvider.kitchens) {
+        // FIX #11: Snapshot the list before iterating
+        final searchResults = List<KitchenModel>.from(_kitchenProvider.kitchens);
+        for (final kitchen in searchResults) {
           if (_matchesBusinessName(kitchen.name, restaurantName)) {
             await _kitchenProvider.fetchMenuItems(kitchen.id);
             final match = _findBestMatch(_kitchenProvider.menuItems, itemName);
@@ -63,8 +64,9 @@ class MealVoiceOrderHandler {
         }
       }
 
-      // 2. Search all available kitchens
-      for (final kitchen in _kitchenProvider.kitchens) {
+      // 2. Snapshot all available kitchens before iterating
+      final allKitchens = List<KitchenModel>.from(_kitchenProvider.kitchens);
+      for (final kitchen in allKitchens) {
         await _kitchenProvider.fetchMenuItems(kitchen.id);
         final match = _findBestMatch(_kitchenProvider.menuItems, itemName);
         if (match != null) {
@@ -74,7 +76,8 @@ class MealVoiceOrderHandler {
 
       // 3. Try search API directly
       await _kitchenProvider.searchKitchens(itemName);
-      for (final kitchen in _kitchenProvider.kitchens) {
+      final searchApiResults = List<KitchenModel>.from(_kitchenProvider.kitchens);
+      for (final kitchen in searchApiResults) {
         await _kitchenProvider.fetchMenuItems(kitchen.id);
         final match = _findBestMatch(_kitchenProvider.menuItems, itemName);
         if (match != null) {
@@ -165,6 +168,7 @@ class MealVoiceOrderHandler {
       final itemWords = item.name.toLowerCase().split(RegExp(r'\s+'));
       int score = 0;
       for (final qw in queryWords) {
+        if (qw.length < 2) continue; // Skip very short words
         for (final iw in itemWords) {
           if (iw == qw || iw.contains(qw) || qw.contains(iw)) {
             score++;
@@ -192,8 +196,8 @@ class MealVoiceOrderHandler {
     final queryWords = lowerQuery.split(RegExp(r'\s+'));
     int matchCount = 0;
     for (final word in queryWords) {
-      if (lowerKitchen.contains(word)) matchCount++;
+      if (word.length >= 2 && lowerKitchen.contains(word)) matchCount++;
     }
-    return matchCount >= queryWords.length ~/ 2;
+    return matchCount >= (queryWords.length ~/ 2).clamp(1, queryWords.length);
   }
 }

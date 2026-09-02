@@ -14,18 +14,29 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.housefoods.MainActivity
 
+/**
+ * Foreground service for MEAL Voice Engine.
+ *
+ * FIX #33: Removed broken broadcast sendEvent — all events go through MealVoiceBridge.
+ * FIX #31: restartWakeWordListening actually restarts via engine.restartWakeWordListening().
+ * FIX #32: isRunning is now instance-level, not static.
+ */
 class MealVoiceService : Service() {
 
     companion object {
         private const val TAG = "MEAL_Service"
         private const val CHANNEL_ID = "meal_voice_channel"
         private const val NOTIFICATION_ID = 9999
-
-        var isRunning = false
-            private set
     }
 
+    // FIX #32: Instance-level state, not static
+    var isRunning = false
+        private set
+
     private var wakeWordEngine: SpeechRecognizerWakeWordEngine? = null
+
+    // Bridge reference — set by MainActivity
+    var bridge: MealVoiceBridge? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -41,6 +52,7 @@ class MealVoiceService : Service() {
             "ACTION_START" -> startVoiceService()
             "ACTION_START_COMMAND_CAPTURE" -> startCommandCapture()
             "ACTION_STOP_COMMAND_CAPTURE" -> stopCommandCapture()
+            "ACTION_RESTART_WAKE_WORD" -> restartWakeWordListening()
             else -> startVoiceService()
         }
         return START_STICKY
@@ -70,19 +82,22 @@ class MealVoiceService : Service() {
         wakeWordEngine!!.initialize(
             context = this,
             onDetected = WakeWordEngine.OnWakeWordDetected { onWakeWordDetected() },
-            onEvent = WakeWordEngine.OnEngineEvent { type, data -> sendEvent(type, data?.toString() ?: "") }
+            onEvent = WakeWordEngine.OnEngineEvent { type, data ->
+                // FIX #33: All events go through bridge (EventChannel), not broadcast
+                bridge?.sendEvent(type, data?.toString() ?: "")
+            }
         )
 
         val started = wakeWordEngine!!.start()
         if (!started) {
             Log.e(TAG, "Failed to start")
-            sendEvent("error", "Failed to start microphone")
+            bridge?.sendEvent("error", "Failed to start microphone")
             stopSelf()
             return false
         }
 
         isRunning = true
-        sendEvent("stateChanged", "3") // LISTENING_FOR_WAKE_WORD
+        bridge?.sendEvent("stateChanged", "3") // LISTENING_FOR_WAKE_WORD
         Log.i(TAG, "Started successfully")
         return true
     }
@@ -92,7 +107,7 @@ class MealVoiceService : Service() {
         wakeWordEngine?.release()
         wakeWordEngine = null
 
-        sendEvent("stateChanged", "14") // STOPPED
+        bridge?.sendEvent("stateChanged", "14") // STOPPED
         isRunning = false
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -100,46 +115,38 @@ class MealVoiceService : Service() {
 
     /**
      * Called when "Hi MEAL" is detected.
-     * Switches the SpeechRecognizer from wake-word mode to command capture mode.
+     * Switches from wake-word mode to command capture mode.
      */
     private fun onWakeWordDetected() {
         Log.i(TAG, "=== WAKE WORD DETECTED ===")
-        sendEvent("wakeWordDetected", System.currentTimeMillis().toString())
+        bridge?.sendEvent("wakeWordDetected", System.currentTimeMillis().toString())
         updateNotification("Wake word detected! Listening for command...")
 
-        // Switch to command capture mode
+        // Switch to command capture mode (only once — engine guards against double-start)
         wakeWordEngine?.startCommandCapture()
     }
 
     /**
-     * Start command capture mode (called from Flutter via MethodChannel).
+     * Start command capture (called from Flutter via MethodChannel).
      */
     fun startCommandCapture() {
         wakeWordEngine?.startCommandCapture()
     }
 
     /**
-     * Stop command capture and return to wake-word mode.
+     * Stop command capture (called from Flutter via MethodChannel).
      */
     fun stopCommandCapture() {
         wakeWordEngine?.stopCommandCapture()
     }
 
     /**
-     * Restart wake-word detection after command processing.
+     * FIX #31: Actually restart wake-word listening via the engine.
      */
     fun restartWakeWordListening() {
-        Log.i(TAG, "Restarting wake-word detection")
+        Log.i(TAG, "Restarting wake-word listening")
         updateNotification("Listening for 'Hi MEAL'...")
-        wakeWordEngine?.stopCommandCapture()
-        // The wake word engine auto-restarts listening after command finalization
-    }
-
-    private fun sendEvent(type: String, data: String) {
-        val intent = Intent("com.mealin.VOICE_EVENT")
-        intent.putExtra("event_type", type)
-        intent.putExtra("event_data", data)
-        sendBroadcast(intent)
+        wakeWordEngine?.restartWakeWordListening()
     }
 
     private fun createNotificationChannel() {

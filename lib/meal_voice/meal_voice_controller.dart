@@ -12,8 +12,12 @@ import 'meal_voice_order_handler.dart';
 
 /// Provider-based controller for MEAL voice engine.
 ///
-/// Manages the full voice workflow:
-/// Wake word → Listen → Parse → Search → Confirm → Add to cart
+/// FIX #5: State guard prevents wake word during active workflow.
+/// FIX #6: Cart conflict uses clearCart before re-adding.
+/// FIX #9: Multi-item processing for ALL items.
+/// FIX #11: Kitchens list snapshot before iteration.
+/// FIX #3: Confirmation safety — no cart modification before YES.
+/// FIX #8: Duplicate event protection via _isProcessing flag.
 class MealVoiceController extends ChangeNotifier {
   final MealVoiceService _service = MealVoiceService.instance;
   final MealVoiceTtsService _tts = MealVoiceTtsService();
@@ -46,18 +50,26 @@ class MealVoiceController extends ChangeNotifier {
   String _ttsResponse = '';
   String get ttsResponse => _ttsResponse;
 
-  // Search result
-  SearchResult? _searchResult;
-  SearchResult? get searchResult => _searchResult;
+  // Search results — supports multi-item
+  final List<SearchResult> _searchResults = [];
+  List<SearchResult> get searchResults => List.unmodifiable(_searchResults);
+
+  // Items that failed to find
+  final List<String> _notFoundItems = [];
+  List<String> get notFoundItems => List.unmodifiable(_notFoundItems);
 
   // Confirmation
   bool _awaitingConfirmation = false;
   bool get awaitingConfirmation => _awaitingConfirmation;
-  int _pendingQuantity = 1;
+  List<MealVoiceItem> _pendingItems = [];
+  bool _pendingCartConflictClear = false;
 
   // Timing
   Timer? _confirmationTimeout;
   static const _confirmationTimeoutDuration = Duration(seconds: 10);
+
+  // Duplicate protection (#8)
+  bool _isProcessing = false;
 
   // Logs
   final List<String> _logs = [];
@@ -86,6 +98,7 @@ class MealVoiceController extends ChangeNotifier {
     }
 
     await _service.initialize();
+    _eventSubscription?.cancel();
     _eventSubscription = _service.events.listen(_onEvent);
 
     _microphoneAvailable = await _service.isMicrophoneAvailable();
@@ -101,6 +114,14 @@ class MealVoiceController extends ChangeNotifier {
   void _onEvent(MealVoiceEvent event) {
     switch (event) {
       case WakeWordDetected():
+        // FIX #5: Guard — ignore wake word if already in active workflow
+        if (_state != MealVoiceState.idle &&
+            _state != MealVoiceState.listeningForWakeWord &&
+            _state != MealVoiceState.stopped &&
+            _state != MealVoiceState.error) {
+          _addLog('Wake word ignored — active workflow (${_state.name})');
+          return;
+        }
         _handleWakeWordDetected(event.timestamp);
         break;
       case EngineStateChanged():
@@ -118,14 +139,12 @@ class MealVoiceController extends ChangeNotifier {
           _handleTranscription(event.transcript);
         } else {
           _lastTranscript = event.transcript;
+          notifyListeners();
         }
         break;
       case CommandParsed():
-        break;
       case SearchResultEvent():
-        break;
       case CartOperationResult():
-        break;
       case TtsSpeakingChanged():
         break;
       case ListeningTimeout():
@@ -142,9 +161,8 @@ class MealVoiceController extends ChangeNotifier {
   void _handleWakeWordDetected(DateTime timestamp) {
     _addLog('Wake word detected');
     _state = MealVoiceState.wakeDetected;
+    _isProcessing = false; // Reset processing guard
     notifyListeners();
-
-    // Start command capture
     _startCommandCapture();
   }
 
@@ -153,7 +171,8 @@ class MealVoiceController extends ChangeNotifier {
     _state = MealVoiceState.listeningToUser;
     _lastTranscript = '';
     _lastCommand = null;
-    _searchResult = null;
+    _searchResults.clear();
+    _notFoundItems.clear();
     notifyListeners();
 
     // Speak greeting
@@ -185,12 +204,18 @@ class MealVoiceController extends ChangeNotifier {
       return;
     }
 
-    // Parse the command
+    // FIX #8: Duplicate event protection
+    if (_isProcessing) {
+      _addLog('Already processing — ignoring duplicate transcription');
+      return;
+    }
+
     _parseAndProcess(transcript);
   }
 
   /// Parse the transcription and process the command.
   Future<void> _parseAndProcess(String transcript) async {
+    _isProcessing = true;
     _state = MealVoiceState.parsingCommand;
     notifyListeners();
 
@@ -200,12 +225,14 @@ class MealVoiceController extends ChangeNotifier {
 
     // Handle unknown intent
     if (command.intent == MealVoiceIntent.unknown) {
+      _isProcessing = false;
       _handleUnknownCommand();
       return;
     }
 
-    // Handle confirmation commands
+    // Handle confirmation/cancel intents
     if (command.intent == MealVoiceIntent.confirm || command.intent == MealVoiceIntent.cancel) {
+      _isProcessing = false;
       if (_awaitingConfirmation) {
         _handleConfirmationResponse(transcript);
       } else {
@@ -218,18 +245,21 @@ class MealVoiceController extends ChangeNotifier {
     if (command.isAdd || command.isRemove) {
       await _searchAndConfirm(command);
     } else {
+      _isProcessing = false;
       _handleUnknownCommand();
     }
   }
 
-  /// Search for items and prepare confirmation.
+  /// Search for ALL items and prepare confirmation.
   Future<void> _searchAndConfirm(MealVoiceCommand command) async {
     if (_orderHandler == null) {
+      _isProcessing = false;
       _handleError('Cart integration not available');
       return;
     }
 
     if (command.items.isEmpty) {
+      _isProcessing = false;
       _handleError('No items found in your command. Please try again.');
       return;
     }
@@ -237,48 +267,107 @@ class MealVoiceController extends ChangeNotifier {
     _state = MealVoiceState.searchingMenu;
     notifyListeners();
 
-    // Process first item (single-item for now, multi-item in future)
-    final item = command.items.first;
-    _addLog('Searching for: ${item.itemName}');
+    _searchResults.clear();
+    _notFoundItems.clear();
 
-    final result = await _orderHandler!.searchItem(
-      itemName: item.itemName,
-      restaurantName: command.businessName,
-    );
+    // FIX #9: Process ALL items, not just the first
+    for (final item in command.items) {
+      _addLog('Searching for: ${item.itemName} (qty: ${item.quantity})');
 
-    if (result == null) {
-      _handleItemNotFound(item.itemName);
+      final result = await _orderHandler!.searchItem(
+        itemName: item.itemName,
+        restaurantName: command.businessName,
+      );
+
+      if (result != null) {
+        _searchResults.add(result);
+        _addLog('Found: ${result.menuItem.name} from ${result.kitchen.name} — ₹${result.menuItem.price}');
+      } else {
+        _notFoundItems.add(item.itemName);
+        _addLog('Not found: ${item.itemName}');
+      }
+    }
+
+    _pendingItems = command.items;
+    _isProcessing = false;
+
+    // All items not found
+    if (_searchResults.isEmpty) {
+      final names = _notFoundItems.join(' or ');
+      _handleItemNotFound(names);
       return;
     }
 
-    _searchResult = result;
-    _pendingQuantity = item.quantity;
+    // Partial items found
+    if (_notFoundItems.isNotEmpty) {
+      _searchResults.first; // At least one found
+      final foundNames = _searchResults.map((r) => r.menuItem.name).join(', ');
+      final missingNames = _notFoundItems.join(', ');
+      final msg = 'I found $foundNames, but I couldn\'t find $missingNames. '
+          'Would you like me to add only the items I found?';
+      _ttsResponse = msg;
+      _state = MealVoiceState.confirmationRequired;
+      _awaitingConfirmation = true;
+      notifyListeners();
+      await _tts.speak(msg);
+      _startConfirmationTimeout();
+      return;
+    }
 
-    _addLog('Found: ${result.menuItem.name} from ${result.kitchen.name} — ₹${result.menuItem.price}');
+    // All items found — generate confirmation
+    await _generateConfirmation(command);
+  }
 
-    // Check cart compatibility — order handler will handle conflict in addToCart
+  /// Generate confirmation message for found items.
+  Future<void> _generateConfirmation(MealVoiceCommand command) async {
+    if (_searchResults.isEmpty) return;
 
-    // Generate confirmation message
-    final price = result.menuItem.price;
-    final qty = item.quantity;
-    final itemName = result.menuItem.name;
-    final kitchenName = result.kitchen.name;
-    final total = price * qty;
+    // Check cart compatibility
+    final firstKitchen = _searchResults.first.kitchen;
+    bool hasConflict = false;
 
-    final confirmMsg = qty > 1
-        ? 'I found $qty $itemName from $kitchenName for ₹$total. Would you like me to add it to your cart?'
-        : 'I found $itemName from $kitchenName for ₹$price. Would you like me to add it to your cart?';
+    if (_orderHandler != null && !_orderHandler!.isCartEmpty) {
+      // Check if any search result kitchen differs from cart kitchen
+      for (final result in _searchResults) {
+        // The order handler will check cart compatibility on add
+        // For now, just note the potential conflict
+      }
+    }
 
-    _ttsResponse = confirmMsg;
+    // Build confirmation message
+    final items = _pendingItems;
+    final results = _searchResults;
+
+    if (results.length == 1) {
+      final result = results.first;
+      final item = items.first;
+      final price = result.menuItem.price;
+      final qty = item.quantity;
+      final total = price * qty;
+      final name = result.menuItem.name;
+      final kitchen = result.kitchen.name;
+
+      _ttsResponse = qty > 1
+          ? 'I found $qty $name from $kitchen for ₹$total. Would you like me to add it to your cart?'
+          : 'I found $name from $kitchen for ₹$price. Would you like me to add it to your cart?';
+    } else {
+      double total = 0;
+      for (int i = 0; i < results.length; i++) {
+        final result = results[i];
+        final item = i < items.length ? items[i] : items.last;
+        total += result.menuItem.price * item.quantity;
+      }
+      final names = results.map((r) => r.menuItem.name).join(', ');
+      _ttsResponse = 'I found $names. Total is ₹$total. Would you like me to add these to your cart?';
+    }
+
+    _ttsResponse = _ttsResponse;
     _state = MealVoiceState.confirmationRequired;
     _awaitingConfirmation = true;
     notifyListeners();
 
-    // Speak confirmation
-    await _tts.speak(confirmMsg);
+    await _tts.speak(_ttsResponse);
     _addLog('Confirmation spoken');
-
-    // Start confirmation timeout
     _startConfirmationTimeout();
   }
 
@@ -291,86 +380,152 @@ class MealVoiceController extends ChangeNotifier {
 
     switch (response) {
       case MealVoiceConfirmation.yes:
-        _addToCart();
+        if (_pendingCartConflictClear) {
+          _handleCartConflictConfirmed();
+        } else {
+          _addAllToCart();
+        }
         break;
       case MealVoiceConfirmation.no:
         _handleUserDenied();
         break;
       case MealVoiceConfirmation.timeout:
       case MealVoiceConfirmation.unknown:
+        // Re-ask
         _handleConfirmationUnknown(transcript);
         break;
     }
   }
 
-  /// Add the pending item to cart.
-  Future<void> _addToCart() async {
-    if (_searchResult == null || _orderHandler == null) {
+  /// Add ALL pending items to cart.
+  Future<void> _addAllToCart() async {
+    if (_searchResults.isEmpty || _orderHandler == null) {
       _handleError('No item to add');
       return;
     }
 
-    final handler = _orderHandler!;
-    final searchResult = _searchResult!;
-
     _state = MealVoiceState.addingToCart;
     _awaitingConfirmation = false;
+    _pendingCartConflictClear = false;
     notifyListeners();
 
-    final result = await handler.addToCart(
-      searchResult: searchResult,
-      quantity: _pendingQuantity,
-    );
+    int addedCount = 0;
+    int failedCount = 0;
+    double addedTotal = 0;
 
-    switch (result) {
-      case CartAddResult.success:
-        final total = handler.cartTotal;
-        final count = handler.cartItemCount;
-        final msg = 'Added to your cart. Your cart total is ₹$total with $count item${count > 1 ? 's' : ''}.';
-        _ttsResponse = msg;
-        _state = MealVoiceState.commandSuccess;
-        _addLog(msg);
-        await _tts.speak(msg);
-        break;
+    for (int i = 0; i < _searchResults.length; i++) {
+      final result = _searchResults[i];
+      final item = i < _pendingItems.length ? _pendingItems[i] : _pendingItems.last;
 
-      case CartAddResult.cartConflict:
-        await _handleCartConflict();
-        return;
+      final addResult = await _orderHandler!.addToCart(
+        searchResult: result,
+        quantity: item.quantity,
+      );
 
-      case CartAddResult.itemUnavailable:
-        _ttsResponse = 'Sorry, that item is currently unavailable.';
-        _state = MealVoiceState.commandError;
-        _addLog('Item unavailable');
-        await _tts.speak(_ttsResponse);
-        break;
+      switch (addResult) {
+        case CartAddResult.success:
+          addedCount++;
+          addedTotal += result.menuItem.price * item.quantity;
+          break;
+        case CartAddResult.cartConflict:
+          // FIX #6: Ask user to clear cart, then re-add
+          await _handleCartConflict();
+          return;
+        case CartAddResult.itemUnavailable:
+          _addLog('Item unavailable: ${result.menuItem.name}');
+          failedCount++;
+          break;
+        default:
+          _addLog('Failed to add: ${result.menuItem.name}');
+          failedCount++;
+          break;
+      }
+    }
 
-      case CartAddResult.networkError:
-        _handleError('Network error. Please try again.');
-        return;
-
-      default:
-        _handleError('Could not add item to cart. Please try again.');
-        return;
+    // Report results
+    if (addedCount > 0 && failedCount == 0) {
+      final total = _orderHandler!.cartTotal;
+      final count = _orderHandler!.cartItemCount;
+      final msg = addedCount == _searchResults.length
+          ? 'Added to your cart. Your cart total is ₹$total with $count item${count > 1 ? 's' : ''}.'
+          : 'Added $addedCount item${addedCount > 1 ? 's' : ''} to your cart. Total is ₹$total.';
+      _ttsResponse = msg;
+      _state = MealVoiceState.commandSuccess;
+      _addLog(msg);
+      await _tts.speak(msg);
+    } else if (addedCount > 0) {
+      final total = _orderHandler!.cartTotal;
+      _ttsResponse = 'Added $addedCount item${addedCount > 1 ? 's' : ''}, but $failedCount item${failedCount > 1 ? 's' : ''} could not be added. Cart total is ₹$total.';
+      _state = MealVoiceState.commandSuccess;
+      _addLog(_ttsResponse!);
+      await _tts.speak(_ttsResponse!);
+    } else {
+      _handleError('Could not add any items to your cart. Please try again.');
+      return;
     }
 
     // Return to wake-word listening
     _returnToWakeWordListening();
   }
 
-  /// Handle cart conflict (items from different restaurant).
+  /// FIX #6: Handle cart conflict — ask user to clear cart.
   Future<void> _handleCartConflict() async {
-    _ttsResponse = 'Your cart already contains items from another restaurant. Would you like me to clear the cart and add this item?';
+    _pendingCartConflictClear = true;
+    _ttsResponse = 'Your cart already contains items from another restaurant. '
+        'Would you like me to clear the cart and add these items?';
     _state = MealVoiceState.confirmationRequired;
     _awaitingConfirmation = true;
     notifyListeners();
-
-    await _tts.speak(_ttsResponse);
+    await _tts.speak(_ttsResponse!);
     _startConfirmationTimeout();
+  }
+
+  /// FIX #6: User confirmed clearing cart — clear and re-add.
+  Future<void> _handleCartConflictConfirmed() async {
+    _awaitingConfirmation = false;
+    _pendingCartConflictClear = false;
+
+    _addLog('Clearing cart due to conflict');
+    await _orderHandler!.clearCart();
+
+    // Now add all items
+    int addedCount = 0;
+    double addedTotal = 0;
+
+    for (int i = 0; i < _searchResults.length; i++) {
+      final result = _searchResults[i];
+      final item = i < _pendingItems.length ? _pendingItems[i] : _pendingItems.last;
+
+      final addResult = await _orderHandler!.addToCart(
+        searchResult: result,
+        quantity: item.quantity,
+      );
+
+      if (addResult == CartAddResult.success) {
+        addedCount++;
+        addedTotal += result.menuItem.price * item.quantity;
+      }
+    }
+
+    if (addedCount > 0) {
+      final total = _orderHandler!.cartTotal;
+      final count = _orderHandler!.cartItemCount;
+      _ttsResponse = 'Cart cleared and items added. Your cart total is ₹$total with $count item${count > 1 ? 's' : ''}.';
+      _state = MealVoiceState.commandSuccess;
+      _addLog(_ttsResponse!);
+      await _tts.speak(_ttsResponse!);
+    } else {
+      _handleError('Could not add items after clearing cart.');
+      return;
+    }
+
+    _returnToWakeWordListening();
   }
 
   /// Handle user denying the confirmation.
   void _handleUserDenied() {
     _awaitingConfirmation = false;
+    _pendingCartConflictClear = false;
     _ttsResponse = 'No problem. Say "Hi MEAL" when you\'re ready.';
     _state = MealVoiceState.userDenied;
     _addLog('User denied');
@@ -379,23 +534,26 @@ class MealVoiceController extends ChangeNotifier {
 
   /// Handle unknown/unrecognized command.
   void _handleUnknownCommand() {
-    _ttsResponse = 'Sorry, I didn\'t understand that. You can say things like "Order one chicken biryani" or "Add two burgers".';
+    _ttsResponse = 'Sorry, I didn\'t understand that. You can say things like '
+        '"Order one chicken biryani" or "Add two burgers".';
     _state = MealVoiceState.commandUnknown;
     _addLog('Unknown command');
-    _speakAndReturn(_ttsResponse);
+    _speakAndReturn(_ttsResponse!);
   }
 
   /// Handle item not found in search.
   void _handleItemNotFound(String itemName) {
-    _ttsResponse = 'Sorry, I couldn\'t find "$itemName" in any available restaurant. Would you like to try something else?';
+    _ttsResponse = 'Sorry, I couldn\'t find "$itemName" in any available restaurant. '
+        'Would you like to try something else?';
     _state = MealVoiceState.commandError;
     _addLog('Item not found: $itemName');
-    _speakAndReturn(_ttsResponse);
+    _speakAndReturn(_ttsResponse!);
   }
 
   /// Handle listening timeout (no speech after wake word).
   void _handleListeningTimeout(String reason) {
     _awaitingConfirmation = false;
+    _pendingCartConflictClear = false;
     _confirmationTimeout?.cancel();
 
     if (_state == MealVoiceState.confirmationRequired) {
@@ -405,7 +563,7 @@ class MealVoiceController extends ChangeNotifier {
     }
 
     _addLog('Timeout: $reason');
-    _speakAndReturn(_ttsResponse);
+    _speakAndReturn(_ttsResponse!);
   }
 
   /// Handle confirmation timeout.
@@ -422,22 +580,24 @@ class MealVoiceController extends ChangeNotifier {
   void _handleConfirmationUnknown(String transcript) {
     _ttsResponse = 'Sorry, I didn\'t catch that. Please say "yes" or "no".';
     _addLog('Unknown confirmation: $transcript');
-    _startConfirmationTimeout(); // Restart timeout
-    _speakAndReturn(_ttsResponse);
+    // Don't restart timeout — just re-listen
+    _speakAndReturn(_ttsResponse!);
   }
 
   /// Handle general errors.
   void _handleError(String message) {
     _awaitingConfirmation = false;
+    _pendingCartConflictClear = false;
     _confirmationTimeout?.cancel();
     _ttsResponse = 'Sorry, something went wrong. $message';
     _state = MealVoiceState.commandError;
     _addLog('Error: $message');
-    _speakAndReturn(_ttsResponse);
+    _speakAndReturn(_ttsResponse!);
   }
 
   /// Speak a message and return to wake-word listening.
   Future<void> _speakAndReturn(String message) async {
+    _isProcessing = false;
     await _tts.speak(message);
     _returnToWakeWordListening();
   }
@@ -445,8 +605,12 @@ class MealVoiceController extends ChangeNotifier {
   /// Return to wake-word listening state.
   void _returnToWakeWordListening() {
     _awaitingConfirmation = false;
+    _pendingCartConflictClear = false;
     _confirmationTimeout?.cancel();
-    _searchResult = null;
+    _searchResults.clear();
+    _notFoundItems.clear();
+    _pendingItems = [];
+    _isProcessing = false;
 
     // Restart native wake-word detection
     _service.restartWakeWordListening();
@@ -465,7 +629,6 @@ class MealVoiceController extends ChangeNotifier {
 
   // ─── Public API ───
 
-  /// Request microphone permission.
   Future<void> requestPermission() async {
     _state = MealVoiceState.initializing;
     _lastTranscript = 'Requesting permission...';
@@ -478,7 +641,6 @@ class MealVoiceController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Start wake-word detection.
   Future<void> startListening() async {
     if (!_permissionGranted) {
       await requestPermission();
@@ -488,7 +650,8 @@ class MealVoiceController extends ChangeNotifier {
     _ttsResponse = '';
     _lastTranscript = '';
     _lastCommand = null;
-    _searchResult = null;
+    _searchResults.clear();
+    _notFoundItems.clear();
 
     final started = await _service.startListening();
     if (started) {
@@ -504,20 +667,19 @@ class MealVoiceController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Stop all voice activity.
   Future<void> stopListening() async {
     _confirmationTimeout?.cancel();
     await _tts.stop();
     await _service.stopListening();
     _isListening = false;
     _awaitingConfirmation = false;
+    _isProcessing = false;
     _state = MealVoiceState.stopped;
     _lastTranscript = 'Stopped';
     _addLog('Stopped');
     notifyListeners();
   }
 
-  /// Get detailed status from native service.
   Future<Map<String, dynamic>> getStatus() async {
     return await _service.getStatus();
   }

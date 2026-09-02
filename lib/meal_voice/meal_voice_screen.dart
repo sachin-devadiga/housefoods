@@ -207,8 +207,9 @@ class _MealVoiceTestScreenState extends State<MealVoiceTestScreen> {
   }
 
   Widget _buildSearchResultCard(MealVoiceController controller) {
-    final result = controller.searchResult;
-    if (result == null) return const SizedBox.shrink();
+    if (controller.searchResults.isEmpty && controller.notFoundItems.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return Card(
       color: Colors.green.shade50,
@@ -217,12 +218,25 @@ class _MealVoiceTestScreenState extends State<MealVoiceTestScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Search Result', style: TextStyle(fontSize: 12, color: Colors.green)),
-            const SizedBox(height: 4),
-            _commandRow('Item', result.menuItem.name),
-            _commandRow('Price', '₹${result.menuItem.price}'),
-            _commandRow('Kitchen', result.kitchen.name),
-            _commandRow('Available', result.menuItem.isAvailable ? 'Yes' : 'No'),
+            if (controller.searchResults.isNotEmpty) ...[
+              Text(
+                'Found ${controller.searchResults.length} item${controller.searchResults.length > 1 ? 's' : ''}',
+                style: const TextStyle(fontSize: 12, color: Colors.green),
+              ),
+              const SizedBox(height: 4),
+              for (final result in controller.searchResults)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: _commandRow(result.menuItem.name, '₹${result.menuItem.price} × ${result.kitchen.name}'),
+                ),
+            ],
+            if (controller.notFoundItems.isNotEmpty) ...[
+              if (controller.searchResults.isNotEmpty) const SizedBox(height: 8),
+              Text(
+                'Not found: ${controller.notFoundItems.join(', ')}',
+                style: const TextStyle(fontSize: 12, color: Colors.orange),
+              ),
+            ],
           ],
         ),
       ),
@@ -302,7 +316,7 @@ class _MealVoiceTestScreenState extends State<MealVoiceTestScreen> {
             _statusRow('Wake Word', true),
             _statusRow('Speech Recognition', controller.microphoneAvailable),
             _statusRow('TTS', controller.ttsAvailable),
-            _statusRow('Cart Integration', controller.lastCommand != null),
+            _statusRow('Cart Integration', controller.lastCommand != null || controller.state != MealVoiceState.idle),
           ],
         ),
       ),
