@@ -71,11 +71,11 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/logo.png"
+  image_path: "assets/logo.jpeg"
   remove_alpha_ios: true
   background_color: "#000000"
   adaptive_icon_background: "#000000"
-  adaptive_icon_foreground: "assets/logo.png"
+  adaptive_icon_foreground: "assets/logo.jpeg"
 
 flutter:
   generate: true # Required for l10n
