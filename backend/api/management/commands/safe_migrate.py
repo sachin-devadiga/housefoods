@@ -41,7 +41,7 @@ class Command(BaseCommand):
         from api.models import AdminSetting
 
         defaults = {
-            'app_latest_version': os.environ.get('APP_LATEST_VERSION', '1.0.2'),
+            'app_latest_version': os.environ.get('APP_LATEST_VERSION', '1.0.3'),
             'app_min_version': os.environ.get('APP_MIN_VERSION', '1.0.0'),
             'app_update_url': os.environ.get('APP_UPDATE_URL', ''),
             'app_update_message': os.environ.get('APP_UPDATE_MESSAGE', ''),
