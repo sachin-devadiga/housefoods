@@ -72,10 +72,12 @@ class _AddressBookScreenState extends State<AddressBookScreen> {
     try {
       await UserRepositoryImpl().updateAddresses(_user!.uid, updated);
       _loadUserData();
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Address removed")),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Failed to remove address"), backgroundColor: Colors.red),
       );
@@ -99,7 +101,8 @@ class _AddressBookScreenState extends State<AddressBookScreen> {
               MaterialPageRoute(builder: (_) => AddAddressScreen(user: _user!)),
             ).then((result) {
               _loadUserData();
-              if (result == true && mounted) {
+              if (!context.mounted) return;
+              if (result == true) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text("Address saved successfully"), backgroundColor: Colors.green),
                 );

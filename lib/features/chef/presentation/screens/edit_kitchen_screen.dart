@@ -86,6 +86,7 @@ class _EditKitchenScreenState extends State<EditKitchenScreen> {
           );
         }
       } catch (e) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Update failed: $e"), backgroundColor: AppTheme.errorColor),
         );

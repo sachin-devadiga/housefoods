@@ -194,7 +194,7 @@ class _DeliveryPartnerProfileTabState extends State<DeliveryPartnerProfileTab> {
                       onPressed: () async {
                         Navigator.pop(ctx);
                         await Provider.of<app.AuthProvider>(context, listen: false).logout();
-                        if (mounted) {
+                        if (context.mounted) {
                           Navigator.pushAndRemoveUntil(
                             context,
                             MaterialPageRoute(builder: (_) => const LoginScreen()),

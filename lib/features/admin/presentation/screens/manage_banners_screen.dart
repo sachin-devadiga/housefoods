@@ -101,7 +101,7 @@ class _ManageBannersScreenState extends State<ManageBannersScreen> {
                 } else {
                   await provider.addBanner(data);
                 }
-                if (mounted) Navigator.pop(ctx);
+                if (ctx.mounted) Navigator.pop(ctx);
               },
               child: Text(isEdit ? 'Update' : 'Add'),
             ),

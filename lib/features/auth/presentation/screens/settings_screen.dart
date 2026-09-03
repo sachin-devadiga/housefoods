@@ -29,7 +29,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: const Text("English"),
               leading: Radio<String>(
                 value: 'en',
+                // ignore: deprecated_member_use
                 groupValue: provider.locale.languageCode,
+                // ignore: deprecated_member_use
                 onChanged: (val) {
                   provider.setLanguage('en');
                   Navigator.pop(context);
@@ -41,7 +43,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: const Text("हिंदी (Hindi)"),
               leading: Radio<String>(
                 value: 'hi',
+                // ignore: deprecated_member_use
                 groupValue: provider.locale.languageCode,
+                // ignore: deprecated_member_use
                 onChanged: (val) {
                   provider.setLanguage('hi');
                   Navigator.pop(context);

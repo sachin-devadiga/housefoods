@@ -59,6 +59,7 @@ class _HomeTabState extends State<HomeTab> {
           if (uid.isNotEmpty) {
             await context.read<FavoritesProvider>().loadFavorites(uid);
           }
+          if (!context.mounted) return;
           await context.read<KitchenProvider>().fetchKitchens();
         },
         child: Consumer<KitchenProvider>(

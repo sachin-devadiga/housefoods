@@ -165,7 +165,9 @@ class _CartCheckoutScreenState extends State<CartCheckoutScreen> {
                   children: List.generate(_deliverySlots.length, (index) {
                     return RadioListTile<int>(
                       value: index,
+                      // ignore: deprecated_member_use
                       groupValue: _selectedSlot,
+                      // ignore: deprecated_member_use
                       onChanged: (val) => setState(() => _selectedSlot = val ?? 0),
                       title: Text(_deliverySlots[index]),
                       activeColor: AppTheme.primaryColor,
@@ -284,7 +286,9 @@ class _CartCheckoutScreenState extends State<CartCheckoutScreen> {
           ..._user!.addresses.map((addr) => ListTile(
             leading: Radio<AddressModel>(
               value: addr,
+              // ignore: deprecated_member_use
               groupValue: _selectedAddress,
+              // ignore: deprecated_member_use
               onChanged: (val) {
                 setState(() => _selectedAddress = val);
                 Navigator.pop(ctx);

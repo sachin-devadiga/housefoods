@@ -42,6 +42,7 @@ class ProfileTab extends StatelessWidget {
         }
       }
     } catch (e) {
+      if (!context.mounted) return;
       _handleError(context, e);
     }
   }
@@ -65,6 +66,7 @@ class ProfileTab extends StatelessWidget {
         }
       }
     } catch (e) {
+      if (!context.mounted) return;
       _handleError(context, e);
     }
   }

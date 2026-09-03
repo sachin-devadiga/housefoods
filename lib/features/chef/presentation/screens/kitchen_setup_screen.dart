@@ -67,6 +67,7 @@ class _KitchenSetupScreenState extends State<KitchenSetupScreen> {
         final position = await _locationService.getCurrentLocation();
         if (position == null) throw "Could not determine location. Please enable GPS.";
 
+        if (!mounted) return;
         final chefProvider = Provider.of<ChefProvider>(context, listen: false);
         final authProvider = Provider.of<AuthProvider>(context, listen: false);
         final profile = authProvider.userProfile;

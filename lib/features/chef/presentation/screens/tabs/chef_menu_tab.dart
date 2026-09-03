@@ -346,7 +346,7 @@ class _ChefMenuTabState extends State<ChefMenuTab> {
                   Switch(
                     value: isVeg,
                     onChanged: (v) => setDialogState(() => isVeg = v),
-                    activeColor: Colors.green,
+                    activeThumbColor: Colors.green,
                   ),
                 ],
               ),

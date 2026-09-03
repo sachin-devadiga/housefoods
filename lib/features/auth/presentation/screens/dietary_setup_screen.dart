@@ -66,6 +66,7 @@ class _DietarySetupScreenState extends State<DietarySetupScreen> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error: $e"), backgroundColor: AppTheme.errorColor),
       );

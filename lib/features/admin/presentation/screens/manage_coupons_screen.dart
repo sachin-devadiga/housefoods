@@ -126,7 +126,7 @@ class _ManageCouponsScreenState extends State<ManageCouponsScreen> {
                 } else {
                   await provider.addCoupon(data);
                 }
-                if (mounted) Navigator.pop(ctx);
+                if (ctx.mounted) Navigator.pop(ctx);
               },
               child: Text(isEdit ? 'Update' : 'Add'),
             ),

@@ -76,6 +76,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           );
         }
       } catch (e) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Error: $e"), backgroundColor: AppTheme.errorColor),
         );

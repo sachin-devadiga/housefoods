@@ -51,6 +51,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     try {
       email = await _getEmail();
     } catch (_) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Session expired. Please login again.")),
       );
@@ -59,6 +60,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
     setState(() => _isLoading = true);
 
+    if (!mounted) return;
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     await authProvider.setupProfile(
       email: email,

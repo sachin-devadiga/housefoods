@@ -158,7 +158,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                               Switch(
                                 value: isActive,
                                 onChanged: (val) => _toggleUser(provider, user['uid'], val),
-                                activeColor: Colors.green,
+                                activeThumbColor: Colors.green,
                               ),
                             ],
                           ),
