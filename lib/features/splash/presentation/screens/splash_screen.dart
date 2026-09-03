@@ -58,7 +58,7 @@ class _SplashScreenState extends State<SplashScreen> {
       return;
     }
 
-    // Check for app update from backend (non-blocking)
+    // Check for app update from backend
     final updateInfo = await UpdateService.checkForUpdate();
     if (mounted && updateInfo != null) {
       final forceUpdate = UpdateService.isForceRequired(updateInfo.minVersion, currentVersion);
@@ -74,10 +74,8 @@ class _SplashScreenState extends State<SplashScreen> {
         );
         return;
       }
-      // Show optional update dialog (non-blocking)
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) UpdateDialog.show(context, updateInfo, currentVersion);
-      });
+      // Show optional update dialog — wait for user to dismiss before continuing
+      await UpdateDialog.show(context, updateInfo, currentVersion);
     }
 
     if (!mounted) return;
