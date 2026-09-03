@@ -132,10 +132,19 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.restaurant_menu,
-              size: 100,
-              color: Colors.white,
+            ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Image.asset(
+                'assets/logo.jpeg',
+                width: 120,
+                height: 120,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => const Icon(
+                  Icons.restaurant_menu,
+                  size: 100,
+                  color: Colors.white,
+                ),
+              ),
             ),
             const SizedBox(height: 20),
             Text(

@@ -81,6 +81,7 @@ flutter:
   generate: true # Required for l10n
   uses-material-design: true
   assets:
+    - assets/logo.jpeg
     - assets/images/
     - assets/icons/
     - assets/sounds/
