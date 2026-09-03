@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import '../config/role_config.dart';
 import '../constants/app_constants.dart';
 
 class UpdateInfo {
@@ -54,6 +55,18 @@ class UpdateService {
       final currentVersion = packageInfo.version;
 
       if (isNewer(info.latestVersion, currentVersion)) {
+        // Construct role-specific download URL from base URL
+        if (info.updateUrl.isNotEmpty && RoleConfig.isDedicated) {
+          final apkName = 'mealin-${RoleConfig.roleName.replaceAll('_', '-')}.apk';
+          final baseUrl = info.updateUrl.endsWith('/') ? info.updateUrl : '${info.updateUrl}/';
+          return UpdateInfo(
+            latestVersion: info.latestVersion,
+            minVersion: info.minVersion,
+            updateUrl: '$baseUrl$apkName',
+            updateMessage: info.updateMessage,
+            forceUpdate: info.forceUpdate,
+          );
+        }
         return info;
       }
       return null;

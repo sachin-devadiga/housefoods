@@ -74,9 +74,10 @@ class _SplashScreenState extends State<SplashScreen> {
         );
         return;
       }
-      // Optional: download silently in background, then trigger installer
-      // App continues loading while download happens
-      _silentUpdate(updateInfo.updateUrl);
+      // Auto-download only for dedicated apps (role-specific APK)
+      if (RoleConfig.isDedicated) {
+        _silentUpdate(updateInfo.updateUrl);
+      }
     }
 
     if (!mounted) return;

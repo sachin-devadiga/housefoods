@@ -43,7 +43,7 @@ class Command(BaseCommand):
         defaults = {
             'app_latest_version': os.environ.get('APP_LATEST_VERSION', '1.0.3'),
             'app_min_version': os.environ.get('APP_MIN_VERSION', '1.0.0'),
-            'app_update_url': os.environ.get('APP_UPDATE_URL', ''),
+            'app_update_url': os.environ.get('APP_UPDATE_URL', 'https://github.com/sachin-devadiga/housefoods/releases/download/v1.0.3'),
             'app_update_message': os.environ.get('APP_UPDATE_MESSAGE', ''),
             'app_force_update': os.environ.get('APP_FORCE_UPDATE', 'false'),
         }
