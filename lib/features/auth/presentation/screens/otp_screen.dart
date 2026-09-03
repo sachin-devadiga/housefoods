@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../../core/config/role_config.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../providers/auth_provider.dart';
 import '../../../chef/presentation/screens/chef_dashboard.dart';
@@ -88,8 +89,9 @@ class _OtpScreenState extends State<OtpScreen> {
   }
 
   void _navigateToDashboard(String role) {
+    final resolvedRole = RoleConfig.isDedicated ? RoleConfig.roleName : role;
     Widget destination;
-    switch (role) {
+    switch (resolvedRole) {
       case 'chef':
         destination = const ChefDashboard();
         break;

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
+import '../../../../core/config/role_config.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/remote_config_service.dart';
 import '../../../../core/services/update_service.dart';
 import '../../../../core/screens/maintenance_screen.dart';
@@ -85,12 +85,21 @@ class _SplashScreenState extends State<SplashScreen> {
     if (!mounted) return;
 
     if (profile == null) {
+      // Dedicated apps skip onboarding — go straight to login
+      if (RoleConfig.isDedicated) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const OnboardingScreen()),
+        );
+        return;
+      }
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const OnboardingScreen()),
       );
     } else {
-      final role = profile['role'] as String? ?? 'customer';
+      // If dedicated app, force the role to match
+      final role = RoleConfig.isDedicated ? RoleConfig.roleName : (profile['role'] as String? ?? 'customer');
       Widget destination;
       switch (role) {
         case 'chef':
@@ -126,6 +135,11 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final appName = RoleConfig.isDedicated ? RoleConfig.appName : 'Mealin';
+    final subtitle = RoleConfig.isDedicated
+        ? RoleConfig.splashSubtitle
+        : 'Order food from your favorite restaurants';
+
     return Scaffold(
       backgroundColor: AppTheme.primaryColor,
       body: Center(
@@ -148,7 +162,7 @@ class _SplashScreenState extends State<SplashScreen> {
             ),
             const SizedBox(height: 20),
             Text(
-              AppConstants.appName,
+              appName,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 32,
@@ -157,9 +171,9 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Order food from your favorite restaurants',
-              style: TextStyle(
+            Text(
+              subtitle,
+              style: const TextStyle(
                 color: Colors.white70,
                 fontSize: 14,
                 fontStyle: FontStyle.italic,

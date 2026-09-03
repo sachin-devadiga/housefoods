@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../../core/config/role_config.dart';
 import '../../../../core/services/token_service.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../chef/presentation/screens/chef_dashboard.dart';
@@ -79,10 +80,11 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   }
 
   void _navigateToDashboard() {
+    final resolvedRole = RoleConfig.isDedicated ? RoleConfig.roleName : widget.role;
     Widget destination;
-    if (widget.role == 'customer') {
+    if (resolvedRole == 'customer') {
       destination = const CustomerDashboard();
-    } else if (widget.role == 'chef') {
+    } else if (resolvedRole == 'chef') {
       destination = const ChefDashboard();
     } else {
       destination = const DeliveryPartnerDashboard();
@@ -133,21 +135,22 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
             const SizedBox(height: 8),
             const Text("Tell us your name to get started."),
             const SizedBox(height: 32),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppTheme.primaryColor, width: 2),
-                color: AppTheme.primaryColor.withValues(alpha: 0.05),
+            if (!RoleConfig.isDedicated)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.primaryColor, width: 2),
+                  color: AppTheme.primaryColor.withValues(alpha: 0.05),
+                ),
+                child: Row(
+                  children: [
+                    Icon(_roleIcon, color: AppTheme.primaryColor),
+                    const SizedBox(width: 15),
+                    Text(_roleTitle, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  ],
+                ),
               ),
-              child: Row(
-                children: [
-                  Icon(_roleIcon, color: AppTheme.primaryColor),
-                  const SizedBox(width: 15),
-                  Text(_roleTitle, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                ],
-              ),
-            ),
             const SizedBox(height: 24),
             TextField(
               controller: _nameController,

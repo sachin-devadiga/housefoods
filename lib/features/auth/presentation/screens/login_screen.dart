@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../../core/config/role_config.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../providers/auth_provider.dart';
 import 'otp_screen.dart';
@@ -14,7 +15,13 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
-  String _selectedRole = 'customer';
+  late String _selectedRole;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedRole = RoleConfig.isDedicated ? RoleConfig.roleName : 'customer';
+  }
 
   @override
   void dispose() {
@@ -51,6 +58,8 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
+    final showRolePicker = !RoleConfig.isDedicated;
+    final appTitle = RoleConfig.isDedicated ? RoleConfig.loginTitle : 'Welcome to Mealin';
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -63,9 +72,9 @@ class _LoginScreenState extends State<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 40),
-                const Text(
-                  "Welcome to Mealin",
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                Text(
+                  appTitle,
+                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -91,29 +100,31 @@ class _LoginScreenState extends State<LoginScreen> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 32),
-                const Text("I want to:", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 16),
-                _buildRoleCard(
-                  title: "Order Food",
-                  subtitle: "Browse restaurants & get food delivered",
-                  role: 'customer',
-                  icon: Icons.fastfood,
-                ),
-                const SizedBox(height: 16),
-                _buildRoleCard(
-                  title: "Sell Food",
-                  subtitle: "List your kitchen & reach more customers",
-                  role: 'chef',
-                  icon: Icons.restaurant,
-                ),
-                const SizedBox(height: 16),
-                _buildRoleCard(
-                  title: "Deliver Food",
-                  subtitle: "Earn money delivering meals",
-                  role: 'delivery_partner',
-                  icon: Icons.delivery_dining,
-                ),
+                if (showRolePicker) ...[
+                  const SizedBox(height: 32),
+                  const Text("I want to:", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 16),
+                  _buildRoleCard(
+                    title: "Order Food",
+                    subtitle: "Browse restaurants & get food delivered",
+                    role: 'customer',
+                    icon: Icons.fastfood,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildRoleCard(
+                    title: "Sell Food",
+                    subtitle: "List your kitchen & reach more customers",
+                    role: 'chef',
+                    icon: Icons.restaurant,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildRoleCard(
+                    title: "Deliver Food",
+                    subtitle: "Earn money delivering meals",
+                    role: 'delivery_partner',
+                    icon: Icons.delivery_dining,
+                  ),
+                ],
                 const SizedBox(height: 32),
                 authProvider.isLoading
                     ? const Center(child: CircularProgressIndicator())

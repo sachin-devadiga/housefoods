@@ -7,6 +7,9 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Read APP_ROLE from Gradle properties (set via flutter build --dart-define)
+val appRole = project.findProperty("APP_ROLE") as? String ?: ""
+
 android {
     namespace = "com.example.housefoods"
     compileSdk = flutter.compileSdkVersion
@@ -19,7 +22,13 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.housefoods"
+        // Set applicationId suffix based on APP_ROLE
+        applicationId = when (appRole) {
+            "customer" -> "com.example.housefoods.customer"
+            "chef" -> "com.example.housefoods.kitchen"
+            "delivery_partner" -> "com.example.housefoods.delivery"
+            else -> "com.example.housefoods"
+        }
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
