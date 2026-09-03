@@ -7,7 +7,6 @@ import '../../../../core/services/remote_config_service.dart';
 import '../../../../core/services/update_service.dart';
 import '../../../../core/screens/maintenance_screen.dart';
 import '../../../../core/screens/force_update_screen.dart';
-import '../../../../core/widgets/update_dialog.dart';
 import '../../../admin/presentation/screens/admin_dashboard.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../chef/presentation/screens/chef_dashboard.dart';
@@ -58,11 +57,12 @@ class _SplashScreenState extends State<SplashScreen> {
       return;
     }
 
-    // Check for app update from backend
+    // Check for update — if available, auto-download and install silently
     final updateInfo = await UpdateService.checkForUpdate();
-    if (mounted && updateInfo != null) {
+    if (mounted && updateInfo != null && updateInfo.updateUrl.isNotEmpty) {
       final forceUpdate = UpdateService.isForceRequired(updateInfo.minVersion, currentVersion);
       if (forceUpdate) {
+        // Force: show screen that auto-downloads and installs
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -74,8 +74,9 @@ class _SplashScreenState extends State<SplashScreen> {
         );
         return;
       }
-      // Show optional update dialog — wait for user to dismiss before continuing
-      await UpdateDialog.show(context, updateInfo, currentVersion);
+      // Optional: download silently in background, then trigger installer
+      // App continues loading while download happens
+      _silentUpdate(updateInfo.updateUrl);
     }
 
     if (!mounted) return;
@@ -85,20 +86,11 @@ class _SplashScreenState extends State<SplashScreen> {
     if (!mounted) return;
 
     if (profile == null) {
-      // Dedicated apps skip onboarding — go straight to login
-      if (RoleConfig.isDedicated) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const OnboardingScreen()),
-        );
-        return;
-      }
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const OnboardingScreen()),
       );
     } else {
-      // If dedicated app, force the role to match
       final role = RoleConfig.isDedicated ? RoleConfig.roleName : (profile['role'] as String? ?? 'customer');
       Widget destination;
       switch (role) {
@@ -119,6 +111,19 @@ class _SplashScreenState extends State<SplashScreen> {
         context,
         MaterialPageRoute(builder: (context) => destination),
       );
+    }
+  }
+
+  /// Download APK in background and trigger Android installer.
+  /// No UI interruption — user just sees the system install prompt when ready.
+  Future<void> _silentUpdate(String url) async {
+    try {
+      final filePath = await UpdateService.downloadApk(url);
+      if (filePath != null && mounted) {
+        await UpdateService.installApk(filePath);
+      }
+    } catch (e) {
+      debugPrint('[Splash] Silent update failed: $e');
     }
   }
 
