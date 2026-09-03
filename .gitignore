@@ -29,3 +29,5 @@ __pycache__/
 .flutter-plugins-dependencies
 .pub/
 .idea/
+android/app/role.properties
+build/apk-output/

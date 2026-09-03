@@ -40,6 +40,78 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:481479523905:android:placeholder1",
+        "android_client_info": {
+          "package_name": "com.example.housefoods.customer"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "481479523905-q2ql8aq955mb3q91a60akelf6nfjgp1p.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBlbec46Lu8Oxs01BZETcGkm0s0y9ID6J4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:481479523905:android:placeholder2",
+        "android_client_info": {
+          "package_name": "com.example.housefoods.kitchen"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "481479523905-q2ql8aq955mb3q91a60akelf6nfjgp1p.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBlbec46Lu8Oxs01BZETcGkm0s0y9ID6J4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:481479523905:android:placeholder3",
+        "android_client_info": {
+          "package_name": "com.example.housefoods.delivery"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "481479523905-q2ql8aq955mb3q91a60akelf6nfjgp1p.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBlbec46Lu8Oxs01BZETcGkm0s0y9ID6J4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
     }
   ],
   "configuration_version": "1"

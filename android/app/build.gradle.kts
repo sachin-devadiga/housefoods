@@ -7,8 +7,8 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// Read APP_ROLE from Gradle properties (set via flutter build --dart-define)
-val appRole = project.findProperty("APP_ROLE") as? String ?: ""
+// APP_ROLE is set in gradle.properties before each build
+val appRole: String = project.findProperty("APP_ROLE") as? String ?: ""
 
 android {
     namespace = "com.example.housefoods"
@@ -22,7 +22,6 @@ android {
     }
 
     defaultConfig {
-        // Set applicationId suffix based on APP_ROLE
         applicationId = when (appRole) {
             "customer" -> "com.example.housefoods.customer"
             "chef" -> "com.example.housefoods.kitchen"
@@ -38,8 +37,6 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
