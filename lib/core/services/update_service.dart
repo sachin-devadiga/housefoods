@@ -1,8 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:path_provider/path_provider.dart';
 import '../constants/app_constants.dart';
 
 class UpdateInfo {
@@ -32,8 +34,9 @@ class UpdateInfo {
 }
 
 class UpdateService {
+  static const _channel = MethodChannel('com.mealin.app/install');
+
   /// Check backend for latest version info.
-  /// Returns null if check fails or no update available.
   static Future<UpdateInfo?> checkForUpdate() async {
     try {
       final url = '${AppConstants.apiBaseUrl}/api/auth/app-version/';
@@ -78,11 +81,49 @@ class UpdateService {
     return isNewer(remoteMinVersion, currentVersion);
   }
 
-  /// Open the APK download URL.
-  static Future<void> openUpdateUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+  /// Download APK and return the file path. Calls onProgress with 0.0-1.0.
+  static Future<String?> downloadApk(
+    String url, {
+    void Function(double progress)? onProgress,
+  }) async {
+    try {
+      final dir = await getTemporaryDirectory();
+      final filePath = '${dir.path}/mealin_update.apk';
+      final file = File(filePath);
+
+      final request = http.Request('GET', Uri.parse(url));
+      final response = await http.Client().send(request);
+
+      if (response.statusCode != 200) return null;
+
+      final totalBytes = response.contentLength ?? 0;
+      int receivedBytes = 0;
+
+      final sink = file.openWrite();
+      await for (final chunk in response.stream) {
+        sink.add(chunk);
+        receivedBytes += chunk.length;
+        if (totalBytes > 0) {
+          onProgress?.call(receivedBytes / totalBytes);
+        }
+      }
+      await sink.close();
+
+      return filePath;
+    } catch (e) {
+      debugPrint('[UpdateService] Download failed: $e');
+      return null;
+    }
+  }
+
+  /// Trigger Android package installer for the given APK file.
+  static Future<bool> installApk(String filePath) async {
+    try {
+      await _channel.invokeMethod('installApk', {'filePath': filePath});
+      return true;
+    } catch (e) {
+      debugPrint('[UpdateService] Install failed: $e');
+      return false;
     }
   }
 }
