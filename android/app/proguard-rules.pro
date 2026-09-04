@@ -1,1 +1,4 @@
--keep class com.example.housefoods.** { *; }
+-keep class com.razorpay.** { *; }
+-keep class com.google.firebase.** { *; }
+-keepattributes *Annotation*
+-dontwarn javax.annotation.**
