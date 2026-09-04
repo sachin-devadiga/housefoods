@@ -70,6 +70,6 @@ Free
 
 ## Contact Information
 - **Developer Name**: HouseFoods
-- **Website**: https://mealin.app
-- **Email**: support@mealin.app
+- **Website**: https://mealin.in
+- **Email**: support@mealin.in
 - **Privacy Policy URL**: https://sachin-devadiga.github.io/housefoods/privacy-policy.html
