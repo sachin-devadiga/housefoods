@@ -66,6 +66,9 @@ class UserProfile(models.Model):
     is_active = models.BooleanField(default=True)
     is_available = models.BooleanField(default=True)
     is_verified = models.BooleanField(default=False)
+    current_latitude = models.FloatField(null=True, blank=True)
+    current_longitude = models.FloatField(null=True, blank=True)
+    location_updated_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

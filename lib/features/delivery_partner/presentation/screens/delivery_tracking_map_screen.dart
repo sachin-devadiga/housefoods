@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../../../../core/constants/app_constants.dart';
+import '../../../../core/services/api_service.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/services/map_api_service.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -28,6 +30,7 @@ class DeliveryTrackingMapScreen extends StatefulWidget {
 class _DeliveryTrackingMapScreenState extends State<DeliveryTrackingMapScreen> {
   final Completer<GoogleMapController> _mapController = Completer();
   final LocationService _locationService = LocationService();
+  final ApiService _api = ApiService(baseUrl: AppConstants.apiBaseUrl);
 
   LatLng? _riderPosition;
   LatLng? _kitchenPosition;
@@ -68,7 +71,18 @@ class _DeliveryTrackingMapScreenState extends State<DeliveryTrackingMapScreen> {
             icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
           ));
         });
+        // Send GPS to backend so customer can see rider location
+        _sendLocationToBackend(pos.latitude, pos.longitude);
       }
+    } catch (_) {}
+  }
+
+  void _sendLocationToBackend(double lat, double lng) async {
+    try {
+      await _api.post(
+        AppConstants.riderLocationUpdateEndpoint,
+        body: {'latitude': lat, 'longitude': lng},
+      );
     } catch (_) {}
   }
 

@@ -79,6 +79,10 @@ urlpatterns = [
     path('delivery/payouts/', views.DeliveryPartnerPayoutView.as_view(), name='delivery-payouts'),
     path('delivery/availability/', views.DeliveryAvailabilityView.as_view(), name='delivery-availability'),
 
+    # Rider Live Location
+    path('delivery/location/', views.RiderLocationUpdateView.as_view(), name='rider-location-update'),
+    path('orders/<int:order_id>/rider-location/', views.RiderLocationView.as_view(), name='rider-location'),
+
     # Wallet
     path('wallet/', views.WalletView.as_view(), name='wallet'),
 

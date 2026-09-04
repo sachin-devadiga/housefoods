@@ -114,6 +114,10 @@ class AppConstants {
   // Map
   static const String mapRouteEndpoint = '/api/auth/map/route/';
 
+  // Rider Location Tracking
+  static const String riderLocationUpdateEndpoint = '/api/auth/delivery/location/';
+  static String riderLocationEndpoint(dynamic orderId) => '/api/auth/orders/$orderId/rider-location/';
+
   // Delivery Documents
   static const String deliveryDocumentsEndpoint = '/api/auth/delivery/documents/';
   static const String deliveryDocumentUploadEndpoint = '/api/auth/delivery/documents/upload/';

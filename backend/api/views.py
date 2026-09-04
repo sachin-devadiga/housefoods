@@ -921,6 +921,48 @@ class DeliveryAvailabilityView(APIView):
 
 
 # ──────────────────────────────────────────────
+# RIDER LIVE LOCATION TRACKING VIEWS
+
+class RiderLocationUpdateView(APIView):
+    permission_classes = [IsDeliveryPartner]
+
+    def post(self, request):
+        latitude = request.data.get('latitude')
+        longitude = request.data.get('longitude')
+        if latitude is None or longitude is None:
+            return Response({'error': 'latitude and longitude are required'}, status=status.HTTP_400_BAD_REQUEST)
+        profile = request.user.profile
+        profile.current_latitude = float(latitude)
+        profile.current_longitude = float(longitude)
+        profile.location_updated_at = timezone.now()
+        profile.save(update_fields=['current_latitude', 'current_longitude', 'location_updated_at'])
+        return Response({'status': 'ok'})
+
+
+class RiderLocationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, order_id):
+        try:
+            order = Order.objects.get(pk=order_id)
+        except Order.DoesNotExist:
+            return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        rider = order.delivery_partner
+        if rider is None:
+            return Response({'rider_found': False})
+
+        profile = rider.profile
+        return Response({
+            'rider_found': True,
+            'rider_name': profile.name or rider.get_full_name() or 'Delivery Partner',
+            'latitude': profile.current_latitude,
+            'longitude': profile.current_longitude,
+            'updated_at': profile.location_updated_at.isoformat() if profile.location_updated_at else None,
+        })
+
+
+# ──────────────────────────────────────────────
 # DELIVERY DOCUMENT VERIFICATION VIEWS
 # ──────────────────────────────────────────────
 

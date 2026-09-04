@@ -4,6 +4,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/api_service.dart';
 import '../../../../core/services/location_service.dart';
+import '../../../../core/services/map_api_service.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/models/order_model.dart';
 import '../widgets/daily_feedback_dialog.dart';
@@ -26,6 +27,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   Timer? _pollTimer;
   LatLng? _currentPosition;
   LatLng? _kitchenPosition;
+  LatLng? _riderPosition;
   final Set<Marker> _markers = {};
   final Set<Polyline> _polylines = {};
 
@@ -95,19 +97,16 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   }
 
   void _fitMapBounds() {
-    if (_currentPosition != null && _kitchenPosition != null) {
-      final bounds = _boundsContaining([_currentPosition!, _kitchenPosition!]);
-      _mapController.future.then((controller) {
-        controller.animateCamera(CameraUpdate.newLatLngBounds(bounds, 80));
-      });
-    } else if (_currentPosition != null) {
-      _mapController.future.then((controller) {
-        controller.animateCamera(CameraUpdate.newLatLngZoom(_currentPosition!, 15));
-      });
+    final points = <LatLng>[];
+    if (_currentPosition != null) points.add(_currentPosition!);
+    if (_kitchenPosition != null) points.add(_kitchenPosition!);
+    if (_riderPosition != null) points.add(_riderPosition!);
+    if (points.length < 2) {
+      if (_currentPosition != null) {
+        _mapController.future.then((c) => c.animateCamera(CameraUpdate.newLatLngZoom(_currentPosition!, 15)));
+      }
+      return;
     }
-  }
-
-  LatLngBounds _boundsContaining(List<LatLng> points) {
     double minLat = points.first.latitude, maxLat = points.first.latitude;
     double minLng = points.first.longitude, maxLng = points.first.longitude;
     for (final p in points) {
@@ -116,7 +115,10 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
       if (p.longitude < minLng) minLng = p.longitude;
       if (p.longitude > maxLng) maxLng = p.longitude;
     }
-    return LatLngBounds(southwest: LatLng(minLat, minLng), northeast: LatLng(maxLat, maxLng));
+    final bounds = LatLngBounds(southwest: LatLng(minLat, minLng), northeast: LatLng(maxLat, maxLng));
+    _mapController.future.then((controller) {
+      controller.animateCamera(CameraUpdate.newLatLngBounds(bounds, 80));
+    });
   }
 
   Future<void> _fetchStatus() async {
@@ -129,6 +131,64 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
       if ((status == 'delivered' || status == 'Delivered') && !_feedbackPrompted) {
         _feedbackPrompted = true;
         WidgetsBinding.instance.addPostFrameCallback((_) => _showFeedbackDialog());
+      }
+    } catch (_) {}
+
+    // Fetch rider's live location
+    _fetchRiderLocation();
+  }
+
+  Future<void> _fetchRiderLocation() async {
+    try {
+      final data = await _api.get(AppConstants.riderLocationEndpoint(widget.order.id));
+      if (data['rider_found'] == true && data['latitude'] != null && data['longitude'] != null) {
+        final lat = double.tryParse(data['latitude'].toString());
+        final lng = double.tryParse(data['longitude'].toString());
+        if (lat != null && lng != null && mounted) {
+          final riderLatLng = LatLng(lat, lng);
+          setState(() {
+            _riderPosition = riderLatLng;
+            _markers.removeWhere((m) => m.markerId.value == 'rider');
+            _markers.add(Marker(
+              markerId: const MarkerId('rider'),
+              position: riderLatLng,
+              infoWindow: InfoWindow(title: data['rider_name'] ?? 'Rider'),
+              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+            ));
+          });
+          _fitMapBounds();
+          _fetchRouteToCustomer();
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _fetchRouteToCustomer() async {
+    if (_riderPosition == null || _currentPosition == null) return;
+    try {
+      final mapApi = MapApiService();
+      final route = await mapApi.getRoute(
+        startLat: _riderPosition!.latitude,
+        startLng: _riderPosition!.longitude,
+        endLat: _currentPosition!.latitude,
+        endLng: _currentPosition!.longitude,
+      );
+      if (route['route'] != null && mounted) {
+        final coords = (route['route'] as List).map((c) {
+          if (c is List && c.length >= 2) return LatLng(c[0].toDouble(), c[1].toDouble());
+          return null;
+        }).whereType<LatLng>().toList();
+        if (coords.isNotEmpty) {
+          setState(() {
+            _polylines.clear();
+            _polylines.add(Polyline(
+              polylineId: const PolylineId('rider_to_customer'),
+              points: coords,
+              color: Colors.blue,
+              width: 5,
+            ));
+          });
+        }
       }
     } catch (_) {}
   }
