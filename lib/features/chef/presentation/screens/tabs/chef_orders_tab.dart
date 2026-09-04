@@ -22,8 +22,9 @@ class _ChefOrdersTabState extends State<ChefOrdersTab> {
   void _loadOrders() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final chefProvider = context.read<ChefProvider>();
-      if (chefProvider.myKitchen != null) {
-        context.read<OrderProvider>().fetchKitchenOrders(chefProvider.myKitchen!['id']);
+      final kitchenId = chefProvider.myKitchen?['id'];
+      if (kitchenId != null) {
+        context.read<OrderProvider>().fetchKitchenOrders(kitchenId);
       }
     });
   }
@@ -98,7 +99,9 @@ class _ChefOrdersTabState extends State<ChefOrdersTab> {
       leading: Icon(icon, color: color),
       title: Text(status),
       onTap: () async {
-        await op.updateStatus(order.id, status, cp.myKitchen!['id']);
+        final kitchenId = cp.myKitchen?['id'];
+        if (kitchenId == null) return;
+        await op.updateStatus(order.id, status, kitchenId);
         if (context.mounted) Navigator.pop(context);
       },
     );

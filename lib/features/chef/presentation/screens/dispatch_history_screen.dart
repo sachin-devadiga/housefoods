@@ -22,8 +22,9 @@ class _DispatchHistoryScreenState extends State<DispatchHistoryScreen> {
   void _loadHistory() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final chefProvider = context.read<ChefProvider>();
-      if (chefProvider.myKitchen != null) {
-        context.read<OrderProvider>().fetchKitchenDispatchHistory(chefProvider.myKitchen!['id']);
+      final kitchenId = chefProvider.myKitchen?['id'];
+      if (kitchenId != null) {
+        context.read<OrderProvider>().fetchKitchenDispatchHistory(kitchenId);
       }
     });
   }

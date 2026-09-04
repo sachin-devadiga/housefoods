@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/theme_provider.dart';
@@ -16,6 +18,18 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
+  String _appVersion = '1.0.0';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (mounted) setState(() => _appVersion = info.version);
+  }
 
   void _showLanguageDialog(BuildContext context, LanguageProvider provider) {
     showDialog(
@@ -134,8 +148,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           
           const Divider(),
           _buildSectionHeader("Legal"),
-          _buildSettingsTile(Icons.description_outlined, "Terms of Service", () {}),
-          _buildSettingsTile(Icons.privacy_tip_outlined, "Privacy Policy", () {}),
+          _buildSettingsTile(Icons.description_outlined, "Terms of Service", () async {
+            final url = Uri.parse('https://mealin.app/terms');
+            if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
+          }),
+          _buildSettingsTile(Icons.privacy_tip_outlined, "Privacy Policy", () async {
+            final url = Uri.parse('https://mealin.app/privacy');
+            if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
+          }),
           
           const Divider(),
           _buildSectionHeader("Account"),
@@ -147,7 +167,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           
           const SizedBox(height: 40),
-          Center(child: Text("Mealin v1.0.0", style: TextStyle(color: Colors.grey[400], fontSize: 12))),
+          Center(child: Text("Mealin v$_appVersion", style: TextStyle(color: Colors.grey[400], fontSize: 12))),
           const SizedBox(height: 20),
         ],
       ),

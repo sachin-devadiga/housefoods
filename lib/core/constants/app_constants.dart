@@ -1,5 +1,3 @@
-import 'dart:io' show Platform;
-
 class AppConstants {
   static const String appName = 'Mealin';
 
@@ -15,16 +13,7 @@ class AppConstants {
     const fromEnv = String.fromEnvironment('API_BASE_URL');
     if (fromEnv.isNotEmpty) return [fromEnv];
 
-    const knownLanIp = String.fromEnvironment('LAN_IP');
-    final candidates = <String>[
-      'https://housefoods.onrender.com',
-      'http://localhost:8000',
-      if (Platform.isAndroid) 'http://10.0.2.2:8000',
-      if (knownLanIp.isNotEmpty) 'http://$knownLanIp:8000',
-      'http://192.168.1.4:8000',
-    ];
-
-    return candidates.toSet().toList();
+    return ['https://housefoods.onrender.com'];
   }
 
   // Auth Endpoints

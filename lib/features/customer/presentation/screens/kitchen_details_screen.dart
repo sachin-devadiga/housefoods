@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_cached_image.dart';
 import '../../domain/models/kitchen_model.dart';
@@ -202,7 +203,21 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
           children: [
             const Icon(Icons.location_on, size: 16, color: Colors.grey),
             const SizedBox(width: 4),
-            Text(widget.kitchen.address, style: const TextStyle(color: Colors.grey)),
+            Expanded(
+              child: Text(widget.kitchen.address, style: const TextStyle(color: Colors.grey)),
+            ),
+            if (widget.kitchen.latitude != 0 && widget.kitchen.longitude != 0)
+              TextButton.icon(
+                onPressed: () async {
+                  final url = Uri.parse(
+                    'https://www.google.com/maps/dir/?api=1&destination=${widget.kitchen.latitude},${widget.kitchen.longitude}',
+                  );
+                  if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
+                },
+                icon: const Icon(Icons.directions, size: 16),
+                label: const Text('Directions', style: TextStyle(fontSize: 12)),
+                style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
+              ),
           ],
         ),
       ],

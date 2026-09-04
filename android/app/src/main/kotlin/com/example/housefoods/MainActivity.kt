@@ -7,10 +7,13 @@ import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import com.example.housefoods.mealvoice.MealVoiceBridge
+import com.example.housefoods.mealvoice.MealVoiceService
 import java.io.File
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.mealin.app/install"
+    private var voiceBridge: MealVoiceBridge? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -43,5 +46,21 @@ class MainActivity : FlutterActivity() {
                 result.notImplemented()
             }
         }
+
+        // Wire up MEAL Voice Bridge
+        val service = MealVoiceService.getInstance()
+        if (service != null) {
+            voiceBridge = MealVoiceBridge(flutterEngine, service)
+            voiceBridge?.attach()
+        } else {
+            // Service not yet running — start it and attach bridge on next activity
+            voiceBridge = null
+        }
+    }
+
+    override fun onDestroy() {
+        voiceBridge?.detach()
+        voiceBridge = null
+        super.onDestroy()
     }
 }

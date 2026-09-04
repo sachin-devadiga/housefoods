@@ -24,8 +24,9 @@ class _ChefHomeTabState extends State<ChefHomeTab> {
   Future<void> _loadOperationalData() async {
     final chefProvider = context.read<ChefProvider>();
     if (chefProvider.myKitchen != null) {
-      final kitchenId = chefProvider.myKitchen!['id'].toString();
-      await context.read<OrderProvider>().fetchTodayDeliveries(kitchenId);
+      final kitchenId = chefProvider.myKitchen?['id']?.toString();
+    if (kitchenId == null) return;
+    await context.read<OrderProvider>().fetchTodayDeliveries(kitchenId);
     }
   }
 

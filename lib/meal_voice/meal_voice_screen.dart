@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'meal_voice_controller.dart';
 import 'meal_voice_state.dart';
+import '../features/customer/presentation/providers/cart_provider.dart';
+import '../features/customer/presentation/providers/kitchen_provider.dart';
 
 /// Developer test screen for MEAL Voice Engine.
 /// Shows full workflow state, transcript, parsed command, and TTS response.
@@ -17,7 +19,12 @@ class _MealVoiceTestScreenState extends State<MealVoiceTestScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<MealVoiceController>().initialize();
+      final kitchenProvider = context.read<KitchenProvider>();
+      final cartProvider = context.read<CartProvider>();
+      context.read<MealVoiceController>().initialize(
+        kitchenProvider: kitchenProvider,
+        cartProvider: cartProvider,
+      );
     });
   }
 

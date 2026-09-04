@@ -6,6 +6,7 @@ import '../../../auth/data/repositories/user_repository_impl.dart';
 import '../../../auth/domain/models/user_model.dart';
 import '../../../auth/domain/models/address_model.dart';
 import '../../../auth/presentation/screens/add_address_screen.dart';
+import '../../../auth/presentation/screens/map_picker_screen.dart';
 import '../../domain/models/cart_model.dart';
 import '../../domain/models/order_model.dart';
 import '../providers/order_provider.dart';
@@ -133,26 +134,50 @@ class _CartCheckoutScreenState extends State<CartCheckoutScreen> {
             _buildSectionTitle('Delivery Address'),
             Card(
               child: _selectedAddress == null
-                  ? ListTile(
-                      leading: const Icon(Icons.add_location_alt),
-                      title: const Text('Add delivery address'),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () async {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => AddAddressScreen(user: _user!)),
-                        );
-                        _loadUser();
-                      },
+                  ? Column(
+                      children: [
+                        ListTile(
+                          leading: const Icon(Icons.add_location_alt),
+                          title: const Text('Add delivery address'),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () async {
+                            if (_user == null) return;
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => AddAddressScreen(user: _user!)),
+                            );
+                            _loadUser();
+                          },
+                        ),
+                        const Divider(height: 1),
+                        ListTile(
+                          leading: const Icon(Icons.map, color: AppTheme.primaryColor),
+                          title: const Text('Select on Map'),
+                          subtitle: const Text('Pick exact delivery location', style: TextStyle(fontSize: 12)),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: _pickAddressFromMap,
+                        ),
+                      ],
                     )
-                  : ListTile(
-                      leading: const Icon(Icons.location_on, color: AppTheme.primaryColor),
-                      title: Text(_selectedAddress!.fullAddress),
-                      subtitle: Text(_selectedAddress!.label),
-                      trailing: TextButton(
-                        onPressed: () => _showAddressPicker(),
-                        child: const Text('Change'),
-                      ),
+                  : Column(
+                      children: [
+                        ListTile(
+                          leading: const Icon(Icons.location_on, color: AppTheme.primaryColor),
+                          title: Text(_selectedAddress!.fullAddress),
+                          subtitle: Text(_selectedAddress!.label),
+                          trailing: TextButton(
+                            onPressed: () => _showAddressPicker(),
+                            child: const Text('Change'),
+                          ),
+                        ),
+                        const Divider(height: 1),
+                        ListTile(
+                          dense: true,
+                          leading: const Icon(Icons.map, size: 20),
+                          title: const Text('Select on Map', style: TextStyle(fontSize: 13)),
+                          onTap: _pickAddressFromMap,
+                        ),
+                      ],
                     ),
             ),
             const SizedBox(height: 16),
@@ -304,6 +329,32 @@ class _CartCheckoutScreenState extends State<CartCheckoutScreen> {
     );
   }
 
+  void _pickAddressFromMap() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MapPickerScreen()),
+    );
+
+    if (result != null && result is Map<String, dynamic>) {
+      final addr = result['address'] as String? ?? '';
+      final lat = result['lat'] as double?;
+      final lng = result['lng'] as double?;
+      if (addr.isNotEmpty) {
+        setState(() {
+          _selectedAddress = AddressModel(
+            id: 'map_${DateTime.now().millisecondsSinceEpoch}',
+            label: 'Map Location',
+            fullAddress: addr,
+            houseNo: '',
+            landmark: '',
+            latitude: lat,
+            longitude: lng,
+          );
+        });
+      }
+    }
+  }
+
   Future<void> _processOrder(double total, double tip) async {
     if (_selectedAddress == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -336,6 +387,8 @@ class _CartCheckoutScreenState extends State<CartCheckoutScreen> {
         kitchenName: widget.kitchenName,
         amount: total,
         deliveryAddress: _selectedAddress!.fullAddress,
+        deliveryLatitude: _selectedAddress!.latitude,
+        deliveryLongitude: _selectedAddress!.longitude,
         startDate: DateTime.now(),
         endDate: DateTime.now(),
         status: 'active',

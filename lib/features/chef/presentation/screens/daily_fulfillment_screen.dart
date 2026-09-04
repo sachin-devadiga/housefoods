@@ -26,8 +26,9 @@ class _DailyFulfillmentScreenState extends State<DailyFulfillmentScreen> {
   void _refreshList() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final chefProvider = context.read<ChefProvider>();
-      if (chefProvider.myKitchen != null) {
-        context.read<OrderProvider>().fetchTodayDeliveries(chefProvider.myKitchen!['id']);
+      final kitchenId = chefProvider.myKitchen?['id'];
+      if (kitchenId != null) {
+        context.read<OrderProvider>().fetchTodayDeliveries(kitchenId);
       }
     });
   }

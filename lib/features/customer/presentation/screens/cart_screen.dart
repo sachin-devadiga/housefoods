@@ -253,7 +253,7 @@ class _CartScreenState extends State<CartScreen> {
                 backgroundColor: AppTheme.primaryColor,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              onPressed: () {
+              onPressed: cart.kitchenId != null ? () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -265,7 +265,7 @@ class _CartScreenState extends State<CartScreen> {
                     ),
                   ),
                 );
-              },
+              } : null,
               child: const Text('Proceed to Checkout', style: TextStyle(fontSize: 16, color: Colors.white)),
             ),
           ),

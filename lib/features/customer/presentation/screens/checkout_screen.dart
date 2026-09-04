@@ -111,6 +111,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       planName: widget.plan.name,
       amount: widget.plan.price, 
       deliveryAddress: "${_selectedAddress!.houseNo}, ${_selectedAddress!.fullAddress}",
+      deliveryLatitude: _selectedAddress!.latitude,
+      deliveryLongitude: _selectedAddress!.longitude,
       startDate: _startDate,
       endDate: _startDate.add(Duration(days: widget.plan.durationDays)),
       status: 'pending',

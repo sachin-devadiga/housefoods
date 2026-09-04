@@ -27,6 +27,10 @@ class MealVoiceService : Service() {
         private const val TAG = "MEAL_Service"
         private const val CHANNEL_ID = "meal_voice_channel"
         private const val NOTIFICATION_ID = 9999
+
+        private var instance: MealVoiceService? = null
+
+        fun getInstance(): MealVoiceService? = instance
     }
 
     // FIX #32: Instance-level state, not static
@@ -42,6 +46,7 @@ class MealVoiceService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         Log.i(TAG, "Service created")
         createNotificationChannel()
     }
@@ -59,6 +64,7 @@ class MealVoiceService : Service() {
     }
 
     override fun onDestroy() {
+        instance = null
         stopVoiceService()
         super.onDestroy()
     }

@@ -17,6 +17,8 @@ class OrderModel {
   final double platformFee;
   final double tip;
   final String deliveryAddress;
+  final double? deliveryLatitude;
+  final double? deliveryLongitude;
   final DateTime? deliveryTime;
   final DateTime startDate;
   final DateTime endDate;
@@ -45,6 +47,8 @@ class OrderModel {
     this.platformFee = 0,
     this.tip = 0,
     required this.deliveryAddress,
+    this.deliveryLatitude,
+    this.deliveryLongitude,
     this.deliveryTime,
     required this.startDate,
     required this.endDate,
@@ -72,6 +76,8 @@ class OrderModel {
       'platform_fee': platformFee.toString(),
       'tip': tip.toString(),
       'delivery_address': deliveryAddress,
+      if (deliveryLatitude != null) 'delivery_latitude': deliveryLatitude.toString(),
+      if (deliveryLongitude != null) 'delivery_longitude': deliveryLongitude.toString(),
       'status': status,
       'payment_id': paymentId,
       'delivery_slot_id': deliverySlotId,
@@ -119,6 +125,8 @@ class OrderModel {
       platformFee: double.tryParse(map['platform_fee']?.toString() ?? '0') ?? 0.0,
       tip: double.tryParse(map['tip']?.toString() ?? '0') ?? 0.0,
       deliveryAddress: map['delivery_address'] ?? map['deliveryAddress'] ?? '',
+      deliveryLatitude: map['delivery_latitude'] != null ? double.tryParse(map['delivery_latitude'].toString()) : null,
+      deliveryLongitude: map['delivery_longitude'] != null ? double.tryParse(map['delivery_longitude'].toString()) : null,
       deliveryTime: map['delivery_time'] != null ? parseDate('delivery_time') : null,
       startDate: parseDate('start_date'),
       endDate: parseDate('end_date'),

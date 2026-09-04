@@ -11,6 +11,8 @@ import '../../widgets/kitchen_horizontal_list.dart';
 import '../kitchen_details_screen.dart';
 import '../kitchen_map_screen.dart';
 import '../../../../../core/theme/app_theme.dart';
+import '../../../../../meal_voice/meal_voice_controller.dart';
+import '../../../../../meal_voice/meal_voice_screen.dart';
 
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
@@ -217,16 +219,40 @@ class _HomeTabState extends State<HomeTab> {
           },
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const KitchenMapScreen()),
-          );
-        },
-        backgroundColor: AppTheme.primaryColor,
-        icon: const Icon(Icons.map_outlined, color: Colors.white),
-        label: const Text("View on Map", style: TextStyle(color: Colors.white)),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton.small(
+            heroTag: 'voice',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const MealVoiceTestScreen()),
+              );
+            },
+            backgroundColor: Colors.deepPurple,
+            child: Consumer<MealVoiceController>(
+              builder: (context, vc, _) => Icon(
+                vc.isListening ? Icons.mic : Icons.mic_none,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          FloatingActionButton.extended(
+            heroTag: 'map',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const KitchenMapScreen()),
+              );
+            },
+            backgroundColor: AppTheme.primaryColor,
+            icon: const Icon(Icons.map_outlined, color: Colors.white),
+            label: const Text("View on Map", style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );

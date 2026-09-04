@@ -21,6 +21,8 @@ class _AddAddressScreenState extends State<AddAddressScreen> {
   final TextEditingController _landmarkController = TextEditingController();
   String _selectedLabel = 'Home';
   bool _isLoading = false;
+  double? _pickedLat;
+  double? _pickedLng;
 
   void _openMapPicker() async {
     final result = await Navigator.push(
@@ -31,7 +33,8 @@ class _AddAddressScreenState extends State<AddAddressScreen> {
     if (result != null && result is Map<String, dynamic>) {
       setState(() {
         _addressController.text = result['address'] ?? '';
-        // In a real scenario, you might parse the 'name' of the place into the house controller
+        _pickedLat = result['lat'] as double?;
+        _pickedLng = result['lng'] as double?;
       });
     }
   }
@@ -47,6 +50,8 @@ class _AddAddressScreenState extends State<AddAddressScreen> {
           fullAddress: _addressController.text.trim(),
           houseNo: _houseController.text.trim(),
           landmark: _landmarkController.text.trim(),
+          latitude: _pickedLat,
+          longitude: _pickedLng,
         );
 
         final updatedAddresses = List<AddressModel>.from(widget.user.addresses)..add(newAddress);
