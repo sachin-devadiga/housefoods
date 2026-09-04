@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.housefoods.MainActivity
@@ -38,6 +39,7 @@ class MealVoiceService : Service() {
         private set
 
     private var wakeWordEngine: SpeechRecognizerWakeWordEngine? = null
+    private var wakeLock: PowerManager.WakeLock? = null
 
     // Bridge reference — set by MainActivity
     var bridge: MealVoiceBridge? = null
@@ -77,12 +79,18 @@ class MealVoiceService : Service() {
 
         Log.i(TAG, "Starting wake-word detection")
 
+        // Save user preference for auto-start on boot
+        getSharedPreferences("meal_voice_prefs", Context.MODE_PRIVATE)
+            .edit().putBoolean("voice_enabled", true).apply()
+
         val notification = buildNotification("Listening for 'Hi MEAL'...")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
+
+        acquireWakeLock()
 
         wakeWordEngine = SpeechRecognizerWakeWordEngine()
         wakeWordEngine!!.initialize(
@@ -112,6 +120,12 @@ class MealVoiceService : Service() {
         wakeWordEngine?.stop()
         wakeWordEngine?.release()
         wakeWordEngine = null
+
+        releaseWakeLock()
+
+        // Save user preference — service was stopped
+        getSharedPreferences("meal_voice_prefs", Context.MODE_PRIVATE)
+            .edit().putBoolean("voice_enabled", false).apply()
 
         bridge?.sendEvent("stateChanged", "14") // STOPPED
         isRunning = false
@@ -153,6 +167,35 @@ class MealVoiceService : Service() {
         Log.i(TAG, "Restarting wake-word listening")
         updateNotification("Listening for 'Hi MEAL'...")
         wakeWordEngine?.restartWakeWordListening()
+    }
+
+    private fun acquireWakeLock() {
+        try {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "mealvoice:wakelock"
+            ).apply {
+                acquire(60 * 60 * 1000L) // 1 hour max, will be released when service stops
+            }
+            Log.i(TAG, "Wake lock acquired")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to acquire wake lock", e)
+        }
+    }
+
+    private fun releaseWakeLock() {
+        try {
+            wakeLock?.let {
+                if (it.isHeld) {
+                    it.release()
+                    Log.i(TAG, "Wake lock released")
+                }
+            }
+            wakeLock = null
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to release wake lock", e)
+        }
     }
 
     private fun createNotificationChannel() {

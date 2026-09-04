@@ -1,7 +1,13 @@
 package com.example.housefoods.mealvoice
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.util.Log
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
@@ -49,9 +55,16 @@ class MealVoiceBridge(
                     result.success(true)
                 }
                 "isMicrophoneAvailable" -> result.success(true)
+                "isBatteryOptimizationIgnored" -> result.success(isBatteryOptimizationIgnored())
+                "requestBatteryOptimizationExemption" -> {
+                    requestBatteryOptimizationExemption()
+                    result.success(true)
+                }
+                "isVoiceEnabledOnBoot" -> result.success(isVoiceEnabledOnBoot())
                 "getStatus" -> result.success(mapOf(
                     "running" to service.isRunning,
-                    "engine" to "SpeechRecognizer"
+                    "engine" to "SpeechRecognizer",
+                    "batteryOptimizationIgnored" to isBatteryOptimizationIgnored()
                 ))
                 else -> result.notImplemented()
             }
@@ -88,5 +101,38 @@ class MealVoiceBridge(
                 // EventChannel may be closed — silently ignore
             }
         }
+    }
+
+    private fun isBatteryOptimizationIgnored(): Boolean {
+        val context = service.applicationContext
+        val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            pm.isIgnoringBatteryOptimizations(context.packageName)
+        } else {
+            true // Pre-M devices don't have this restriction
+        }
+    }
+
+    private fun requestBatteryOptimizationExemption() {
+        try {
+            val context = service.applicationContext
+            val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !pm.isIgnoringBatteryOptimizations(context.packageName)) {
+                val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:${context.packageName}")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+                Log.i("MEAL_Bridge", "Battery optimization exemption requested")
+            }
+        } catch (e: Exception) {
+            Log.e("MEAL_Bridge", "Failed to request battery optimization exemption", e)
+        }
+    }
+
+    private fun isVoiceEnabledOnBoot(): Boolean {
+        val context = service.applicationContext
+        val prefs = context.getSharedPreferences("meal_voice_prefs", Context.MODE_PRIVATE)
+        return prefs.getBoolean("voice_enabled", false)
     }
 }

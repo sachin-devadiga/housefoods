@@ -199,6 +199,33 @@ class MealVoiceService {
     }
   }
 
+  Future<bool> isBatteryOptimizationIgnored() async {
+    try {
+      final result = await _methodChannel.invokeMethod<bool>('isBatteryOptimizationIgnored');
+      return result ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<void> requestBatteryOptimizationExemption() async {
+    try {
+      await _methodChannel.invokeMethod('requestBatteryOptimizationExemption');
+      _log('Battery optimization exemption requested');
+    } catch (e) {
+      _log('Failed to request battery optimization exemption: $e', level: 'warning');
+    }
+  }
+
+  Future<bool> isVoiceEnabledOnBoot() async {
+    try {
+      final result = await _methodChannel.invokeMethod<bool>('isVoiceEnabledOnBoot');
+      return result ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
   void _log(String message, {String level = 'info'}) {
     final timestamp = DateTime.now().toIso8601String().substring(11, 19);
     debugPrint('[MEAL][$timestamp][$level] $message');
