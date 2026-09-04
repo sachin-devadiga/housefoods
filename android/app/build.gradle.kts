@@ -31,10 +31,10 @@ android {
 
     defaultConfig {
         applicationId = when (appRole) {
-            "customer" -> "com.example.housefoods.customer"
-            "chef" -> "com.example.housefoods.kitchen"
-            "delivery_partner" -> "com.example.housefoods.delivery"
-            else -> "com.example.housefoods"
+            "customer" -> "app.mealin.customer"
+            "chef" -> "app.mealin.kitchen"
+            "delivery_partner" -> "app.mealin.delivery"
+            else -> "app.mealin"
         }
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
