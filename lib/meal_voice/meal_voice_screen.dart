@@ -4,6 +4,11 @@ import 'meal_voice_controller.dart';
 import 'meal_voice_state.dart';
 import '../features/customer/presentation/providers/cart_provider.dart';
 import '../features/customer/presentation/providers/kitchen_provider.dart';
+import '../core/services/voice_order_security_service.dart';
+import '../core/services/api_service.dart';
+import '../core/services/token_service.dart';
+import '../core/constants/app_constants.dart';
+import '../features/customer/presentation/screens/voice_pin_dialog.dart';
 
 /// Developer test screen for MEAL Voice Engine.
 /// Shows full workflow state, transcript, parsed command, and TTS response.
@@ -18,14 +23,42 @@ class _MealVoiceTestScreenState extends State<MealVoiceTestScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final kitchenProvider = context.read<KitchenProvider>();
       final cartProvider = context.read<CartProvider>();
-      context.read<MealVoiceController>().initialize(
-        kitchenProvider: kitchenProvider,
-        cartProvider: cartProvider,
+      final tokenService = TokenService();
+      final token = await tokenService.getAccessToken();
+      final securityService = VoiceOrderSecurityService(
+        api: ApiService(baseUrl: AppConstants.apiBaseUrl),
       );
+      await securityService.setToken(token);
+
+      final vc = context.read<MealVoiceController>();
+      vc.requestAuthorization = () => _showPinDialog(vc);
+      vc.initialize(
+         kitchenProvider: kitchenProvider,
+         cartProvider: cartProvider,
+         securityService: securityService,
+       );
     });
+  }
+
+  Future<void> _showPinDialog(MealVoiceController vc) async {
+    final total = vc.searchResults.isNotEmpty
+        ? vc.searchResults.fold<double>(0, (sum, r) => sum + double.parse(r.menuItem.price.toString()))
+        : 0.0;
+
+    final token = await VoicePinDialog.show(
+      context: context,
+      orderTotal: total,
+      orderSummary: vc.ttsResponse,
+    );
+
+    if (token != null) {
+      vc.onAuthorizationGranted(token, 120);
+    } else {
+      vc.onAuthorizationFailed('PIN verification cancelled');
+    }
   }
 
   @override
@@ -250,29 +283,86 @@ class _MealVoiceTestScreenState extends State<MealVoiceTestScreen> {
   }
 
   Widget _buildConfirmationCard(MealVoiceController controller) {
-    if (!controller.awaitingConfirmation) return const SizedBox.shrink();
+    if (!controller.awaitingConfirmation && !controller.awaitingAuthorization && !controller.awaitingFinalConfirmation) {
+      return const SizedBox.shrink();
+    }
 
-    return Card(
-      color: Colors.orange.shade50,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            const Icon(Icons.help_outline, size: 32, color: Colors.orange),
-            const SizedBox(height: 8),
-            const Text(
-              'Awaiting Confirmation',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.orange),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Say "Yes" or "No"',
-              style: TextStyle(color: Colors.orange),
-            ),
-          ],
+    if (controller.state == MealVoiceState.awaitingAuthorization) {
+      return Card(
+        color: Colors.deepPurple.shade50,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              const Icon(Icons.security, size: 32, color: Colors.deepPurple),
+              const SizedBox(height: 8),
+              const Text(
+                'Voice PIN Required',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.deepPurple),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                controller.ttsResponse,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.deepPurple),
+              ),
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    }
+
+    if (controller.state == MealVoiceState.authorized) {
+      return Card(
+        color: Colors.green.shade50,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              const Icon(Icons.check_circle, size: 32, color: Colors.green),
+              const SizedBox(height: 8),
+              const Text(
+                'PIN Verified!',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                controller.ttsResponse,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.green),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (controller.state == MealVoiceState.awaitingFinalConfirmation) {
+      return Card(
+        color: Colors.orange.shade50,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              const Icon(Icons.help_outline, size: 32, color: Colors.orange),
+              const SizedBox(height: 8),
+              const Text(
+                'Confirm Order',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.orange),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                controller.ttsResponse,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.orange),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 
   Widget _buildActionButtons(MealVoiceController controller) {
@@ -419,8 +509,20 @@ class _MealVoiceTestScreenState extends State<MealVoiceTestScreen> {
         return 'Stopped';
       case MealVoiceState.error:
         return 'Error';
-    }
-  }
+      case MealVoiceState.awaitingAuthorization:
+        return 'Enter Voice PIN';
+      case MealVoiceState.authorized:
+        return 'PIN Verified!';
+      case MealVoiceState.awaitingFinalConfirmation:
+        return 'Confirm Order';
+      case MealVoiceState.placingOrder:
+        return 'Placing order...';
+      case MealVoiceState.orderSuccess:
+        return 'Order Placed!';
+      case MealVoiceState.orderFailed:
+        return 'Order Failed';
+     }
+   }
 
   Color _getStateColor(MealVoiceState state) {
     switch (state) {

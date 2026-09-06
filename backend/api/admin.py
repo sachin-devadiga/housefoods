@@ -10,7 +10,7 @@ from .models import (
     MenuCategory, MenuItem, SubscriptionPlan, DailyMenu, Order,
     DeliveryLog, Payment, WalletTransaction, Review, Coupon,
     SupportTicket, Banner, AdminSetting, PayoutRequest,
-    DeliveryDocument,
+    DeliveryDocument, VoicePin, VoiceAuthorization,
 )
 
 
@@ -402,4 +402,30 @@ class DeliveryDocumentAdmin(BulkActionsAdmin):
         updated = queryset.update(status='rejected')
         self.message_user(request, f'{updated} document(s) rejected.')
     reject_docs.short_description = 'Reject selected documents'
+
+
+@admin.register(VoicePin)
+class VoicePinAdmin(BulkActionsAdmin):
+    list_display = ['user', 'failed_attempts', 'locked_until', 'created_at', 'updated_at']
+    list_filter = ['locked_until']
+    search_fields = ['user__email', 'user__name']
+    readonly_fields = ['pin_hash', 'created_at', 'updated_at']
+
+    def has_add_permission(self, request):
+        return False
+
+
+@admin.register(VoiceAuthorization)
+class VoiceAuthorizationAdmin(BulkActionsAdmin):
+    list_display = ['token_display', 'user', 'is_consumed', 'expires_at', 'order_id', 'created_at']
+    list_filter = ['is_consumed']
+    search_fields = ['token', 'user__email', 'user__name']
+    readonly_fields = ['token', 'created_at']
+
+    def token_display(self, obj):
+        return obj.token[:12] + '...'
+    token_display.short_description = 'Token'
+
+    def has_add_permission(self, request):
+        return False
 

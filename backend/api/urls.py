@@ -141,6 +141,13 @@ urlpatterns = [
     # Map
     path('map/route/', views.MapRouteView.as_view(), name='map-route'),
 
+    # Voice PIN Security
+    path('voice-pin/setup/', views.SetupVoicePinView.as_view(), name='voice-pin-setup'),
+    path('voice-pin/verify/', views.VerifyVoicePinView.as_view(), name='voice-pin-verify'),
+    path('voice-pin/reset/', views.ResetVoicePinView.as_view(), name='voice-pin-reset'),
+    path('voice-pin/status/', views.VoicePinStatusView.as_view(), name='voice-pin-status'),
+    path('voice-pin/consume/', views.ConsumeAuthorizationView.as_view(), name='voice-pin-consume'),
+
     # Include router URLs
     path('', include(router.urls)),
 ]

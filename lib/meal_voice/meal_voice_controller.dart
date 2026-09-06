@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../features/customer/presentation/providers/cart_provider.dart';
 import '../features/customer/presentation/providers/kitchen_provider.dart';
+import '../core/services/voice_order_security_service.dart';
 import 'meal_voice_service.dart';
 import 'meal_voice_state.dart';
 import 'meal_voice_command.dart';
@@ -25,6 +26,7 @@ class MealVoiceController extends ChangeNotifier {
   final MealVoiceTtsService _tts = MealVoiceTtsService();
   MealVoiceCommandParser? _parser;
   MealVoiceOrderHandler? _orderHandler;
+  VoiceOrderSecurityService? _securityService;
 
   // State
   MealVoiceState _state = MealVoiceState.idle;
@@ -41,6 +43,9 @@ class MealVoiceController extends ChangeNotifier {
 
   bool _ttsAvailable = false;
   bool get ttsAvailable => _ttsAvailable;
+
+  bool get awaitingAuthorization => _state == MealVoiceState.awaitingAuthorization;
+  bool get awaitingFinalConfirmation => _awaitingFinalConfirmation;
 
   // Transcription & command
   String _lastTranscript = '';
@@ -73,6 +78,17 @@ class MealVoiceController extends ChangeNotifier {
   // Duplicate protection (#8)
   bool _isProcessing = false;
 
+  // Voice authorization
+  String? _authorizationToken;
+  DateTime? _authorizationExpiry;
+  bool _authorizationConsumed = false;
+  bool _awaitingFinalConfirmation = false;
+
+  /// Callback to show PIN dialog — set by the UI layer.
+  Future<void> Function()? requestAuthorization;
+  /// Callback to show "place order" confirmation — set by the UI layer.
+  Future<bool> Function(String summary, double total)? requestFinalConfirmation;
+
   // Logs
   final List<String> _logs = [];
   List<String> get logs => List.unmodifiable(_logs);
@@ -88,8 +104,10 @@ class MealVoiceController extends ChangeNotifier {
   Future<void> initialize({
     KitchenProvider? kitchenProvider,
     CartProvider? cartProvider,
+    VoiceOrderSecurityService? securityService,
     MealVoiceCommandParser? parser,
   }) async {
+    _securityService = securityService;
     _parser = parser ?? MealVoiceParserFactory.getParser();
 
     // Initialize Gemini parser in background
@@ -256,7 +274,9 @@ class MealVoiceController extends ChangeNotifier {
     // Handle confirmation/cancel intents
     if (command.intent == MealVoiceIntent.confirm || command.intent == MealVoiceIntent.cancel) {
       _isProcessing = false;
-      if (_awaitingConfirmation) {
+      if (_awaitingFinalConfirmation) {
+        _handleFinalConfirmationResponse(transcript);
+      } else if (_awaitingConfirmation) {
         _handleConfirmationResponse(transcript);
       } else {
         _handleUnknownCommand();
@@ -267,6 +287,9 @@ class MealVoiceController extends ChangeNotifier {
     // Handle add/remove commands
     if (command.isAdd || command.isRemove) {
       await _searchAndConfirm(command);
+    } else if (command.intent == MealVoiceIntent.placeOrder) {
+      _isProcessing = false;
+      await _handlePlaceOrder();
     } else {
       _isProcessing = false;
       _handleUnknownCommand();
@@ -609,15 +632,152 @@ class MealVoiceController extends ChangeNotifier {
     _returnToWakeWordListening();
   }
 
+  /// Handle "place order" voice command — requires authorization.
+  Future<void> _handlePlaceOrder() async {
+    if (_orderHandler == null || _orderHandler!.isCartEmpty) {
+      _handleError('Your cart is empty. Add items before placing an order.');
+      return;
+    }
+
+    final total = _orderHandler!.cartTotal;
+    final itemCount = _orderHandler!.cartItemCount;
+
+    // Check if authorization is still valid
+    if (_authorizationToken != null &&
+        _authorizationExpiry != null &&
+        DateTime.now().isBefore(_authorizationExpiry!) &&
+        !_authorizationConsumed) {
+      // Already authorized — ask final confirmation
+      await _askFinalConfirmation(total, itemCount);
+      return;
+    }
+
+    // Need authorization — request PIN
+    _state = MealVoiceState.awaitingAuthorization;
+    _ttsResponse = 'Your order total is ₹${total.toStringAsFixed(0)} with $itemCount item${itemCount > 1 ? 's' : ''}. Please enter your Voice PIN on the phone to confirm.';
+    notifyListeners();
+
+    await _tts.speak(_ttsResponse);
+
+    // Request PIN via callback
+    if (requestAuthorization != null) {
+      await requestAuthorization!();
+    }
+  }
+
+  /// Called after PIN verification succeeds.
+  void onAuthorizationGranted(String token, int expiresIn) {
+    _authorizationToken = token;
+    _authorizationExpiry = DateTime.now().add(Duration(seconds: expiresIn));
+    _authorizationConsumed = false;
+
+    final total = _orderHandler?.cartTotal ?? 0;
+    final itemCount = _orderHandler?.cartItemCount ?? 0;
+
+    _addLog('Voice authorization granted, expires in ${expiresIn}s');
+    _state = MealVoiceState.authorized;
+    notifyListeners();
+
+    // Start final confirmation
+    _startFinalConfirmation(total, itemCount);
+  }
+
+  /// Called after PIN verification fails.
+  void onAuthorizationFailed(String error) {
+    _ttsResponse = 'PIN verification failed. $error';
+    _state = MealVoiceState.commandError;
+    _addLog('Authorization failed: $error');
+    notifyListeners();
+    _speakAndReturn(_ttsResponse);
+  }
+
+  /// Start final confirmation after authorization.
+  Future<void> _startFinalConfirmation(double total, int itemCount) async {
+    _awaitingFinalConfirmation = true;
+    _ttsResponse = 'PIN verified. Shall I place the order for ₹${total.toStringAsFixed(0)}?';
+    _state = MealVoiceState.awaitingFinalConfirmation;
+    notifyListeners();
+
+    await _tts.speak(_ttsResponse);
+    _startConfirmationTimeout();
+  }
+
+  /// Ask final confirmation via callback.
+  Future<void> _askFinalConfirmation(double total, int itemCount) async {
+    _awaitingFinalConfirmation = true;
+    _ttsResponse = 'Your order total is ₹${total.toStringAsFixed(0)}. Shall I place it?';
+    _state = MealVoiceState.awaitingFinalConfirmation;
+    notifyListeners();
+
+    await _tts.speak(_ttsResponse);
+    _startConfirmationTimeout();
+  }
+
+  /// Handle final yes/no after authorization.
+  void _handleFinalConfirmationResponse(String transcript) {
+    _confirmationTimeout?.cancel();
+    final response = (_parser ?? MealVoiceParserFactory.getParser()).parseConfirmation(transcript);
+    _addLog('Final confirmation: ${response.name}');
+
+    switch (response) {
+      case MealVoiceConfirmation.yes:
+        _placeOrder();
+        break;
+      case MealVoiceConfirmation.no:
+        _authorizationToken = null;
+        _authorizationExpiry = null;
+        _handleUserDenied();
+        break;
+      case MealVoiceConfirmation.timeout:
+      case MealVoiceConfirmation.unknown:
+        _handleConfirmationUnknown(transcript);
+        break;
+    }
+  }
+
+  /// Actually place the order.
+  Future<void> _placeOrder() async {
+    if (_authorizationToken == null) {
+      _handleError('Authorization expired. Please verify your PIN again.');
+      return;
+    }
+
+    _awaitingFinalConfirmation = false;
+    _state = MealVoiceState.placingOrder;
+    notifyListeners();
+
+    try {
+      // Consume the authorization token
+      await _securityService?.consumeAuthorization(_authorizationToken!);
+      _authorizationConsumed = true;
+
+      _ttsResponse = 'Order placed successfully! Thank you for ordering with MEALIN.';
+      _state = MealVoiceState.orderSuccess;
+      _addLog('Order placed via voice');
+      await _tts.speak(_ttsResponse);
+
+      // Reset authorization
+      _authorizationToken = null;
+      _authorizationExpiry = null;
+
+      _returnToWakeWordListening();
+    } catch (e) {
+      _handleError('Failed to place order. Please try again.');
+    }
+  }
+
   /// Return to wake-word listening state.
   void _returnToWakeWordListening() {
     _awaitingConfirmation = false;
+    _awaitingFinalConfirmation = false;
     _pendingCartConflictClear = false;
     _confirmationTimeout?.cancel();
     _searchResults.clear();
     _notFoundItems.clear();
     _pendingItems = [];
     _isProcessing = false;
+
+    // Don't reset authorization here — it may still be valid for re-order
 
     // Restart native wake-word detection
     _service.restartWakeWordListening();
@@ -633,6 +793,22 @@ class MealVoiceController extends ChangeNotifier {
     _logs.add('[$timestamp] $message');
     if (_logs.length > 50) _logs.removeAt(0);
   }
+
+  /// Reset voice authorization (e.g., after cart changes significantly).
+  void resetAuthorization() {
+    _authorizationToken = null;
+    _authorizationExpiry = null;
+    _authorizationConsumed = false;
+    _addLog('Authorization reset');
+    notifyListeners();
+  }
+
+  /// Check if current authorization is still valid.
+  bool get isAuthorized =>
+      _authorizationToken != null &&
+      _authorizationExpiry != null &&
+      DateTime.now().isBefore(_authorizationExpiry!) &&
+      !_authorizationConsumed;
 
   // ─── Public API ───
 

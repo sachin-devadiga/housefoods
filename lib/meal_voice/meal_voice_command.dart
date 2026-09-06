@@ -109,6 +109,7 @@ enum MealVoiceIntent {
   remove,
   cancel,
   confirm,
+  placeOrder,
   unknown,
 }
 

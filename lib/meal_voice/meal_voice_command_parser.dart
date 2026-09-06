@@ -98,6 +98,19 @@ class RegexMealVoiceCommandParser implements MealVoiceCommandParser {
   }
 
   MealVoiceIntent _detectIntent(String lower) {
+    // Check place order first
+    final placeOrderKeywords = [
+      'place the order', 'place order', 'place my order',
+      'checkout', 'check out', 'confirm order', 'confirm my order',
+      'proceed to checkout', 'pay now', 'place it',
+      'go ahead and order', 'complete the order',
+    ];
+    for (final keyword in placeOrderKeywords) {
+      if (lower.contains(keyword)) {
+        return MealVoiceIntent.placeOrder;
+      }
+    }
+
     for (final entry in _intentKeywords.entries) {
       for (final keyword in entry.value) {
         if (lower.startsWith(keyword) || lower.contains(' $keyword ') || lower.contains(' $keyword')) {

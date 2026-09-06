@@ -625,3 +625,41 @@ class ChatMessage(models.Model):
 
     def __str__(self):
         return f'{self.sender.email} -> {self.receiver.email}: {self.message[:50]}'
+
+
+class VoicePin(models.Model):
+    user = models.OneToOneField(UserProfile, on_delete=models.CASCADE, related_name='voice_pin')
+    pin_hash = models.CharField(max_length=256)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    failed_attempts = models.IntegerField(default=0)
+    locked_until = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'voice_pins'
+
+    def __str__(self):
+        return f'Voice PIN for {self.user.email}'
+
+
+class VoiceAuthorization(models.Model):
+    user = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='voice_authorizations')
+    token = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_consumed = models.BooleanField(default=False)
+    order_id = models.IntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'voice_authorizations'
+        indexes = [
+            models.Index(fields=['user', 'is_consumed']),
+            models.Index(fields=['token']),
+        ]
+
+    @property
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+
+    def __str__(self):
+        return f'VoiceAuth {self.token[:8]}... for {self.user.email}'

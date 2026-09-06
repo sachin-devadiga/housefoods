@@ -41,7 +41,7 @@ RESPOND WITH VALID JSON ONLY. No markdown, no explanation, no extra text.
 
 JSON SCHEMA:
 {
-  "intent": "add" | "remove" | "clear_cart" | "confirm" | "cancel" | "unknown" | "needs_clarification",
+  "intent": "add" | "remove" | "clear_cart" | "confirm" | "cancel" | "place_order" | "unknown" | "needs_clarification",
   "items": [
     {
       "item_name": "normalized item name",
@@ -53,6 +53,18 @@ JSON SCHEMA:
 }
 
 EXAMPLES:
+
+User: "Place the order"
+→ {"intent":"place_order","items":[],"restaurant":null,"clarification_needed":null}
+
+User: "Place my order"
+→ {"intent":"place_order","items":[],"restaurant":null,"clarification_needed":null}
+
+User: "Checkout"
+→ {"intent":"place_order","items":[],"restaurant":null,"clarification_needed":null}
+
+User: "Confirm my order"
+→ {"intent":"place_order","items":[],"restaurant":null,"clarification_needed":null}
 
 User: "Add one chicken biryani"
 → {"intent":"add","items":[{"item_name":"chicken biryani","quantity":1}],"restaurant":null,"clarification_needed":null}
@@ -212,6 +224,8 @@ User: "Order some food"
         return MealVoiceIntent.remove; // Map to remove with empty items
       case 'confirm':
         return MealVoiceIntent.confirm;
+      case 'place_order':
+        return MealVoiceIntent.placeOrder;
       case 'cancel':
         return MealVoiceIntent.cancel;
       case 'needs_clarification':

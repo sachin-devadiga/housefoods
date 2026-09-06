@@ -49,6 +49,24 @@ enum MealVoiceState {
 
   /// An error occurred (permission, hardware, etc).
   error,
+
+  /// Awaiting Voice PIN authorization before placing order.
+  awaitingAuthorization,
+
+  /// Voice authorization granted.
+  authorized,
+
+  /// Awaiting final confirmation after authorization.
+  awaitingFinalConfirmation,
+
+  /// Placing the order (API call in progress).
+  placingOrder,
+
+  /// Order placed successfully.
+  orderSuccess,
+
+  /// Order placement failed.
+  orderFailed,
 }
 
 /// Events emitted by the MEAL voice engine.

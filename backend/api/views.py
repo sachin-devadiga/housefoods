@@ -8,6 +8,7 @@ from decimal import Decimal
 import requests
 
 from django.conf import settings
+from django.contrib.auth.hashers import make_password, check_password
 from django.contrib.auth.models import User
 from django.db import transaction
 from django.db.models import Count, Sum, Q, Avg
@@ -26,7 +27,7 @@ from .models import (
     MenuCategory, MenuItem, SubscriptionPlan, DailyMenu, Order, OrderItem,
     Cart, CartItem, DeliveryLog, Payment, WalletTransaction, Review, Coupon,
     Notification, SupportTicket, Banner, AdminSetting, PayoutRequest,
-    ChatMessage, DeliveryDocument,
+    ChatMessage, DeliveryDocument, VoicePin, VoiceAuthorization,
 )
 from .otp_utils import send_otp_email, send_otp_email_async, t0, tlog, elapsed
 from .notification_utils import notify_chef_new_order, notify_delivery_partners
@@ -1385,6 +1386,10 @@ class PlaceOrderView(APIView):
 
     @transaction.atomic
     def post(self, request):
+        auth_check = check_voice_authorization(request)
+        if auth_check is not None:
+            return auth_check
+
         kitchen_id = request.data.get('kitchen')
         order_type = request.data.get('order_type', 'subscription')
 
@@ -1446,6 +1451,10 @@ class PlaceOrderWithWalletView(APIView):
 
     @transaction.atomic
     def post(self, request):
+        auth_check = check_voice_authorization(request)
+        if auth_check is not None:
+            return auth_check
+
         kitchen_id = request.data.get('kitchen')
         order_type = request.data.get('order_type', 'subscription')
 
@@ -2135,3 +2144,155 @@ class AppVersionView(APIView):
             'updateMessage': message,
             'forceUpdate': force,
         })
+
+
+# ──────────────────────────────────────────────
+# VOICE PIN SECURITY
+# ──────────────────────────────────────────────
+
+def check_voice_authorization(request):
+    """Check voice authorization if the request includes voice_authorization_token."""
+    token = request.data.get('voice_authorization_token')
+    if not token:
+        return None
+
+    try:
+        auth = VoiceAuthorization.objects.get(
+            token=token,
+            user=request.user.profile,
+            is_consumed=False,
+        )
+        if auth.is_expired:
+            return Response({'error': 'Voice authorization expired. Please verify your PIN again.'},
+                          status=status.HTTP_401_UNAUTHORIZED)
+        auth.is_consumed = True
+        auth.save()
+        return None
+    except VoiceAuthorization.DoesNotExist:
+        return Response({'error': 'Invalid voice authorization'}, status=status.HTTP_401_UNAUTHORIZED)
+
+
+class SetupVoicePinView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        pin = request.data.get('pin', '')
+        if not pin or not pin.isdigit() or len(pin) not in (4, 6):
+            return Response({'error': 'PIN must be 4 or 6 digits'}, status=status.HTTP_400_BAD_REQUEST)
+
+        profile = request.user.profile
+        pin_hash = make_password(pin)
+
+        voice_pin, created = VoicePin.objects.update_or_create(
+            user=profile,
+            defaults={
+                'pin_hash': pin_hash,
+                'failed_attempts': 0,
+                'locked_until': None,
+            },
+        )
+
+        return Response({'status': 'ok', 'pin_set': True})
+
+
+class VerifyVoicePinView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        pin = request.data.get('pin', '')
+        if not pin:
+            return Response({'error': 'PIN is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        profile = request.user.profile
+
+        try:
+            voice_pin = VoicePin.objects.get(user=profile)
+        except VoicePin.DoesNotExist:
+            return Response({'error': 'Voice PIN not configured'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if voice_pin.locked_until and voice_pin.locked_until > timezone.now():
+            return Response({'error': 'Account locked. Try again later.'}, status=status.HTTP_423_LOCKED)
+
+        if not check_password(pin, voice_pin.pin_hash):
+            voice_pin.failed_attempts += 1
+            if voice_pin.failed_attempts >= 5:
+                voice_pin.locked_until = timezone.now() + timedelta(minutes=15)
+            voice_pin.save()
+            return Response({'error': 'Invalid PIN'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        voice_pin.failed_attempts = 0
+        voice_pin.locked_until = None
+        voice_pin.save()
+
+        auth_token = uuid.uuid4().hex
+        VoiceAuthorization.objects.create(
+            user=profile,
+            token=auth_token,
+            expires_at=timezone.now() + timedelta(seconds=120),
+        )
+
+        return Response({
+            'authorized': True,
+            'authorization_token': auth_token,
+            'expires_in': 120,
+        })
+
+
+class ResetVoicePinView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        pin = request.data.get('pin', '')
+        if not pin or not pin.isdigit() or len(pin) not in (4, 6):
+            return Response({'error': 'PIN must be 4 or 6 digits'}, status=status.HTTP_400_BAD_REQUEST)
+
+        profile = request.user.profile
+        pin_hash = make_password(pin)
+
+        VoicePin.objects.update_or_create(
+            user=profile,
+            defaults={
+                'pin_hash': pin_hash,
+                'failed_attempts': 0,
+                'locked_until': None,
+            },
+        )
+
+        return Response({'status': 'ok', 'pin_reset': True})
+
+
+class VoicePinStatusView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = request.user.profile
+        pin_configured = VoicePin.objects.filter(user=profile).exists()
+        return Response({'pin_configured': pin_configured})
+
+
+class ConsumeAuthorizationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        token = request.data.get('authorization_token', '')
+        if not token:
+            return Response({'error': 'authorization_token is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        profile = request.user.profile
+
+        try:
+            auth = VoiceAuthorization.objects.get(
+                token=token,
+                user=profile,
+                is_consumed=False,
+            )
+        except VoiceAuthorization.DoesNotExist:
+            return Response({'error': 'Invalid authorization token'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if auth.is_expired:
+            return Response({'error': 'Authorization token expired'}, status=status.HTTP_400_BAD_REQUEST)
+
+        auth.is_consumed = True
+        auth.save()
+
+        return Response({'consumed': True})
