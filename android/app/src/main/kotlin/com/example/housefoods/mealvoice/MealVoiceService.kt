@@ -84,8 +84,11 @@ class MealVoiceService : Service() {
             .edit().putBoolean("voice_enabled", true).apply()
 
         val notification = buildNotification("Listening for 'Hi MEAL'...")
-        // Use basic startForeground - microphone type requires special permissions
-        startForeground(NOTIFICATION_ID, notification)
+        try {
+            startForeground(NOTIFICATION_ID, notification)
+        } catch (e: Exception) {
+            Log.e(TAG, "startForeground failed, continuing without foreground", e)
+        }
 
         acquireWakeLock()
 
