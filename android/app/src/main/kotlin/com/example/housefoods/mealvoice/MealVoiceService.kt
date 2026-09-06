@@ -85,7 +85,11 @@ class MealVoiceService : Service() {
 
         val notification = buildNotification("Listening for 'Hi MEAL'...")
         try {
-            startForeground(NOTIFICATION_ID, notification)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "startForeground failed, continuing without foreground", e)
         }
