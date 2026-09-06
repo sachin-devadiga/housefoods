@@ -80,7 +80,7 @@ class MainActivity : FlutterActivity() {
                 voiceBridge = MealVoiceBridge(flutterEngine, service)
                 voiceBridge?.attach()
                 bridgeAttached = true
-                service.startVoiceService()
+                // Service already started from onCreate()
             } else {
                 // Retry once more
                 Handler(Looper.getMainLooper()).postDelayed({
@@ -89,7 +89,6 @@ class MainActivity : FlutterActivity() {
                         voiceBridge = MealVoiceBridge(flutterEngine, service2)
                         voiceBridge?.attach()
                         bridgeAttached = true
-                        service2.startVoiceService()
                     }
                 }, 500)
             }
