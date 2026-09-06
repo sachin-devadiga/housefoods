@@ -36,14 +36,19 @@ class _MealVoiceTestScreenState extends State<MealVoiceTestScreen> {
       final vc = context.read<MealVoiceController>();
       vc.requestAuthorization = () => _showPinDialog(vc);
       vc.initialize(
-         kitchenProvider: kitchenProvider,
-         cartProvider: cartProvider,
-         securityService: securityService,
-       );
+        kitchenProvider: kitchenProvider,
+        cartProvider: cartProvider,
+        securityService: securityService,
+      );
+
+      // Request permission and start listening
+      await vc.requestPermission();
+      vc.startListening();
     });
   }
 
   Future<void> _showPinDialog(MealVoiceController vc) async {
+    if (!mounted) return;
     final total = vc.searchResults.isNotEmpty
         ? vc.searchResults.fold<double>(0, (sum, r) => sum + double.parse(r.menuItem.price.toString()))
         : 0.0;

@@ -170,7 +170,7 @@ class _VoicePinSetupScreenState extends State<VoicePinSetupScreen> {
                       width: 80,
                       height: 80,
                       decoration: BoxDecoration(
-                        color: AppTheme.primaryColor.withOpacity(0.1),
+                        color: AppTheme.primaryColor.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
@@ -322,7 +322,7 @@ class _VoicePinSetupScreenState extends State<VoicePinSetupScreen> {
                 ),
                 filled: true,
                 fillColor: _controllers[index].text.isNotEmpty
-                    ? AppTheme.primaryColor.withOpacity(0.04)
+                    ? AppTheme.primaryColor.withValues(alpha: 0.04)
                     : Colors.grey[50],
               ),
               inputFormatters: [
