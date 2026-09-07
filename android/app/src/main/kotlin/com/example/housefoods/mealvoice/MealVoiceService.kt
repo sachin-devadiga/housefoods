@@ -157,15 +157,13 @@ class MealVoiceService : Service() {
 
     /**
      * Called when "Hi MEAL" is detected.
-     * Switches from wake-word mode to command capture mode.
+     * Only notifies Flutter — Flutter decides whether to use native or Sarvam for command.
      */
     private fun onWakeWordDetected() {
         Log.i(TAG, "=== WAKE WORD DETECTED ===")
         bridge?.sendEvent("wakeWordDetected", System.currentTimeMillis().toString())
         updateNotification("Wake word detected! Listening for command...")
-
-        // Switch to command capture mode (only once — engine guards against double-start)
-        wakeWordEngine?.startCommandCapture()
+        // Do NOT start command capture here — Flutter handles it via MethodChannel
     }
 
     /**
