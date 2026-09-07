@@ -91,7 +91,6 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context!!)
 
             speechRecognizer?.setRecognitionListener(createWakeWordListener())
-            suppressTinSound()
             speechRecognizer?.startListening(createRecognitionIntent())
             isRunning = true
             isCapturingCommand = false
@@ -133,7 +132,6 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
             mainHandler.postDelayed({
                 try {
                     speechRecognizer?.setRecognitionListener(createCommandCaptureListener())
-                    suppressTinSound()
                     speechRecognizer?.startListening(createRecognitionIntent())
                     scheduleCommandTimeout()
                     Log.i(TAG, "Command capture started")
@@ -177,7 +175,6 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
         try {
             speechRecognizer?.stopListening()
             speechRecognizer?.setRecognitionListener(createWakeWordListener())
-            suppressTinSound()
             speechRecognizer?.startListening(createRecognitionIntent())
             Log.i(TAG, "Wake-word listening restarted")
         } catch (e: Exception) {
@@ -191,7 +188,6 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US.toString())
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
         }
     }
 
@@ -429,9 +425,8 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
                 try {
                     isCapturingCommand = false // FIX #27: reset before restart
                     commandFinalized = false
-                    speechRecognizer?.setRecognitionListener(createWakeWordListener())
-                    suppressTinSound()
-                    speechRecognizer?.startListening(createRecognitionIntent())
+            speechRecognizer?.setRecognitionListener(createWakeWordListener())
+            speechRecognizer?.startListening(createRecognitionIntent())
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to restart", e)
                 }
