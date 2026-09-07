@@ -197,9 +197,11 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
         return object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {
                 Log.i(TAG, "Ready for speech (wake phase)")
+                onEventCallback?.onEvent("log", "SpeechRecognizer ready for speech")
             }
             override fun onBeginningOfSpeech() {
                 Log.d(TAG, "Speech started (wake phase)")
+                onEventCallback?.onEvent("log", "Speech detected (wake phase)")
             }
             override fun onRmsChanged(rmsdB: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
@@ -213,7 +215,20 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
             }
 
             override fun onError(error: Int) {
-                Log.w(TAG, "Recognition error: $error")
+                val errorName = when(error) {
+                    SpeechRecognizer.ERROR_AUDIO -> "ERROR_AUDIO"
+                    SpeechRecognizer.ERROR_CLIENT -> "ERROR_CLIENT"
+                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "ERROR_PERMISSIONS"
+                    SpeechRecognizer.ERROR_NETWORK -> "ERROR_NETWORK"
+                    SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "ERROR_NETWORK_TIMEOUT"
+                    SpeechRecognizer.ERROR_NO_MATCH -> "ERROR_NO_MATCH"
+                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "ERROR_RECOGNIZER_BUSY"
+                    SpeechRecognizer.ERROR_SERVER -> "ERROR_SERVER"
+                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "ERROR_SPEECH_TIMEOUT"
+                    else -> "ERROR_$error"
+                }
+                Log.w(TAG, "Recognition error: $error ($errorName)")
+                onEventCallback?.onEvent("log", "SpeechRecognizer error: $errorName ($error)")
                 if (isRunning && !isCapturingCommand && error != SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
                     consecutiveErrors++
                     val backoffMs = minOf(
@@ -232,6 +247,9 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
             }
 
             override fun onResults(results: Bundle?) {
+                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                Log.i(TAG, "Wake phase results: $matches")
+                onEventCallback?.onEvent("log", "Wake results: ${matches?.joinToString(", ") ?: "empty"}")
                 // FIX #27: Only process if NOT in command capture mode
                 if (isRunning && !isCapturingCommand) {
                     consecutiveErrors = 0 // Reset backoff on success
