@@ -34,7 +34,7 @@ class MealVoiceParserFactory {
     return _regexParser!;
   }
 
-  /// Initialize the Gemini parser. Returns true if successful.
+  /// Initialize the Gemini parser via backend proxy (no key needed on device).
   static Future<bool> initializeGemini() async {
     if (_geminiInitialized) return _geminiParser?.isAvailable ?? false;
 
@@ -43,7 +43,7 @@ class MealVoiceParserFactory {
     _geminiInitialized = true;
 
     if (success) {
-      debugPrint('[MEAL Parser] Gemini parser ready');
+      debugPrint('[MEAL Parser] Gemini parser ready (backend proxy)');
     } else {
       debugPrint('[MEAL Parser] Gemini unavailable — using regex fallback');
     }
@@ -51,19 +51,10 @@ class MealVoiceParserFactory {
     return success;
   }
 
-  /// Initialize Gemini with a user-provided API key (runtime).
+  /// Initialize Gemini with user-provided key — now redirects to backend proxy.
   static Future<bool> initializeGeminiWithKey(String apiKey) async {
-    final parser = getGeminiParser();
-    final success = await parser.initializeWithKey(apiKey);
-    _geminiInitialized = true;
-
-    if (success) {
-      debugPrint('[MEAL Parser] Gemini parser ready (user key)');
-    } else {
-      debugPrint('[MEAL Parser] Gemini init failed with user key');
-    }
-
-    return success;
+    // Backend proxy handles the key — just initialize normally
+    return initializeGemini();
   }
 
   /// Check if Gemini is available.

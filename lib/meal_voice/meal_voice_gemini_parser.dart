@@ -1,19 +1,19 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:http/http.dart' as http;
 import '../../core/constants/app_constants.dart';
+import '../../core/services/token_service.dart';
 import 'meal_voice_command.dart';
 import 'meal_voice_command_parser.dart';
 
 /// Gemini-based command parser for MEAL Voice Engine.
 ///
-/// Uses Google Gemini to interpret natural language food orders
-/// and return structured [MealVoiceCommand] objects.
+/// Uses backend proxy to call Google Gemini API.
+/// The Gemini API key never leaves the server — same as Sarvam.
 ///
 /// Gemini ONLY interprets speech — it never modifies cart, orders, or prices.
-/// The backend remains the source of truth for all product data.
 class GeminiMealVoiceCommandParser implements MealVoiceCommandParser {
-  GenerativeModel? _model;
+  String? _authToken;
   bool _isAvailable = false;
 
   bool get isAvailable => _isAvailable;
@@ -95,77 +95,98 @@ User: "Get me that thing I ordered yesterday"
 
 User: "Order some food"
 → {"intent":"needs_clarification","items":[],"restaurant":null,"clarification_needed":"What would you like to order?"}
+
+User: "I'm feeling hungry"
+→ {"intent":"needs_clarification","items":[],"restaurant":null,"clarification_needed":"What would you like to order?"}
+
+User: "What's good today?"
+→ {"intent":"needs_clarification","items":[],"restaurant":null,"clarification_needed":"What type of food are you in the mood for?"}
+
+User: "Surprise me"
+→ {"intent":"needs_clarification","items":[],"restaurant":null,"clarification_needed:"What cuisine would you like?"}
+
+User: "Order in Hindi" or "मुझे बिरयानी चाहिए"
+→ Parse the language and return appropriate JSON with Hindi item names
 ''';
 
-  /// Initialize the Gemini model with compile-time API key.
+  /// Initialize — checks if backend Gemini endpoint is available.
   Future<bool> initialize() async {
-    final apiKey = AppConstants.geminiApiKey;
-    if (apiKey.isEmpty) {
-      debugPrint('[MEAL Gemini] No compile-time API key configured');
+    final tokenService = TokenService();
+    _authToken = await tokenService.getAccessToken();
+    if (_authToken == null || _authToken!.isEmpty) {
+      debugPrint('[MEAL Gemini] No auth token — unavailable');
       _isAvailable = false;
       return false;
     }
-    return _initWithKey(apiKey);
+
+    // Backend proxy is always available if the server has GEMINI_API_KEY set
+    _isAvailable = true;
+    debugPrint('[MEAL Gemini] Initialized (backend proxy)');
+    return true;
   }
 
-  /// Initialize with a user-provided API key (runtime).
+  /// Initialize with user-provided key — now uses backend proxy (key ignored).
   Future<bool> initializeWithKey(String apiKey) async {
-    if (apiKey.isEmpty) {
-      debugPrint('[MEAL Gemini] Empty API key');
-      _isAvailable = false;
-      return false;
-    }
-    return _initWithKey(apiKey);
+    // User key no longer needed — backend has the key
+    return initialize();
   }
 
-  Future<bool> _initWithKey(String apiKey) async {
-    try {
-      _model = GenerativeModel(
-        model: 'gemini-1.5-flash',
-        apiKey: apiKey,
-        systemInstruction: Content.system(_systemPrompt),
-        generationConfig: GenerationConfig(
-          temperature: 0.1,
-          topP: 0.8,
-          maxOutputTokens: 512,
-        ),
-      );
-      _isAvailable = true;
-      debugPrint('[MEAL Gemini] Initialized');
-      return true;
-    } catch (e) {
-      debugPrint('[MEAL Gemini] Init failed: $e');
-      _isAvailable = false;
-      return false;
-    }
+  /// Refresh auth token.
+  Future<void> refreshToken() async {
+    final tokenService = TokenService();
+    _authToken = await tokenService.getAccessToken();
   }
 
   @override
   MealVoiceCommand parse(String transcript) {
-    // parse is synchronous — actual Gemini call is async
-    // This is called for interface compliance; use parseAsync for real parsing
     return _parseSyncFallback(transcript);
   }
 
-  /// Async parse using Gemini. Falls back to regex on any failure.
+  /// Async parse using Gemini via backend proxy. Falls back to regex on failure.
   Future<MealVoiceCommand> parseAsync(String transcript) async {
-    if (!_isAvailable || _model == null) {
+    if (!_isAvailable) {
       debugPrint('[MEAL Gemini] Not available, using regex fallback');
       return _parseSyncFallback(transcript);
     }
 
-    try {
-      final response = await _model!.generateContent([
-        Content.text(transcript),
-      ]);
+    await refreshToken();
 
-      final text = response.text;
-      if (text == null || text.isEmpty) {
-        debugPrint('[MEAL Gemini] Empty response');
-        return _parseSyncFallback(transcript);
+    if (_authToken == null || _authToken!.isEmpty) {
+      debugPrint('[MEAL Gemini] No auth token after refresh');
+      return _parseSyncFallback(transcript);
+    }
+
+    try {
+      final uri = Uri.parse('${AppConstants.apiBaseUrl}/api/auth/voice/gemini/');
+
+      final response = await http.post(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $_authToken',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'prompt': transcript,
+          'system_prompt': _systemPrompt,
+          'model': 'gemini-1.5-flash',
+          'temperature': 0.1,
+          'max_output_tokens': 512,
+        }),
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw Exception('Gemini request timed out'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final text = data['text'] as String?;
+        if (text != null && text.isNotEmpty) {
+          return _parseGeminiResponse(text, transcript);
+        }
       }
 
-      return _parseGeminiResponse(text, transcript);
+      debugPrint('[MEAL Gemini] Backend error ${response.statusCode}');
+      return _parseSyncFallback(transcript);
     } catch (e) {
       debugPrint('[MEAL Gemini] Error: $e');
       return _parseSyncFallback(transcript);
@@ -175,7 +196,6 @@ User: "Order some food"
   /// Parse Gemini's JSON response into a MealVoiceCommand.
   MealVoiceCommand _parseGeminiResponse(String responseText, String rawTranscript) {
     try {
-      // Clean response — remove markdown code fences if present
       var cleaned = responseText.trim();
       if (cleaned.startsWith('```')) {
         cleaned = cleaned.replaceFirst(RegExp(r'^```\w*\n?'), '');
@@ -192,10 +212,8 @@ User: "Order some food"
       final restaurant = json['restaurant'] as String?;
       final clarification = json['clarification_needed'] as String?;
 
-      // Map intent string to enum
       final intent = _mapIntent(intentStr);
 
-      // Parse items
       final items = itemsList.map((item) {
         final map = item as Map<String, dynamic>;
         return MealVoiceItem(
@@ -204,7 +222,6 @@ User: "Order some food"
         );
       }).where((item) => item.itemName.isNotEmpty).toList();
 
-      // If needs_clarification, return with clarification message
       if (intent == MealVoiceIntent.unknown && clarification != null) {
         return MealVoiceCommand(
           intent: MealVoiceIntent.unknown,
@@ -227,7 +244,6 @@ User: "Order some food"
     }
   }
 
-  /// Map Gemini intent string to MealVoiceIntent enum.
   MealVoiceIntent _mapIntent(String intent) {
     switch (intent.toLowerCase()) {
       case 'add':
@@ -249,9 +265,7 @@ User: "Order some food"
     }
   }
 
-  /// Synchronous fallback using regex parser.
   MealVoiceCommand _parseSyncFallback(String transcript) {
-    // Import and use the regex parser as fallback
     return RegexMealVoiceCommandParser().parse(transcript);
   }
 

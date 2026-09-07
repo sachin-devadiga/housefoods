@@ -151,6 +151,7 @@ urlpatterns = [
     # Voice STT/TTS Proxy (Sarvam API key stays on backend)
     path('voice/stt/', views.VoiceSTTView.as_view(), name='voice-stt'),
     path('voice/tts/', views.VoiceTTSView.as_view(), name='voice-tts'),
+    path('voice/gemini/', views.VoiceGeminiView.as_view(), name='voice-gemini'),
 
     # Include router URLs
     path('', include(router.urls)),

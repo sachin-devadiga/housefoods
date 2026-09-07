@@ -18,22 +18,18 @@ class MealVoiceSettingsScreen extends StatefulWidget {
 
 class _MealVoiceSettingsScreenState extends State<MealVoiceSettingsScreen> {
   late MealVoiceSettings _settings;
-  final _apiKeyController = TextEditingController();
-  bool _obscureKey = true;
 
   @override
   void initState() {
     super.initState();
     _settings = MealVoiceSettings();
     _settings.load().then((_) {
-      _apiKeyController.text = _settings.apiKey;
       if (mounted) setState(() {});
     });
   }
 
   @override
   void dispose() {
-    _apiKeyController.dispose();
     _settings.dispose();
     super.dispose();
   }
@@ -63,26 +59,18 @@ class _MealVoiceSettingsScreenState extends State<MealVoiceSettingsScreen> {
                 _buildSpeakerDropdown(settings),
                 const SizedBox(height: 16),
 
-                // AI Provider
-                _buildSectionHeader('AI Conversation (Optional)'),
-                Text(
-                  'Provide your own API key for smarter voice commands',
-                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                ),
-                const SizedBox(height: 8),
-                _buildAiProviderDropdown(settings),
-                const SizedBox(height: 12),
-
-                if (settings.aiProvider != 'none') ...[
-                  _buildApiKeyField(settings),
-                  const SizedBox(height: 8),
-                  Text(
-                    _getApiKeyHelp(settings.aiProvider),
-                    style: TextStyle(color: Colors.grey[500], fontSize: 11),
+                // AI Status
+                _buildSectionHeader('AI Conversation'),
+                Card(
+                  child: ListTile(
+                    leading: Icon(
+                      Icons.smart_toy,
+                      color: Colors.green,
+                    ),
+                    title: const Text('Gemini AI'),
+                    subtitle: const Text('Powered by backend — always available'),
                   ),
-                  const SizedBox(height: 8),
-                  _buildSaveApiKeyButton(settings),
-                ],
+                ),
                 const SizedBox(height: 24),
 
                 // Test section
@@ -138,58 +126,6 @@ class _MealVoiceSettingsScreenState extends State<MealVoiceSettingsScreen> {
     );
   }
 
-  Widget _buildAiProviderDropdown(MealVoiceSettings settings) {
-    return Card(
-      child: ListTile(
-        leading: const Icon(Icons.smart_toy, color: Colors.deepPurple),
-        title: const Text('AI Provider'),
-        subtitle: Text(settings.aiProviderName),
-        trailing: const Icon(Icons.arrow_drop_down),
-        onTap: () => _showAiProviderPicker(settings),
-      ),
-    );
-  }
-
-  Widget _buildApiKeyField(MealVoiceSettings settings) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: TextField(
-          controller: _apiKeyController,
-          obscureText: _obscureKey,
-          decoration: InputDecoration(
-            labelText: 'API Key',
-            hintText: _getApiKeyHint(settings.aiProvider),
-            border: const OutlineInputBorder(),
-            prefixIcon: const Icon(Icons.key),
-            suffixIcon: IconButton(
-              icon: Icon(_obscureKey ? Icons.visibility : Icons.visibility_off),
-              onPressed: () => setState(() => _obscureKey = !_obscureKey),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSaveApiKeyButton(MealVoiceSettings settings) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: () async {
-          await settings.setApiKey(_apiKeyController.text);
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('API key saved')),
-            );
-          }
-        },
-        style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple),
-        child: const Text('Save API Key', style: TextStyle(color: Colors.white)),
-      ),
-    );
-  }
-
   Widget _buildTestButton(BuildContext context) {
     return SizedBox(
       width: double.infinity,
@@ -197,7 +133,6 @@ class _MealVoiceSettingsScreenState extends State<MealVoiceSettingsScreen> {
         onPressed: () async {
           if (!mounted) return;
           final vc = MealVoiceController();
-          final nav = Navigator.of(context);
           final messenger = ScaffoldMessenger.of(context);
           await vc.initialize(
             kitchenProvider: context.read<KitchenProvider>(),
@@ -240,35 +175,13 @@ class _MealVoiceSettingsScreenState extends State<MealVoiceSettingsScreen> {
             Text(
               'Language: ${settings.languageName}\n'
               'Speaker: ${settings.speakerName}\n'
-              'AI: ${settings.aiProviderName}',
+              'AI: Gemini (server-side)',
               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
           ],
         ),
       ),
     );
-  }
-
-  String _getApiKeyHint(String provider) {
-    switch (provider) {
-      case 'gemini':
-        return 'Enter your Gemini API key';
-      case 'openai':
-        return 'Enter your OpenAI API key';
-      default:
-        return '';
-    }
-  }
-
-  String _getApiKeyHelp(String provider) {
-    switch (provider) {
-      case 'gemini':
-        return 'Get your key from aistudio.google.com. Free tier available.';
-      case 'openai':
-        return 'Get your key from platform.openai.com. Requires billing.';
-      default:
-        return '';
-    }
   }
 
   void _showLanguagePicker(MealVoiceSettings settings) {
@@ -340,47 +253,6 @@ class _MealVoiceSettingsScreenState extends State<MealVoiceSettingsScreen> {
                       subtitle: Text(entry.key),
                       onTap: () {
                         settings.setSpeaker(entry.key);
-                        Navigator.pop(context);
-                      },
-                    );
-                  }).toList(),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  void _showAiProviderPicker(MealVoiceSettings settings) {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                  'Select AI Provider',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-              ),
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  children: MealVoiceSettings.aiProviders.entries.map((entry) {
-                    final isSelected = settings.aiProvider == entry.key;
-                    return ListTile(
-                      leading: isSelected
-                          ? const Icon(Icons.check, color: Colors.deepPurple)
-                          : const SizedBox(width: 24),
-                      title: Text(entry.value),
-                      subtitle: Text(entry.key),
-                      onTap: () {
-                        settings.setAiProvider(entry.key);
                         Navigator.pop(context);
                       },
                     );

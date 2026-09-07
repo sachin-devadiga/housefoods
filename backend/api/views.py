@@ -2424,3 +2424,53 @@ class VoiceTTSView(APIView):
                 {'error': f'TTS service error: {resp.status_code}'},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
+
+
+class VoiceGeminiView(APIView):
+    """Proxy for Google Gemini AI. Sends prompt, returns structured response.
+    
+    The Gemini API key never leaves the server.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+        if not GEMINI_API_KEY:
+            return Response(
+                {'error': 'Gemini AI not configured'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        prompt = request.data.get('prompt', '')
+        system_prompt = request.data.get('system_prompt', '')
+        if not prompt:
+            return Response(
+                {'error': 'prompt is required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        model_name = request.data.get('model', 'gemini-1.5-flash')
+        temperature = request.data.get('temperature', 0.1)
+        max_tokens = request.data.get('max_output_tokens', 512)
+
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=GEMINI_API_KEY)
+            model = genai.GenerativeModel(
+                model_name,
+                system_instruction=system_prompt if system_prompt else None,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=temperature,
+                    max_output_tokens=max_tokens,
+                ),
+            )
+            response = model.generate_content(prompt)
+            return Response({
+                'text': response.text,
+                'model': model_name,
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(
+                {'error': f'Gemini error: {str(e)[:200]}'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )

@@ -185,24 +185,14 @@ class MealVoiceController extends ChangeNotifier {
     await _settings!.load();
     _parser = parser ?? MealVoiceParserFactory.getParser();
 
-    // Initialize AI parser based on user settings
-    if (_settings!.hasAiKey && _settings!.aiProvider == 'gemini') {
-      MealVoiceParserFactory.initializeGeminiWithKey(_settings!.geminiApiKey!).then((ok) {
-        if (ok) {
-          _parser = MealVoiceParserFactory.getParser();
-          _addLog('Gemini parser ready (user key)');
-          notifyListeners();
-        }
-      });
-    } else {
-      MealVoiceParserFactory.initializeGemini().then((available) {
-        if (available) {
-          _parser = MealVoiceParserFactory.getParser();
-          _addLog('Gemini parser available');
-          notifyListeners();
-        }
-      });
-    }
+    // Initialize Gemini parser via backend proxy (key is on server)
+    MealVoiceParserFactory.initializeGemini().then((available) {
+      if (available) {
+        _parser = MealVoiceParserFactory.getParser();
+        _addLog('Gemini parser ready (backend proxy)');
+        notifyListeners();
+      }
+    });
 
     if (kitchenProvider != null && cartProvider != null) {
       _orderHandler = MealVoiceOrderHandler(
