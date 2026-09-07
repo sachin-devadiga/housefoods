@@ -191,6 +191,7 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US.toString())
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
         }
     }
 
@@ -399,18 +400,29 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
 
     /**
      * Suppress the Android system "tin" sound that plays when SpeechRecognizer starts.
-     * Mutes the notification audio stream briefly during recognition start.
+     * Mutes all audio streams briefly so the recognition startup chime is silenced.
      */
     private fun suppressTinSound() {
         try {
-            audioManager?.setStreamMute(AudioManager.STREAM_NOTIFICATION, true)
-            audioManager?.setStreamMute(AudioManager.STREAM_SYSTEM, true)
-            mainHandler.postDelayed({
+            val streams = intArrayOf(
+                AudioManager.STREAM_NOTIFICATION,
+                AudioManager.STREAM_SYSTEM,
+                AudioManager.STREAM_MUSIC,
+                AudioManager.STREAM_ALARM,
+                AudioManager.STREAM_ACCESSIBILITY
+            )
+            for (stream in streams) {
                 try {
-                    audioManager?.setStreamMute(AudioManager.STREAM_NOTIFICATION, false)
-                    audioManager?.setStreamMute(AudioManager.STREAM_SYSTEM, false)
+                    audioManager?.adjustStreamVolume(stream, AudioManager.ADJUST_MUTE, 0)
                 } catch (_: Exception) {}
-            }, 1000)
+            }
+            mainHandler.postDelayed({
+                for (stream in streams) {
+                    try {
+                        audioManager?.adjustStreamVolume(stream, AudioManager.ADJUST_UNMUTE, 0)
+                    } catch (_: Exception) {}
+                }
+            }, 1500)
         } catch (_: Exception) {}
     }
 

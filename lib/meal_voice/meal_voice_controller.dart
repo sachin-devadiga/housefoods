@@ -962,8 +962,10 @@ class MealVoiceController extends ChangeNotifier {
     _pendingItems = [];
     _isProcessing = false;
 
-    // Always restart native engine for wake word (works in background)
-    _service.restartWakeWordListening();
+    // CRITICAL FIX: stopEngine() destroyed the engine object (set to null).
+    // restartWakeWordListening() does nothing on a null engine.
+    // startListening() creates a brand new engine since isRunning=false after stopEngine().
+    _service.startListening();
     _state = MealVoiceState.listeningForWakeWord;
     _isListening = true;
     _lastTranscript = 'Listening for "Hi MEAL"...';
