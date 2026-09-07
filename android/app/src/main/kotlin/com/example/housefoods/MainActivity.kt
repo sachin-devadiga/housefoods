@@ -21,8 +21,9 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Start MEAL Voice Service before Flutter engine configures
-        startVoiceService()
+        // Do NOT start voice service here — it starts the native SpeechRecognizer
+        // which plays an Android notification sound on every listen cycle.
+        // The service is started by Flutter via MethodChannel when needed.
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -63,7 +64,7 @@ class MainActivity : FlutterActivity() {
 
     private fun startVoiceService() {
         val serviceIntent = Intent(this, MealVoiceService::class.java).apply {
-            action = "ACTION_START"
+            action = "ACTION_CREATE_ONLY"
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)
@@ -87,7 +88,7 @@ class MainActivity : FlutterActivity() {
                     val service2 = MealVoiceService.getInstance()
                     if (service2 != null && !bridgeAttached) {
                         voiceBridge = MealVoiceBridge(flutterEngine, service2)
-                        voiceBridge?.attach()
+                voiceBridge?.attach()
                         bridgeAttached = true
                     }
                 }, 500)

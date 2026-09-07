@@ -57,10 +57,28 @@ class MealVoiceService : Service() {
         when (intent?.action) {
             "ACTION_STOP" -> stopVoiceService()
             "ACTION_START" -> startVoiceService()
+            "ACTION_CREATE_ONLY" -> {
+                // Service created but don't start SpeechRecognizer yet.
+                // Flutter will call "startListening" via MethodChannel when ready.
+                Log.i(TAG, "Created only — waiting for Flutter to start listening")
+                val notification = buildNotification("MEAL ready — tap to open")
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                        startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+                    } else {
+                        startForeground(NOTIFICATION_ID, notification)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "startForeground failed", e)
+                }
+            }
             "ACTION_START_COMMAND_CAPTURE" -> startCommandCapture()
             "ACTION_STOP_COMMAND_CAPTURE" -> stopCommandCapture()
             "ACTION_RESTART_WAKE_WORD" -> restartWakeWordListening()
-            else -> startVoiceService()
+            else -> {
+                // Unknown action — do nothing
+                Log.i(TAG, "Unknown action: ${intent?.action}")
+            }
         }
         return START_STICKY
     }
