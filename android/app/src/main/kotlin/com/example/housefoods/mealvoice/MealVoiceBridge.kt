@@ -42,6 +42,10 @@ class MealVoiceBridge(
                     service.stopVoiceService()
                     result.success(true)
                 }
+                "stopEngine" -> {
+                    service.stopEngine()
+                    result.success(true)
+                }
                 "startCommandCapture" -> {
                     service.startCommandCapture()
                     result.success(true)

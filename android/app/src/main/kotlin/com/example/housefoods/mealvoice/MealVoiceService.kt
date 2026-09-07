@@ -167,6 +167,19 @@ class MealVoiceService : Service() {
     }
 
     /**
+     * Stop the speech engine but keep the service and bridge alive.
+     * Used when switching from wake-word mode to command capture mode.
+     */
+    fun stopEngine() {
+        Log.i(TAG, "Stopping engine (keeping service alive)")
+        wakeWordEngine?.stop()
+        wakeWordEngine?.release()
+        wakeWordEngine = null
+        releaseWakeLock()
+        isRunning = false
+    }
+
+    /**
      * Called when "Hi MEAL" is detected.
      * Only notifies Flutter — Flutter decides whether to use native or Sarvam for command.
      */

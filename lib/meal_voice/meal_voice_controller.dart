@@ -325,7 +325,7 @@ class MealVoiceController extends ChangeNotifier {
     notifyListeners();
 
     // Stop native engine so it doesn't interfere with Sarvam command capture
-    await _service.stopListening();
+    await _service.stopEngine();
 
     // Speak natural greeting
     final hour = DateTime.now().hour;

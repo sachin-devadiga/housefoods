@@ -139,6 +139,18 @@ class MealVoiceService {
     }
   }
 
+  /// Stop the speech engine but keep the service and bridge alive.
+  Future<bool> stopEngine() async {
+    try {
+      _log('Stopping engine (keeping bridge alive)');
+      final result = await _methodChannel.invokeMethod<bool>('stopEngine');
+      return result == true;
+    } catch (e) {
+      _log('Stop engine failed: $e', level: 'error');
+      return false;
+    }
+  }
+
   Future<bool> startCommandCapture() async {
     try {
       _log('Starting command capture');

@@ -403,12 +403,14 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
      */
     private fun suppressTinSound() {
         try {
-            audioManager?.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, AudioManager.ADJUST_MUTE, 0)
+            audioManager?.setStreamMute(AudioManager.STREAM_NOTIFICATION, true)
+            audioManager?.setStreamMute(AudioManager.STREAM_SYSTEM, true)
             mainHandler.postDelayed({
                 try {
-                    audioManager?.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, AudioManager.ADJUST_UNMUTE, 0)
+                    audioManager?.setStreamMute(AudioManager.STREAM_NOTIFICATION, false)
+                    audioManager?.setStreamMute(AudioManager.STREAM_SYSTEM, false)
                 } catch (_: Exception) {}
-            }, 800)
+            }, 1000)
         } catch (_: Exception) {}
     }
 
