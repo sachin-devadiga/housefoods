@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_sound/flutter_sound.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../features/customer/presentation/providers/cart_provider.dart';
 import '../features/customer/presentation/providers/kitchen_provider.dart';
@@ -12,6 +15,8 @@ import 'meal_voice_gemini_parser.dart';
 import 'meal_voice_parser_factory.dart';
 import 'meal_voice_tts_service.dart';
 import 'meal_voice_order_handler.dart';
+import 'sarvam_stt_service.dart';
+import 'sarvam_tts_service.dart';
 
 /// Provider-based controller for MEAL voice engine.
 ///
@@ -24,6 +29,8 @@ import 'meal_voice_order_handler.dart';
 class MealVoiceController extends ChangeNotifier {
   final MealVoiceService _service = MealVoiceService.instance;
   final MealVoiceTtsService _tts = MealVoiceTtsService();
+  final SarvamSTTService _sarvamSTT = SarvamSTTService();
+  final SarvamTTSService _sarvamTTS = SarvamTTSService();
   MealVoiceCommandParser? _parser;
   MealVoiceOrderHandler? _orderHandler;
   VoiceOrderSecurityService? _securityService;
@@ -43,6 +50,9 @@ class MealVoiceController extends ChangeNotifier {
 
   bool _ttsAvailable = false;
   bool get ttsAvailable => _ttsAvailable;
+
+  bool _sarvamAvailable = false;
+  bool get sarvamAvailable => _sarvamAvailable;
 
   bool get awaitingAuthorization => _state == MealVoiceState.awaitingAuthorization;
   bool get awaitingFinalConfirmation => _awaitingFinalConfirmation;
@@ -100,6 +110,17 @@ class MealVoiceController extends ChangeNotifier {
   String _userName = '';
   set userName(String name) => _userName = name;
 
+  /// Speak text — prefer Sarvam TTS, fall back to device TTS.
+  Future<void> _speak(String text) async {
+    if (text.isEmpty) return;
+    if (_sarvamAvailable) {
+      final lang = SarvamTTSService.detectLanguage(text);
+      await _sarvamTTS.speak(text, languageCode: lang);
+    } else if (_ttsAvailable) {
+      await _tts.speak(text);
+    }
+  }
+
   /// Initialize the controller.
   Future<void> initialize({
     KitchenProvider? kitchenProvider,
@@ -133,9 +154,14 @@ class MealVoiceController extends ChangeNotifier {
     _microphoneAvailable = await _service.isMicrophoneAvailable();
     _permissionGranted = await Permission.microphone.isGranted;
 
+    // Initialize TTS — prefer Sarvam, fall back to flutter_tts
+    await _sarvamTTS.initialize();
     _ttsAvailable = await _tts.initialize();
 
-    _addLog('Engine initialized (parser: ${_parser?.parserName ?? "unknown"}, TTS: $_ttsAvailable)');
+    // Initialize STT — Sarvam cloud STT
+    _sarvamAvailable = await _sarvamSTT.initialize();
+
+    _addLog('Engine initialized (parser: ${_parser?.parserName ?? "unknown"}, TTS: $_ttsAvailable, Sarvam: $_sarvamAvailable)');
     notifyListeners();
   }
 
@@ -204,12 +230,16 @@ class MealVoiceController extends ChangeNotifier {
     _notFoundItems.clear();
     notifyListeners();
 
-    // Speak greeting
+    // Speak greeting — prefer Sarvam TTS, fall back to device TTS
     final greeting = _userName.isNotEmpty
         ? 'Hi $_userName, how can I help you?'
         : 'Hi, how can I help you?';
 
-    await _tts.speak(greeting);
+    if (_sarvamAvailable) {
+      await _sarvamTTS.speak(greeting);
+    } else if (_ttsAvailable) {
+      await _speak(greeting);
+    }
     _addLog('Greeting spoken');
 
     // Start native command capture
@@ -355,7 +385,7 @@ class MealVoiceController extends ChangeNotifier {
       _state = MealVoiceState.confirmationRequired;
       _awaitingConfirmation = true;
       notifyListeners();
-      await _tts.speak(msg);
+      await _speak(msg);
       _startConfirmationTimeout();
       return;
     }
@@ -400,7 +430,7 @@ class MealVoiceController extends ChangeNotifier {
     _awaitingConfirmation = true;
     notifyListeners();
 
-    await _tts.speak(_ttsResponse);
+    await _speak(_ttsResponse);
     _addLog('Confirmation spoken');
     _startConfirmationTimeout();
   }
@@ -484,13 +514,13 @@ class MealVoiceController extends ChangeNotifier {
       _ttsResponse = msg;
       _state = MealVoiceState.commandSuccess;
       _addLog(msg);
-      await _tts.speak(msg);
+      await _speak(msg);
     } else if (addedCount > 0) {
       final total = _orderHandler!.cartTotal;
       _ttsResponse = 'Added $addedCount item${addedCount > 1 ? 's' : ''}, but $failedCount item${failedCount > 1 ? 's' : ''} could not be added. Cart total is ₹$total.';
       _state = MealVoiceState.commandSuccess;
       _addLog(_ttsResponse);
-      await _tts.speak(_ttsResponse);
+      await _speak(_ttsResponse);
     } else {
       _handleError('Could not add any items to your cart. Please try again.');
       return;
@@ -508,7 +538,7 @@ class MealVoiceController extends ChangeNotifier {
     _state = MealVoiceState.confirmationRequired;
     _awaitingConfirmation = true;
     notifyListeners();
-    await _tts.speak(_ttsResponse);
+    await _speak(_ttsResponse);
     _startConfirmationTimeout();
   }
 
@@ -543,7 +573,7 @@ class MealVoiceController extends ChangeNotifier {
       _ttsResponse = 'Cart cleared and items added. Your cart total is ₹$total with $count item${count > 1 ? 's' : ''}.';
       _state = MealVoiceState.commandSuccess;
       _addLog(_ttsResponse);
-      await _tts.speak(_ttsResponse);
+      await _speak(_ttsResponse);
     } else {
       _handleError('Could not add items after clearing cart.');
       return;
@@ -628,7 +658,7 @@ class MealVoiceController extends ChangeNotifier {
   /// Speak a message and return to wake-word listening.
   Future<void> _speakAndReturn(String message) async {
     _isProcessing = false;
-    await _tts.speak(message);
+    await _speak(message);
     _returnToWakeWordListening();
   }
 
@@ -657,7 +687,7 @@ class MealVoiceController extends ChangeNotifier {
     _ttsResponse = 'Your order total is ₹${total.toStringAsFixed(0)} with $itemCount item${itemCount > 1 ? 's' : ''}. Please enter your Voice PIN on the phone to confirm.';
     notifyListeners();
 
-    await _tts.speak(_ttsResponse);
+    await _speak(_ttsResponse);
 
     // Request PIN via callback
     if (requestAuthorization != null) {
@@ -698,7 +728,7 @@ class MealVoiceController extends ChangeNotifier {
     _state = MealVoiceState.awaitingFinalConfirmation;
     notifyListeners();
 
-    await _tts.speak(_ttsResponse);
+    await _speak(_ttsResponse);
     _startConfirmationTimeout();
   }
 
@@ -709,7 +739,7 @@ class MealVoiceController extends ChangeNotifier {
     _state = MealVoiceState.awaitingFinalConfirmation;
     notifyListeners();
 
-    await _tts.speak(_ttsResponse);
+    await _speak(_ttsResponse);
     _startConfirmationTimeout();
   }
 
@@ -754,7 +784,7 @@ class MealVoiceController extends ChangeNotifier {
       _ttsResponse = 'Order placed successfully! Thank you for ordering with MEALIN.';
       _state = MealVoiceState.orderSuccess;
       _addLog('Order placed via voice');
-      await _tts.speak(_ttsResponse);
+      await _speak(_ttsResponse);
 
       // Reset authorization
       _authorizationToken = null;
@@ -836,6 +866,18 @@ class MealVoiceController extends ChangeNotifier {
     _searchResults.clear();
     _notFoundItems.clear();
 
+    // If Sarvam STT is available, use cloud-based listening
+    if (_sarvamAvailable) {
+      _addLog('Using Sarvam cloud STT');
+      _isListening = true;
+      _state = MealVoiceState.listeningToUser;
+      _lastTranscript = 'Listening... (Sarvam)';
+      notifyListeners();
+      _captureWithSarvam();
+      return;
+    }
+
+    // Fall back to native STT
     final started = await _service.startListening();
     if (started) {
       _isListening = true;
@@ -852,9 +894,69 @@ class MealVoiceController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Capture speech using Sarvam cloud STT.
+  /// Records audio for a fixed duration, then sends to Sarvam API.
+  Future<void> _captureWithSarvam() async {
+    try {
+      // Request microphone permission
+      final status = await Permission.microphone.request();
+      if (!status.isGranted) {
+        _handleError('Microphone permission denied');
+        return;
+      }
+
+      _addLog('Recording audio for Sarvam STT...');
+
+      // Use flutter_sound to capture audio
+      final recorder = FlutterSoundRecorder();
+      await recorder.openRecorder();
+      final tempDir = await getTemporaryDirectory();
+      final audioPath = '${tempDir.path}/sarvam_capture.wav';
+
+      await recorder.startRecorder(
+        toFile: audioPath,
+        codec: Codec.pcm16WAV,
+        sampleRate: 16000,
+        numChannels: 1,
+      );
+
+      // Record for up to 8 seconds
+      _lastTranscript = 'Listening...';
+      notifyListeners();
+
+      await Future.delayed(const Duration(seconds: 8));
+
+      await recorder.stopRecorder();
+      await recorder.closeRecorder();
+
+      _addLog('Audio captured, sending to Sarvam STT...');
+
+      // Send to Sarvam STT
+      final transcript = await _sarvamSTT.transcribeFile(audioPath);
+
+      // Clean up
+      try {
+        await File(audioPath).delete();
+      } catch (_) {}
+
+      if (transcript != null && transcript.trim().isNotEmpty) {
+        _handleTranscription(transcript);
+      } else {
+        _addLog('Sarvam STT returned empty result');
+        _lastTranscript = 'No speech detected. Tap mic to try again.';
+        _state = MealVoiceState.idle;
+        _isListening = false;
+        notifyListeners();
+      }
+    } catch (e) {
+      _handleError('Sarvam STT error: $e');
+    }
+  }
+
   Future<void> stopListening() async {
     _confirmationTimeout?.cancel();
     await _tts.stop();
+    await _sarvamTTS.stop();
     await _service.stopListening();
     _isListening = false;
     _awaitingConfirmation = false;
@@ -874,6 +976,8 @@ class MealVoiceController extends ChangeNotifier {
     _eventSubscription?.cancel();
     _confirmationTimeout?.cancel();
     _tts.dispose();
+    _sarvamSTT.dispose();
+    _sarvamTTS.dispose();
     super.dispose();
   }
 }

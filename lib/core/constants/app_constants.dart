@@ -137,6 +137,14 @@ class AppConstants {
   // Override with: --dart-define=GEMINI_API_KEY=your_key_here
   static const String geminiApiKey = String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
 
+  // Sarvam AI (STT/TTS)
+  // Override with: --dart-define=SARVAM_API_KEY=your_key_here
+  static const String sarvamApiKey = String.fromEnvironment('SARVAM_API_KEY', defaultValue: '');
+  static const String sarvamBaseUrl = 'https://api.sarvam.ai';
+  static const String sarvamSttModel = 'saaras:v4';
+  static const String sarvamTtsModel = 'bulbul:v3';
+  static const String sarvamTtsSpeaker = 'meera'; // Female Indian voice
+
   // Upload
   static const String uploadEndpoint = '/api/auth/upload/';
 
