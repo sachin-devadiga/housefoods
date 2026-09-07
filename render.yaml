@@ -38,3 +38,5 @@ services:
         value: "Mealin"
       - key: BREVO_API_KEY
         sync: false
+      - key: SARVAM_API_KEY
+        sync: false

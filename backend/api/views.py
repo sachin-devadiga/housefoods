@@ -18,6 +18,7 @@ from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -2296,3 +2297,130 @@ class ConsumeAuthorizationView(APIView):
         auth.save()
 
         return Response({'consumed': True})
+
+
+# ============================================================
+# Voice STT/TTS Proxy — Sarvam API key lives ONLY on backend
+# ============================================================
+
+SARVAM_API_KEY = os.environ.get('SARVAM_API_KEY', '')
+SARVAM_BASE_URL = 'https://api.sarvam.ai'
+
+
+class VoiceSTTView(APIView):
+    """Proxy for Sarvam Speech-to-Text. Accepts multipart audio, returns transcript.
+    
+    The Sarvam API key never leaves the server.
+    """
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        if not SARVAM_API_KEY:
+            return Response(
+                {'error': 'Voice STT not configured'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        audio_file = request.FILES.get('file')
+        if not audio_file:
+            return Response(
+                {'error': 'audio file is required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        model = request.data.get('model', 'saaras:v4')
+        language_code = request.data.get('language_code', '')
+
+        # Build multipart request to Sarvam
+        files = {'file': (audio_file.name, audio_file.read(), audio_file.content_type)}
+        data = {'model': model}
+        if language_code and language_code != 'auto':
+            data['language_code'] = language_code
+
+        try:
+            resp = requests.post(
+                f'{SARVAM_BASE_URL}/speech-to-text',
+                headers={'api-subscription-key': SARVAM_API_KEY},
+                files=files,
+                data=data,
+                timeout=30,
+            )
+        except requests.exceptions.Timeout:
+            return Response(
+                {'error': 'STT service timed out'},
+                status=status.HTTP_504_GATEWAY_TIMEOUT,
+            )
+        except requests.exceptions.RequestException as e:
+            return Response(
+                {'error': f'STT service unavailable: {str(e)[:100]}'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        if resp.status_code == 200:
+            return Response(resp.json(), status=status.HTTP_200_OK)
+        else:
+            return Response(
+                {'error': f'STT service error: {resp.status_code}'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+
+class VoiceTTSView(APIView):
+    """Proxy for Sarvam Text-to-Speech. Accepts JSON, returns audio.
+    
+    The Sarvam API key never leaves the server.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not SARVAM_API_KEY:
+            return Response(
+                {'error': 'Voice TTS not configured'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        text = request.data.get('text', '')
+        if not text:
+            return Response(
+                {'error': 'text is required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        language_code = request.data.get('language_code', 'hi-IN')
+        model = request.data.get('model', 'bulbul:v3')
+        speaker = request.data.get('speaker', 'shruti')
+
+        try:
+            resp = requests.post(
+                f'{SARVAM_BASE_URL}/text-to-speech',
+                headers={
+                    'api-subscription-key': SARVAM_API_KEY,
+                    'Content-Type': 'application/json',
+                },
+                json={
+                    'text': text,
+                    'language_code': language_code,
+                    'model': model,
+                    'speaker': speaker,
+                },
+                timeout=15,
+            )
+        except requests.exceptions.Timeout:
+            return Response(
+                {'error': 'TTS service timed out'},
+                status=status.HTTP_504_GATEWAY_TIMEOUT,
+            )
+        except requests.exceptions.RequestException as e:
+            return Response(
+                {'error': f'TTS service unavailable: {str(e)[:100]}'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        if resp.status_code == 200:
+            return Response(resp.json(), status=status.HTTP_200_OK)
+        else:
+            return Response(
+                {'error': f'TTS service error: {resp.status_code}'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )

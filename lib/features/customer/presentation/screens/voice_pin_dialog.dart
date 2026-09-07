@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/services/voice_order_security_service.dart';
 import '../../../../core/services/api_service.dart';
+import '../../../../core/services/token_service.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_theme.dart';
 
@@ -58,6 +59,8 @@ class _VoicePinDialogState extends State<VoicePinDialog> {
   VoiceOrderSecurityService get _securityService =>
       VoiceOrderSecurityService(api: ApiService(baseUrl: AppConstants.apiBaseUrl));
 
+  bool _serviceInitialized = false;
+
   @override
   void initState() {
     super.initState();
@@ -65,9 +68,19 @@ class _VoicePinDialogState extends State<VoicePinDialog> {
       _controllers.add(TextEditingController());
       _focusNodes.add(FocusNode());
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       _focusNodes[0].requestFocus();
+      await _initService();
     });
+  }
+
+  Future<void> _initService() async {
+    final tokenService = TokenService();
+    final token = await tokenService.getAccessToken();
+    if (token != null) {
+      await _securityService.setToken(token);
+    }
+    _serviceInitialized = true;
   }
 
   @override
@@ -102,6 +115,10 @@ class _VoicePinDialogState extends State<VoicePinDialog> {
 
   Future<void> _verify() async {
     if (_enteredPin.length != _pinLength || _isLoading || _isLocked) return;
+    if (!_serviceInitialized) {
+      setState(() { _error = 'Still connecting...'; });
+      return;
+    }
 
     setState(() {
       _isLoading = true;

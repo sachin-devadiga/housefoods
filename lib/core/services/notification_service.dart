@@ -219,7 +219,7 @@ class NotificationService {
       await api.post(AppConstants.updateFcmTokenEndpoint, body: {'fcm_token': fcmToken});
       api.dispose();
     } catch (e) {
-      debugPrint('Failed to upload FCM token: $e');
+      debugPrint('Failed to upload FCM token');
     }
   }
 

@@ -191,12 +191,13 @@ User: "Order some food"
         );
       }).where((item) => item.itemName.isNotEmpty).toList();
 
-      // If needs_clarification, return unknown with clarification message
+      // If needs_clarification, return with clarification message
       if (intent == MealVoiceIntent.unknown && clarification != null) {
         return MealVoiceCommand(
           intent: MealVoiceIntent.unknown,
           items: [],
           rawText: rawTranscript,
+          clarification: clarification,
         );
       }
 
@@ -221,7 +222,7 @@ User: "Order some food"
       case 'remove':
         return MealVoiceIntent.remove;
       case 'clear_cart':
-        return MealVoiceIntent.remove; // Map to remove with empty items
+        return MealVoiceIntent.clearCart;
       case 'confirm':
         return MealVoiceIntent.confirm;
       case 'place_order':

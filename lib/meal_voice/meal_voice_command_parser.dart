@@ -39,6 +39,9 @@ class RegexMealVoiceCommandParser implements MealVoiceCommandParser {
       'remove', 'delete', 'cancel', 'take out', 'drop',
       'take off', 'get rid of', 'no more',
     ],
+    MealVoiceIntent.clearCart: [
+      'clear cart', 'empty cart', 'clear my cart', 'empty my cart',
+    ],
   };
 
   // Quantity word mapping

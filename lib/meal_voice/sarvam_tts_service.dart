@@ -6,31 +6,35 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import '../core/constants/app_constants.dart';
+import '../core/services/token_service.dart';
 
-/// Sarvam AI Text-to-Speech service.
+/// Text-to-Speech service via MEALIN backend proxy.
 ///
-/// Converts text to natural-sounding Indian voices using Sarvam's
-/// Bulbul v3 TTS model.
+/// Sends text to MEALIN backend which proxies to Sarvam AI.
+/// The Sarvam API key never leaves the server.
 class SarvamTTSService {
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isInitialized = false;
   bool _isSpeaking = false;
   Completer<void>? _speakCompleter;
-  String _apiKey = '';
+  String? _authToken;
 
   bool get isInitialized => _isInitialized;
   bool get isSpeaking => _isSpeaking;
 
   static const Map<String, String> speakers = {
-    'meera': 'Meera (Female, Hindi)',
+    'shruti': 'Shruti (Female, Hindi)',
     'shubh': 'Shubh (Male, Hindi)',
     'aditya': 'Aditya (Male, Hindi)',
+    'tanya': 'Tanya (Female, Hindi)',
+    'kavya': 'Kavya (Female, Hindi)',
   };
 
   Future<bool> initialize() async {
-    _apiKey = AppConstants.sarvamApiKey;
-    if (_apiKey.isEmpty) {
-      debugPrint('[SarvamTTS] WARNING: No API key configured');
+    final tokenService = TokenService();
+    _authToken = await tokenService.getAccessToken();
+    if (_authToken == null || _authToken!.isEmpty) {
+      debugPrint('[SarvamTTS] WARNING: No auth token — TTS unavailable until logged in');
       _isInitialized = false;
       return false;
     }
@@ -43,16 +47,33 @@ class SarvamTTSService {
     });
 
     _isInitialized = true;
-    debugPrint('[SarvamTTS] Initialized');
+    debugPrint('[SarvamTTS] Initialized (backend proxy)');
     return true;
   }
 
+  /// Refresh auth token (call after login/token refresh).
+  Future<void> refreshToken() async {
+    final tokenService = TokenService();
+    _authToken = await tokenService.getAccessToken();
+  }
+
   /// Convert text to speech and play it.
-  Future<void> speak(String text, {
+  /// Returns true if audio was played, false on any failure.
+  Future<bool> speak(String text, {
     String languageCode = 'hi-IN',
-    String speaker = 'meera',
+    String speaker = 'shruti',
   }) async {
-    if (!_isInitialized || text.isEmpty) return;
+    if (!_isInitialized || text.isEmpty) {
+      debugPrint('[SarvamTTS] speak() skipped: initialized=$_isInitialized, empty=${text.isEmpty}');
+      return false;
+    }
+
+    await refreshToken();
+
+    if (_authToken == null || _authToken!.isEmpty) {
+      debugPrint('[SarvamTTS] No auth token after refresh');
+      return false;
+    }
 
     if (_isSpeaking) {
       await stop();
@@ -60,11 +81,13 @@ class SarvamTTSService {
     }
 
     try {
+      debugPrint('[SarvamTTS] Synthesizing: "${text.substring(0, text.length.clamp(0, 50))}..." (lang=$languageCode, speaker=$speaker)');
       final audioBytes = await _synthesize(text, languageCode: languageCode, speaker: speaker);
-      if (audioBytes == null) {
-        debugPrint('[SarvamTTS] Synthesis failed');
-        return;
+      if (audioBytes == null || audioBytes.isEmpty) {
+        debugPrint('[SarvamTTS] Synthesis returned null/empty — FAIL');
+        return false;
       }
+      debugPrint('[SarvamTTS] Got ${audioBytes.length} bytes of audio');
 
       final tempDir = await getTemporaryDirectory();
       final audioFile = File('${tempDir.path}/sarvam_tts_${DateTime.now().millisecondsSinceEpoch}.wav');
@@ -73,43 +96,48 @@ class SarvamTTSService {
       _speakCompleter = Completer<void>();
       _isSpeaking = true;
 
+      debugPrint('[SarvamTTS] Playing audio file...');
       await _audioPlayer.play(DeviceFileSource(audioFile.path));
 
       await _speakCompleter!.future.timeout(
         const Duration(seconds: 30),
         onTimeout: () {
-          debugPrint('[SarvamTTS] Speech timeout');
+          debugPrint('[SarvamTTS] Speech playback timeout (30s)');
           _isSpeaking = false;
         },
       );
 
-      // ignore: avoid_slow_async_io
       if (await audioFile.exists()) {
         await audioFile.delete();
       }
+
+      debugPrint('[SarvamTTS] speak() completed successfully');
+      return true;
     } catch (e) {
-      debugPrint('[SarvamTTS] Speak error: $e');
+      debugPrint('[SarvamTTS] speak() FAILED: $e');
       _isSpeaking = false;
+      return false;
     }
   }
 
   Future<List<int>?> _synthesize(String text, {
     String languageCode = 'hi-IN',
-    String speaker = 'meera',
+    String speaker = 'shruti',
   }) async {
     try {
-      final uri = Uri.parse('${AppConstants.sarvamBaseUrl}/text-to-speech');
+      final uri = Uri.parse('${AppConstants.apiBaseUrl}/api/auth/voice/tts/');
+      debugPrint('[SarvamTTS] POST $uri');
 
       final response = await http.post(
         uri,
         headers: {
-          'api-subscription-key': _apiKey,
+          'Authorization': 'Bearer $_authToken',
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
           'text': text,
           'language_code': languageCode,
-          'model': AppConstants.sarvamTtsModel,
+          'model': 'bulbul:v3',
           'speaker': speaker,
         }),
       ).timeout(
@@ -119,6 +147,8 @@ class SarvamTTSService {
         },
       );
 
+      debugPrint('[SarvamTTS] Backend response: ${response.statusCode}');
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         final audios = data['audios'] as List?;
@@ -126,8 +156,9 @@ class SarvamTTSService {
           final base64Audio = audios[0] as String;
           return base64Decode(base64Audio);
         }
+        debugPrint('[SarvamTTS] Response has no audios: ${response.body.substring(0, response.body.length.clamp(0, 200))}');
       } else {
-        debugPrint('[SarvamTTS] API error ${response.statusCode}: ${response.body}');
+        debugPrint('[SarvamTTS] Backend error ${response.statusCode}: ${response.body.substring(0, response.body.length.clamp(0, 200))}');
       }
 
       return null;

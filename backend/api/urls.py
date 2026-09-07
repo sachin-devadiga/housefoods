@@ -148,6 +148,10 @@ urlpatterns = [
     path('voice-pin/status/', views.VoicePinStatusView.as_view(), name='voice-pin-status'),
     path('voice-pin/consume/', views.ConsumeAuthorizationView.as_view(), name='voice-pin-consume'),
 
+    # Voice STT/TTS Proxy (Sarvam API key stays on backend)
+    path('voice/stt/', views.VoiceSTTView.as_view(), name='voice-stt'),
+    path('voice/tts/', views.VoiceTTSView.as_view(), name='voice-tts'),
+
     # Include router URLs
     path('', include(router.urls)),
 ]

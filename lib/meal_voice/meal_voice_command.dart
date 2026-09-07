@@ -9,6 +9,7 @@ class MealVoiceCommand {
   final String? bakery;
   final String rawText;
   final DateTime parsedAt;
+  final String? clarification;
 
   MealVoiceCommand({
     required this.intent,
@@ -17,6 +18,7 @@ class MealVoiceCommand {
     this.bakery,
     required this.rawText,
     DateTime? parsedAt,
+    this.clarification,
   }) : parsedAt = parsedAt ?? DateTime.now();
 
   /// Single-item convenience constructor
@@ -51,6 +53,7 @@ class MealVoiceCommand {
 
   bool get isAdd => intent == MealVoiceIntent.add;
   bool get isRemove => intent == MealVoiceIntent.remove;
+  bool get isClearCart => intent == MealVoiceIntent.clearCart;
   bool get isConfirm => intent == MealVoiceIntent.confirm;
   bool get isCancel => intent == MealVoiceIntent.cancel;
   bool get hasMultipleItems => items.length > 1;
@@ -107,6 +110,7 @@ class MealVoiceItem {
 enum MealVoiceIntent {
   add,
   remove,
+  clearCart,
   cancel,
   confirm,
   placeOrder,

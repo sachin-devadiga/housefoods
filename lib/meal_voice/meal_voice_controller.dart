@@ -88,6 +88,9 @@ class MealVoiceController extends ChangeNotifier {
   // Duplicate protection (#8)
   bool _isProcessing = false;
 
+  // TTS/Microphone conflict guard
+  bool _isSpeaking = false;
+
   // Voice authorization
   String? _authorizationToken;
   DateTime? _authorizationExpiry;
@@ -110,14 +113,53 @@ class MealVoiceController extends ChangeNotifier {
   String _userName = '';
   set userName(String name) => _userName = name;
 
+  // Continuous listening mode (Sarvam mode)
+  bool _continuousListening = false;
+
+  // Consecutive STT failure counter — speaks error after N failures
+  int _consecutiveSttFailures = 0;
+  static const _maxConsecutiveFailures = 3;
+
+  // Battery optimization warning
+  bool _batteryOptimizationWarning = false;
+  bool get batteryOptimizationWarning => _batteryOptimizationWarning;
+
   /// Speak text — prefer Sarvam TTS, fall back to device TTS.
+  /// Never throws — always tries both if available.
   Future<void> _speak(String text) async {
     if (text.isEmpty) return;
-    if (_sarvamAvailable) {
-      final lang = SarvamTTSService.detectLanguage(text);
-      await _sarvamTTS.speak(text, languageCode: lang);
-    } else if (_ttsAvailable) {
-      await _tts.speak(text);
+    _isSpeaking = true;
+    try {
+      // Try Sarvam TTS first
+      if (_sarvamAvailable) {
+        try {
+          final lang = SarvamTTSService.detectLanguage(text);
+          _addLog('TTS: Speaking via Sarvam (${text.length} chars, lang=$lang)');
+          final ok = await _sarvamTTS.speak(text, languageCode: lang);
+          if (ok) {
+            _addLog('TTS: Sarvam speak completed');
+            return;
+          } else {
+            _addLog('TTS: Sarvam returned false — falling back to device TTS');
+          }
+        } catch (e) {
+          _addLog('TTS: Sarvam exception: $e — falling back to device TTS');
+        }
+      }
+      // Fallback to device TTS
+      if (_ttsAvailable) {
+        try {
+          _addLog('TTS: Speaking via device TTS (${text.length} chars)');
+          await _tts.speak(text);
+          _addLog('TTS: Device TTS speak completed');
+        } catch (e) {
+          _addLog('TTS: Device TTS also failed: $e');
+        }
+      } else {
+        _addLog('TTS: No TTS available — response not spoken');
+      }
+    } finally {
+      _isSpeaking = false;
     }
   }
 
@@ -155,11 +197,25 @@ class MealVoiceController extends ChangeNotifier {
     _permissionGranted = await Permission.microphone.isGranted;
 
     // Initialize TTS — prefer Sarvam, fall back to flutter_tts
-    await _sarvamTTS.initialize();
+    final sarvamTtsOk = await _sarvamTTS.initialize();
+    _addLog('Sarvam TTS init: ${sarvamTtsOk ? "OK" : "FAILED"}');
     _ttsAvailable = await _tts.initialize();
+    _addLog('Device TTS init: ${_ttsAvailable ? "OK" : "FAILED"}');
 
     // Initialize STT — Sarvam cloud STT
     _sarvamAvailable = await _sarvamSTT.initialize();
+    _addLog('Sarvam STT init: ${_sarvamAvailable ? "OK" : "FAILED"}');
+
+    // Check battery optimization (Android only)
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        final batteryStatus = await Permission.ignoreBatteryOptimizations.status;
+        if (batteryStatus.isDenied) {
+          _batteryOptimizationWarning = true;
+          _addLog('Battery optimization is enabled — background voice may be unreliable');
+        }
+      } catch (_) {}
+    }
 
     _addLog('Engine initialized (parser: ${_parser?.parserName ?? "unknown"}, TTS: $_ttsAvailable, Sarvam: $_sarvamAvailable)');
     notifyListeners();
@@ -169,6 +225,11 @@ class MealVoiceController extends ChangeNotifier {
   void _onEvent(MealVoiceEvent event) {
     switch (event) {
       case WakeWordDetected():
+        // FIX: Ignore wake word if TTS is playing (avoid self-interaction)
+        if (_isSpeaking) {
+          _addLog('Wake word ignored — TTS is speaking');
+          return;
+        }
         // FIX #5: Guard — ignore wake word if already in active workflow
         if (_state != MealVoiceState.idle &&
             _state != MealVoiceState.listeningForWakeWord &&
@@ -218,7 +279,9 @@ class MealVoiceController extends ChangeNotifier {
     _state = MealVoiceState.wakeDetected;
     _isProcessing = false; // Reset processing guard
     notifyListeners();
-    _startCommandCapture();
+    _startCommandCapture().catchError((e) {
+      _addLog('ERROR in _startCommandCapture: $e');
+    });
   }
 
   /// Start command capture after wake word.
@@ -230,21 +293,23 @@ class MealVoiceController extends ChangeNotifier {
     _notFoundItems.clear();
     notifyListeners();
 
-    // Speak greeting — prefer Sarvam TTS, fall back to device TTS
+    // Speak greeting
     final greeting = _userName.isNotEmpty
         ? 'Hi $_userName, how can I help you?'
         : 'Hi, how can I help you?';
 
-    if (_sarvamAvailable) {
-      await _sarvamTTS.speak(greeting);
-    } else if (_ttsAvailable) {
-      await _speak(greeting);
-    }
+    await _speak(greeting);
     _addLog('Greeting spoken');
 
-    // Start native command capture
-    await _service.startCommandCapture();
-    _addLog('Listening for command...');
+    if (_sarvamAvailable) {
+      // Sarvam mode: start recording for command
+      _addLog('Listening for command via Sarvam...');
+      _captureWithSarvam();
+    } else {
+      // Native mode: use SpeechRecognizer
+      await _service.startCommandCapture();
+      _addLog('Listening for command via native STT...');
+    }
   }
 
   /// Handle speech transcription from native STT.
@@ -297,7 +362,14 @@ class MealVoiceController extends ChangeNotifier {
     // Handle unknown intent
     if (command.intent == MealVoiceIntent.unknown) {
       _isProcessing = false;
-      _handleUnknownCommand();
+      if (command.clarification != null && command.clarification!.isNotEmpty) {
+        _ttsResponse = command.clarification!;
+        _state = MealVoiceState.commandUnknown;
+        _addLog('Clarification: ${command.clarification}');
+        await _speakAndReturn(_ttsResponse);
+      } else {
+        _handleUnknownCommand();
+      }
       return;
     }
 
@@ -317,12 +389,33 @@ class MealVoiceController extends ChangeNotifier {
     // Handle add/remove commands
     if (command.isAdd || command.isRemove) {
       await _searchAndConfirm(command);
+    } else if (command.intent == MealVoiceIntent.clearCart) {
+      _isProcessing = false;
+      await _handleClearCart();
     } else if (command.intent == MealVoiceIntent.placeOrder) {
       _isProcessing = false;
       await _handlePlaceOrder();
     } else {
       _isProcessing = false;
       _handleUnknownCommand();
+    }
+  }
+
+  /// Handle clear cart command.
+  Future<void> _handleClearCart() async {
+    if (_orderHandler == null) {
+      _handleError('Cart integration not available');
+      return;
+    }
+
+    try {
+      await _orderHandler!.clearCart();
+      _ttsResponse = 'Cart cleared. What would you like to order?';
+      _state = MealVoiceState.commandSuccess;
+      _addLog('Cart cleared via voice');
+      await _speakAndReturn(_ttsResponse);
+    } catch (e) {
+      _handleError('Failed to clear cart');
     }
   }
 
@@ -376,7 +469,6 @@ class MealVoiceController extends ChangeNotifier {
 
     // Partial items found
     if (_notFoundItems.isNotEmpty) {
-      _searchResults.first; // At least one found
       final foundNames = _searchResults.map((r) => r.menuItem.name).join(', ');
       final missingNames = _notFoundItems.join(', ');
       final msg = 'I found $foundNames, but I couldn\'t find $missingNames. '
@@ -425,7 +517,6 @@ class MealVoiceController extends ChangeNotifier {
       _ttsResponse = 'I found $names. Total is ₹$total. Would you like me to add these to your cart?';
     }
 
-    _ttsResponse = _ttsResponse;
     _state = MealVoiceState.confirmationRequired;
     _awaitingConfirmation = true;
     notifyListeners();
@@ -645,14 +736,24 @@ class MealVoiceController extends ChangeNotifier {
   }
 
   /// Handle general errors.
-  void _handleError(String message) {
+  Future<void> _handleError(String message) async {
     _awaitingConfirmation = false;
     _pendingCartConflictClear = false;
     _confirmationTimeout?.cancel();
-    _ttsResponse = 'Sorry, something went wrong. $message';
+    _isProcessing = false;
+
+    // Provide user-friendly messages for common errors
+    String userMessage;
+    if (message.contains('SocketException') || message.contains('Network') || message.contains('timeout')) {
+      userMessage = 'I\'m having trouble connecting. Please check your internet connection and try again.';
+    } else {
+      userMessage = 'Sorry, something went wrong. $message';
+    }
+
+    _ttsResponse = userMessage;
     _state = MealVoiceState.commandError;
     _addLog('Error: $message');
-    _speakAndReturn(_ttsResponse);
+    await _speakAndReturn(_ttsResponse);
   }
 
   /// Speak a message and return to wake-word listening.
@@ -766,6 +867,8 @@ class MealVoiceController extends ChangeNotifier {
   }
 
   /// Actually place the order.
+  /// Note: Razorpay payment requires the app UI. Voice ordering adds items
+  /// to the cart and then the user must complete checkout in the app.
   Future<void> _placeOrder() async {
     if (_authorizationToken == null) {
       _handleError('Authorization expired. Please verify your PIN again.');
@@ -781,9 +884,14 @@ class MealVoiceController extends ChangeNotifier {
       await _securityService?.consumeAuthorization(_authorizationToken!);
       _authorizationConsumed = true;
 
-      _ttsResponse = 'Order placed successfully! Thank you for ordering with MEALIN.';
-      _state = MealVoiceState.orderSuccess;
-      _addLog('Order placed via voice');
+      final total = _orderHandler?.cartTotal ?? 0;
+      final itemCount = _orderHandler?.cartItemCount ?? 0;
+
+      _ttsResponse = 'Your cart has $itemCount item${itemCount > 1 ? 's' : ''} '
+          'totalling ₹${total.toStringAsFixed(0)}. '
+          'Please open the app to complete payment and place your order.';
+      _state = MealVoiceState.commandSuccess;
+      _addLog('Order authorized via voice — cart ready for checkout');
       await _speak(_ttsResponse);
 
       // Reset authorization
@@ -792,7 +900,7 @@ class MealVoiceController extends ChangeNotifier {
 
       _returnToWakeWordListening();
     } catch (e) {
-      _handleError('Failed to place order. Please try again.');
+      _handleError('Failed to authorize order. Please try again.');
     }
   }
 
@@ -807,13 +915,27 @@ class MealVoiceController extends ChangeNotifier {
     _pendingItems = [];
     _isProcessing = false;
 
-    // Don't reset authorization here — it may still be valid for re-order
-
-    // Restart native wake-word detection
-    _service.restartWakeWordListening();
-    _state = MealVoiceState.listeningForWakeWord;
-    _isListening = true;
-    _addLog('Listening for "Hi MEAL"...');
+    if (_sarvamAvailable && _continuousListening) {
+      // Sarvam continuous mode: auto-start next recording cycle
+      _state = MealVoiceState.listeningToUser;
+      _isListening = true;
+      _lastTranscript = 'Listening... (say "Hi MEAL")';
+      _addLog('Sarvam: auto-starting next recording cycle');
+      notifyListeners();
+      _captureWithSarvam();
+    } else if (_sarvamAvailable) {
+      // Sarvam single-shot mode: wait for user to tap
+      _state = MealVoiceState.idle;
+      _isListening = false;
+      _lastTranscript = 'Tap mic to speak';
+      _addLog('Sarvam mode: ready for next command');
+    } else {
+      // Native mode: restart wake-word detection
+      _service.restartWakeWordListening();
+      _state = MealVoiceState.listeningForWakeWord;
+      _isListening = true;
+      _addLog('Listening for "Hi MEAL"...');
+    }
     notifyListeners();
   }
 
@@ -822,6 +944,39 @@ class MealVoiceController extends ChangeNotifier {
     final timestamp = DateTime.now().toIso8601String().substring(11, 19);
     _logs.add('[$timestamp] $message');
     if (_logs.length > 50) _logs.removeAt(0);
+  }
+
+  /// Check if a transcript contains a wake word variation.
+  /// Uses regex to handle punctuation, mispronunciation, and Sarvam quirks.
+  static bool _isWakeWord(String lowerTranscript) {
+    final cleaned = lowerTranscript.replaceAll(RegExp(r'[^\w\s]'), ' ').trim();
+    // Match: hi/hey/hello/ok/start + optional noise + meal/meel/meil/me all
+    final patterns = [
+      RegExp(r'\bhi\b.*?\bmeal\b'),
+      RegExp(r'\bhey\b.*?\bmeal\b'),
+      RegExp(r'\bhello\b.*?\bmeal\b'),
+      RegExp(r'\bok\b.*?\bmeal\b'),
+      RegExp(r'\bstart\b.*?\bmeal\b'),
+      RegExp(r'\bhi\b.*?\bmeel\b'),
+      RegExp(r'\bhey\b.*?\bmeel\b'),
+      RegExp(r'\bhi\b.*?\bmeil\b'),
+      RegExp(r'\bhey\b.*?\bmeil\b'),
+      RegExp(r'\bhimeal\b'),
+      RegExp(r'\bheymeal\b'),
+    ];
+    for (final pattern in patterns) {
+      if (pattern.hasMatch(cleaned)) return true;
+    }
+    // Fallback: check raw string for simple matches
+    const simplePhrases = [
+      'hi meal', 'hey meal', 'hello meal', 'ok meal', 'start meal',
+      'hi meel', 'hey meel', 'hi meil', 'hey meil',
+      'himeal', 'heymeal', 'hellomeal', 'okmeal', 'startmeal',
+    ];
+    for (final phrase in simplePhrases) {
+      if (cleaned.contains(phrase)) return true;
+    }
+    return false;
   }
 
   /// Reset voice authorization (e.g., after cart changes significantly).
@@ -840,6 +995,20 @@ class MealVoiceController extends ChangeNotifier {
       DateTime.now().isBefore(_authorizationExpiry!) &&
       !_authorizationConsumed;
 
+  /// Request battery optimization exemption (Android only).
+  Future<void> requestBatteryOptimizationExemption() async {
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        final status = await Permission.ignoreBatteryOptimizations.request();
+        if (status.isGranted) {
+          _batteryOptimizationWarning = false;
+          _addLog('Battery optimization exemption granted');
+          notifyListeners();
+        }
+      } catch (_) {}
+    }
+  }
+
   // ─── Public API ───
 
   Future<void> requestPermission() async {
@@ -848,13 +1017,31 @@ class MealVoiceController extends ChangeNotifier {
     notifyListeners();
 
     final status = await Permission.microphone.request();
-    _permissionGranted = status.isGranted;
-    _lastTranscript = _permissionGranted ? 'Permission granted' : 'Permission denied';
-    _state = _permissionGranted ? MealVoiceState.idle : MealVoiceState.error;
+    if (status.isGranted) {
+      _permissionGranted = true;
+      _lastTranscript = 'Permission granted';
+      _state = MealVoiceState.idle;
+    } else if (status.isPermanentlyDenied) {
+      _permissionGranted = false;
+      _lastTranscript = 'Microphone permission permanently denied. Please enable it in Settings.';
+      _state = MealVoiceState.error;
+      _addLog('Microphone permission permanently denied');
+    } else {
+      _permissionGranted = false;
+      _lastTranscript = 'Microphone permission denied';
+      _state = MealVoiceState.error;
+      _addLog('Microphone permission denied');
+    }
     notifyListeners();
   }
 
   Future<void> startListening() async {
+    // Prevent duplicate sessions
+    if (_isListening) {
+      _addLog('Already listening — ignoring duplicate start');
+      return;
+    }
+
     if (!_permissionGranted) {
       await requestPermission();
       if (!_permissionGranted) return;
@@ -865,13 +1052,17 @@ class MealVoiceController extends ChangeNotifier {
     _lastCommand = null;
     _searchResults.clear();
     _notFoundItems.clear();
+    _consecutiveSttFailures = 0;
+
+    // Enable continuous mode for Sarvam
+    _continuousListening = _sarvamAvailable;
 
     // If Sarvam STT is available, use cloud-based listening
     if (_sarvamAvailable) {
-      _addLog('Using Sarvam cloud STT');
+      _addLog('Using Sarvam cloud STT (continuous mode)');
       _isListening = true;
       _state = MealVoiceState.listeningToUser;
-      _lastTranscript = 'Listening... (Sarvam)';
+      _lastTranscript = 'Listening... (say "Hi MEAL")';
       notifyListeners();
       _captureWithSarvam();
       return;
@@ -895,23 +1086,26 @@ class MealVoiceController extends ChangeNotifier {
   }
 
   /// Capture speech using Sarvam cloud STT.
-  /// Records audio for a fixed duration, then sends to Sarvam API.
+  /// Records audio then sends to backend proxy for transcription.
+  /// Max recording: 12 seconds hard limit.
   Future<void> _captureWithSarvam() async {
+    FlutterSoundRecorder? recorder;
+    String? audioPath;
     try {
       // Request microphone permission
       final status = await Permission.microphone.request();
       if (!status.isGranted) {
+        _addLog('STT: Microphone permission denied');
         _handleError('Microphone permission denied');
         return;
       }
 
-      _addLog('Recording audio for Sarvam STT...');
+      _addLog('STT: Starting recording...');
 
-      // Use flutter_sound to capture audio
-      final recorder = FlutterSoundRecorder();
+      recorder = FlutterSoundRecorder();
       await recorder.openRecorder();
       final tempDir = await getTemporaryDirectory();
-      final audioPath = '${tempDir.path}/sarvam_capture.wav';
+      audioPath = '${tempDir.path}/sarvam_capture.wav';
 
       await recorder.startRecorder(
         toFile: audioPath,
@@ -920,40 +1114,87 @@ class MealVoiceController extends ChangeNotifier {
         numChannels: 1,
       );
 
-      // Record for up to 8 seconds
       _lastTranscript = 'Listening...';
       notifyListeners();
 
-      await Future.delayed(const Duration(seconds: 8));
+      // Wait 12 seconds for user to speak — simple, always works
+      _addLog('STT: Recording for 12s...');
+      await Future.delayed(const Duration(seconds: 12));
 
-      await recorder.stopRecorder();
-      await recorder.closeRecorder();
+      // Stop recorder — wrapped in try-catch so we always proceed
+      try {
+        await recorder.stopRecorder();
+      } catch (e) {
+        _addLog('STT: stopRecorder error (non-fatal): $e');
+      }
+      try {
+        await recorder.closeRecorder();
+      } catch (e) {
+        _addLog('STT: closeRecorder error (non-fatal): $e');
+      }
+      recorder = null;
 
-      _addLog('Audio captured, sending to Sarvam STT...');
+      _addLog('STT: Audio captured, sending to backend proxy...');
 
-      // Send to Sarvam STT
+      // Send to STT via backend
       final transcript = await _sarvamSTT.transcribeFile(audioPath);
+      final sttError = _sarvamSTT.lastError;
 
-      // Clean up
+      // Clean up audio file
       try {
         await File(audioPath).delete();
       } catch (_) {}
+      audioPath = null;
 
       if (transcript != null && transcript.trim().isNotEmpty) {
-        _handleTranscription(transcript);
+        _consecutiveSttFailures = 0; // Reset on success
+        final lowerTranscript = transcript.trim().toLowerCase();
+        _addLog('STT: "$transcript"');
+        // Check for wake word in Sarvam mode
+        if (_isWakeWord(lowerTranscript)) {
+          _addLog('Wake word detected in transcript: "$transcript"');
+          _handleWakeWordDetected(DateTime.now());
+        } else {
+          _handleTranscription(transcript);
+        }
       } else {
-        _addLog('Sarvam STT returned empty result');
-        _lastTranscript = 'No speech detected. Tap mic to try again.';
-        _state = MealVoiceState.idle;
-        _isListening = false;
-        notifyListeners();
+        _consecutiveSttFailures++;
+        final errorDetail = sttError ?? 'empty transcript';
+        _addLog('STT failed ($_consecutiveSttFailures/$_maxConsecutiveFailures): $errorDetail');
+
+        if (_consecutiveSttFailures >= _maxConsecutiveFailures) {
+          _consecutiveSttFailures = 0;
+          _handleError('Speech recognition is not working. $errorDetail');
+          return;
+        }
+
+        if (_continuousListening) {
+          _lastTranscript = 'Listening... (attempt ${_consecutiveSttFailures + 1})';
+          notifyListeners();
+          _captureWithSarvam();
+        } else {
+          _lastTranscript = 'No speech detected. Tap mic to try again.';
+          _state = MealVoiceState.idle;
+          _isListening = false;
+          notifyListeners();
+        }
       }
     } catch (e) {
-      _handleError('Sarvam STT error: $e');
+      // Always clean up recorder
+      if (recorder != null) {
+        try { await recorder.stopRecorder(); } catch (_) {}
+        try { await recorder.closeRecorder(); } catch (_) {}
+      }
+      if (audioPath != null) {
+        try { await File(audioPath).delete(); } catch (_) {}
+      }
+      _addLog('STT: Recording exception: $e');
+      _handleError('Recording failed: $e');
     }
   }
 
   Future<void> stopListening() async {
+    _continuousListening = false;
     _confirmationTimeout?.cancel();
     await _tts.stop();
     await _sarvamTTS.stop();
@@ -964,6 +1205,43 @@ class MealVoiceController extends ChangeNotifier {
     _state = MealVoiceState.stopped;
     _lastTranscript = 'Stopped';
     _addLog('Stopped');
+    notifyListeners();
+  }
+
+  /// Called when app resumes from background.
+  void onAppResumed() {
+    _addLog('App resumed');
+    if (_state != MealVoiceState.stopped && !_isListening) {
+      _addLog('Restarting voice listener');
+      startListening();
+    }
+  }
+
+  /// Called when app goes to background.
+  void onAppPaused() {
+    _addLog('App paused');
+    _service.stopListening();
+    _isListening = false;
+  }
+
+  /// Reset all user-specific state. Call on logout.
+  void resetUserState() {
+    _userName = '';
+    _authorizationToken = null;
+    _authorizationExpiry = null;
+    _authorizationConsumed = false;
+    _awaitingConfirmation = false;
+    _awaitingFinalConfirmation = false;
+    _pendingCartConflictClear = false;
+    _isProcessing = false;
+    _isSpeaking = false;
+    _continuousListening = false;
+    _searchResults.clear();
+    _notFoundItems.clear();
+    _pendingItems = [];
+    _confirmationTimeout?.cancel();
+    _logs.clear();
+    _addLog('User state reset');
     notifyListeners();
   }
 

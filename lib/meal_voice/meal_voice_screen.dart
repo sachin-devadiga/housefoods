@@ -9,6 +9,7 @@ import '../core/services/api_service.dart';
 import '../core/services/token_service.dart';
 import '../core/constants/app_constants.dart';
 import '../features/customer/presentation/screens/voice_pin_dialog.dart';
+import '../features/auth/presentation/providers/auth_provider.dart';
 
 /// Developer test screen for MEAL Voice Engine.
 /// Shows full workflow state, transcript, parsed command, and TTS response.
@@ -20,10 +21,14 @@ class MealVoiceTestScreen extends StatefulWidget {
 }
 
 class _MealVoiceTestScreenState extends State<MealVoiceTestScreen> {
+  AppLifecycleListener? _lifecycleListener;
+
   @override
   void initState() {
     super.initState();
+    _setupLifecycleListener();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
       final kitchenProvider = context.read<KitchenProvider>();
       final cartProvider = context.read<CartProvider>();
       final tokenService = TokenService();
@@ -33,9 +38,25 @@ class _MealVoiceTestScreenState extends State<MealVoiceTestScreen> {
       );
       await securityService.setToken(token);
 
+      if (!mounted) return;
       final vc = context.read<MealVoiceController>();
+
+      // Set customer name from authenticated user profile
+      final authProvider = context.read<AuthProvider>();
+      final profile = authProvider.userProfile;
+      final userName = profile?['name'] as String? ?? '';
+      if (userName.isNotEmpty) {
+        vc.userName = userName;
+        await tokenService.saveUserName(userName);
+      } else {
+        final storedName = await tokenService.getUserName();
+        if (storedName != null && storedName.isNotEmpty) {
+          vc.userName = storedName;
+        }
+      }
+
       vc.requestAuthorization = () => _showPinDialog(vc);
-      vc.initialize(
+      await vc.initialize(
         kitchenProvider: kitchenProvider,
         cartProvider: cartProvider,
         securityService: securityService,
@@ -45,6 +66,38 @@ class _MealVoiceTestScreenState extends State<MealVoiceTestScreen> {
       await vc.requestPermission();
       vc.startListening();
     });
+  }
+
+  void _setupLifecycleListener() {
+    _lifecycleListener = AppLifecycleListener(
+      onStateChange: (state) async {
+        if (!mounted) return;
+        final vc = context.read<MealVoiceController>();
+        switch (state) {
+          case AppLifecycleState.resumed:
+            vc.onAppResumed();
+            break;
+          case AppLifecycleState.paused:
+            vc.onAppPaused();
+            break;
+          case AppLifecycleState.inactive:
+            vc.onAppPaused();
+            break;
+          case AppLifecycleState.detached:
+            vc.onAppPaused();
+            break;
+          case AppLifecycleState.hidden:
+            vc.onAppPaused();
+            break;
+        }
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _lifecycleListener?.dispose();
+    super.dispose();
   }
 
   Future<void> _showPinDialog(MealVoiceController vc) async {
@@ -371,7 +424,8 @@ class _MealVoiceTestScreenState extends State<MealVoiceTestScreen> {
   }
 
   Widget _buildActionButtons(MealVoiceController controller) {
-    final isRunning = controller.state == MealVoiceState.listeningForWakeWord ||
+    final isRunning = controller.isListening ||
+        controller.state == MealVoiceState.listeningForWakeWord ||
         controller.state == MealVoiceState.listeningToUser;
 
     return Row(
@@ -416,8 +470,11 @@ class _MealVoiceTestScreenState extends State<MealVoiceTestScreen> {
             const SizedBox(height: 8),
             _statusRow('Wake Word', true),
             _statusRow('Speech Recognition', controller.microphoneAvailable),
+            _statusRow('Sarvam STT', controller.sarvamAvailable),
             _statusRow('TTS', controller.ttsAvailable),
-            _statusRow('Cart Integration', controller.lastCommand != null || controller.state != MealVoiceState.idle),
+            _statusRow('Cart Integration', controller.sarvamAvailable),
+            if (controller.batteryOptimizationWarning)
+              _statusRow('Battery Optimization', false),
           ],
         ),
       ),

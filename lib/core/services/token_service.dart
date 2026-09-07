@@ -6,6 +6,7 @@ class TokenService {
   static const _emailKey = 'session_email';
   static const _uidKey = 'session_uid';
   static const _roleKey = 'user_role';
+  static const _userNameKey = 'user_name';
 
   final FlutterSecureStorage _storage;
 
@@ -38,11 +39,13 @@ class TokenService {
     required String email,
     required String uid,
     required String role,
+    String? name,
   }) async {
     await Future.wait([
       saveEmail(email),
       _storage.write(key: _uidKey, value: uid),
       _storage.write(key: _roleKey, value: role),
+      if (name != null) _storage.write(key: _userNameKey, value: name),
     ]);
   }
 
@@ -58,6 +61,14 @@ class TokenService {
     return await _storage.read(key: _roleKey);
   }
 
+  Future<String?> getUserName() async {
+    return await _storage.read(key: _userNameKey);
+  }
+
+  Future<void> saveUserName(String name) async {
+    await _storage.write(key: _userNameKey, value: name);
+  }
+
   Future<void> updateAccessToken(String token) async {
     await _storage.write(key: _accessTokenKey, value: token);
   }
@@ -69,6 +80,7 @@ class TokenService {
       _storage.delete(key: _emailKey),
       _storage.delete(key: _uidKey),
       _storage.delete(key: _roleKey),
+      _storage.delete(key: _userNameKey),
     ]);
   }
 

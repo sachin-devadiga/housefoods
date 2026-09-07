@@ -24,6 +24,8 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
         private const val TAG = "MEAL_SpeechRec"
         private const val COMMAND_LISTEN_TIMEOUT_MS = 10000L
         private const val RESTART_DELAY_MS = 300L
+        private const val ERROR_BACKOFF_BASE_MS = 2000L
+        private const val ERROR_BACKOFF_MAX_MS = 30000L
 
         private val WAKE_PHRASES = listOf(
             "hi meal", "hey meal", "hi meil", "hey meil",
@@ -45,6 +47,9 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
     private var commandResults = StringBuilder()
     private val mainHandler = Handler(Looper.getMainLooper())
     private var commandTimeoutRunnable: Runnable? = null
+
+    // Backoff: prevent tight error loops when speech recognizer keeps failing
+    private var consecutiveErrors = 0
 
     override fun initialize(context: Context, onDetected: WakeWordEngine.OnWakeWordDetected, onEvent: WakeWordEngine.OnEngineEvent) {
         this.context = context
@@ -207,13 +212,26 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
             override fun onError(error: Int) {
                 Log.w(TAG, "Recognition error: $error")
                 if (isRunning && !isCapturingCommand && error != SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
-                    restartListening()
+                    consecutiveErrors++
+                    val backoffMs = minOf(
+                        ERROR_BACKOFF_BASE_MS * consecutiveErrors,
+                        ERROR_BACKOFF_MAX_MS
+                    )
+                    if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                        // Non-critical: short backoff
+                        Log.d(TAG, "No match — retrying in ${backoffMs}ms (errors: $consecutiveErrors)")
+                    } else {
+                        // Critical error: longer backoff
+                        Log.w(TAG, "Error $error — retrying in ${backoffMs}ms (errors: $consecutiveErrors)")
+                    }
+                    restartListeningWithDelay(backoffMs)
                 }
             }
 
             override fun onResults(results: Bundle?) {
                 // FIX #27: Only process if NOT in command capture mode
                 if (isRunning && !isCapturingCommand) {
+                    consecutiveErrors = 0 // Reset backoff on success
                     processWakeWordResults(results)
                     if (isRunning && !isCapturingCommand) {
                         restartListening()
@@ -377,6 +395,10 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
      * FIX #27: resetListening resets isCapturingCommand before restarting.
      */
     private fun restartListening() {
+        restartListeningWithDelay(RESTART_DELAY_MS)
+    }
+
+    private fun restartListeningWithDelay(delayMs: Long) {
         try {
             speechRecognizer?.stopListening()
             mainHandler.postDelayed({
@@ -388,7 +410,7 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to restart", e)
                 }
-            }, RESTART_DELAY_MS)
+            }, delayMs)
         } catch (e: Exception) {
             Log.e(TAG, "Error restarting", e)
         }
