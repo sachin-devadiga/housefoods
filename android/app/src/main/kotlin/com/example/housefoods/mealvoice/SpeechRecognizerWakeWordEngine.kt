@@ -57,6 +57,8 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
 
     // Backoff: prevent tight error loops when speech recognizer keeps failing
     private var consecutiveErrors = 0
+    // Flag: true after wake word detected in this session — prevents restartListening
+    private var wakeDetectedThisSession = false
 
     override fun initialize(context: Context, onDetected: WakeWordEngine.OnWakeWordDetected, onEvent: WakeWordEngine.OnEngineEvent) {
         this.context = context
@@ -106,6 +108,7 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
             isCapturingCommand = false
             commandFinalized = false
             consecutiveErrors = 0
+            wakeDetectedThisSession = false
             Log.i(TAG, "Wake-word detection started")
             onEventCallback?.onEvent("log", "Listening for 'Hi MEAL'")
             return true
@@ -267,10 +270,14 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
                 onEventCallback?.onEvent("log", "Wake results: ${matches?.joinToString(", ") ?: "empty"}")
                 // FIX #27: Only process if NOT in command capture mode
                 if (isRunning && !isCapturingCommand) {
-                    consecutiveErrors = 0 // Reset backoff on success
-                    processWakeWordResults(results)
-                    if (isRunning && !isCapturingCommand) {
+                    consecutiveErrors = 0
+                    if (!wakeDetectedThisSession) {
+                        processWakeWordResults(results)
+                    }
+                    if (isRunning && !isCapturingCommand && !wakeDetectedThisSession) {
                         restartListening()
+                    } else if (wakeDetectedThisSession) {
+                        Log.i(TAG, "Wake detected — not restarting native listener")
                     }
                 }
             }
@@ -281,7 +288,7 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
                     Log.d(TAG, "Wake partial: $partial")
                     onEventCallback?.onEvent("log", "Partial: ${partial.firstOrNull() ?: ""}")
                 }
-                if (isRunning && !isCapturingCommand) {
+                if (isRunning && !isCapturingCommand && !wakeDetectedThisSession) {
                     processWakeWordResults(partialResults)
                 }
             }
@@ -290,19 +297,21 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
         }
     }
 
-    private fun processWakeWordResults(results: Bundle?) {
-        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) ?: return
+    private fun processWakeWordResults(results: Bundle?): Boolean {
+        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) ?: return false
         for (match in matches) {
             val lower = match.lowercase().trim()
             for (phrase in WAKE_PHRASES) {
                 if (lower.contains(phrase)) {
                     Log.i(TAG, "WAKE WORD DETECTED: $match")
+                    wakeDetectedThisSession = true
                     onDetectedCallback?.onDetected()
                     onEventCallback?.onEvent("log", "Wake word detected: $match")
-                    return
+                    return true
                 }
             }
         }
+        return false
     }
 
     // ─── Phase 2: Command Capture Listener ───
