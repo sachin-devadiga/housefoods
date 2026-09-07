@@ -28,10 +28,21 @@ class MealVoiceService : Service() {
         private const val TAG = "MEAL_Service"
         private const val CHANNEL_ID = "meal_voice_channel"
         private const val NOTIFICATION_ID = 9999
+        private const val WAKE_WORD_NOTIFICATION_ID = 9998
 
         private var instance: MealVoiceService? = null
 
         fun getInstance(): MealVoiceService? = instance
+
+        fun hasPendingWakeWord(context: Context): Boolean {
+            return context.getSharedPreferences("meal_voice_prefs", Context.MODE_PRIVATE)
+                .getBoolean("pending_wake_word", false)
+        }
+
+        fun clearPendingWakeWord(context: Context) {
+            context.getSharedPreferences("meal_voice_prefs", Context.MODE_PRIVATE)
+                .edit().remove("pending_wake_word").apply()
+        }
     }
 
     // FIX #32: Instance-level state, not static
@@ -161,9 +172,18 @@ class MealVoiceService : Service() {
      */
     private fun onWakeWordDetected() {
         Log.i(TAG, "=== WAKE WORD DETECTED ===")
-        bridge?.sendEvent("wakeWordDetected", System.currentTimeMillis().toString())
-        updateNotification("Wake word detected! Listening for command...")
-        // Do NOT start command capture here — Flutter handles it via MethodChannel
+
+        if (bridge != null) {
+            // Bridge is alive — send event directly to Flutter
+            bridge?.sendEvent("wakeWordDetected", System.currentTimeMillis().toString())
+            updateNotification("Wake word detected! Listening for command...")
+        } else {
+            // Bridge is dead (app killed) — save pending flag + show actionable notification
+            Log.i(TAG, "Bridge is null — saving pending wake word flag")
+            getSharedPreferences("meal_voice_prefs", Context.MODE_PRIVATE)
+                .edit().putBoolean("pending_wake_word", true).apply()
+            showWakeWordNotification()
+        }
     }
 
     /**
@@ -229,6 +249,16 @@ class MealVoiceService : Service() {
         }
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(channel)
+
+        // Separate channel for wake word alerts (high importance so it heads-up)
+        val alertChannel = NotificationChannel(
+            "meal_voice_wake_word",
+            "MEAL Wake Word Alert",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Notifies when MEAL hears 'Hi MEAL'"
+        }
+        manager.createNotificationChannel(alertChannel)
     }
 
     private fun buildNotification(text: String): Notification {
@@ -253,5 +283,27 @@ class MealVoiceService : Service() {
     private fun updateNotification(text: String) {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(NOTIFICATION_ID, buildNotification(text))
+    }
+
+    private fun showWakeWordNotification() {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("meal_voice_wake_word", true)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this, 1, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(this, "meal_voice_wake_word")
+            .setContentTitle("MEAL heard you!")
+            .setContentText("Tap to place your order")
+            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .build()
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(WAKE_WORD_NOTIFICATION_ID, notification)
     }
 }
