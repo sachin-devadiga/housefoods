@@ -272,6 +272,13 @@ class MealVoiceController extends ChangeNotifier {
         _handleWakeWordDetected(event.timestamp);
         break;
       case EngineStateChanged():
+        // FIX: Don't overwrite state when awaiting confirmation — engine is
+        // being restarted in background for capture, but UI must stay on
+        // confirmation state so user knows to say "Yes" or "No".
+        if (_awaitingConfirmation || _awaitingFinalConfirmation) {
+          _addLog('Engine state change ignored — awaiting confirmation');
+          break;
+        }
         _state = event.newState;
         _isListening = event.newState == MealVoiceState.listeningForWakeWord;
         break;
@@ -521,6 +528,7 @@ class MealVoiceController extends ChangeNotifier {
       notifyListeners();
       await _speak(msg);
       _startConfirmationTimeout();
+      await _restartEngineForConfirmation();
       return;
     }
 
@@ -565,6 +573,8 @@ class MealVoiceController extends ChangeNotifier {
     await _speak(_ttsResponse);
     _addLog('Confirmation: $_ttsResponse');
     _startConfirmationTimeout();
+    // Restart engine so it can capture user's Yes/No response
+    await _restartEngineForConfirmation();
   }
 
   /// Handle the user's confirmation response.
@@ -672,6 +682,7 @@ class MealVoiceController extends ChangeNotifier {
     notifyListeners();
     await _speak(_ttsResponse);
     _startConfirmationTimeout();
+    await _restartEngineForConfirmation();
   }
 
   /// FIX #6: User confirmed clearing cart — clear and re-add.
@@ -805,6 +816,22 @@ class MealVoiceController extends ChangeNotifier {
     _returnToWakeWordListening();
   }
 
+  /// Restart native engine for listening to confirmation response (Yes/No).
+  /// Only needed when Sarvam path destroyed the engine.
+  Future<void> _restartEngineForConfirmation() async {
+    if (!_sarvamAvailable) return; // Native path: engine is still alive
+    _addLog('Restarting engine for confirmation...');
+    try {
+      await _service.startListening();
+      // Brief delay for engine to initialize, then switch to command capture
+      await Future.delayed(const Duration(milliseconds: 400));
+      await _service.startCommandCapture();
+      _addLog('Engine restarted for confirmation listening');
+    } catch (e) {
+      _addLog('Failed to restart engine for confirmation: $e');
+    }
+  }
+
   /// Handle "place order" voice command — requires authorization.
   Future<void> _handlePlaceOrder() async {
     if (_orderHandler == null || _orderHandler!.isCartEmpty) {
@@ -876,6 +903,7 @@ class MealVoiceController extends ChangeNotifier {
 
     await _speak(_ttsResponse);
     _startConfirmationTimeout();
+    await _restartEngineForConfirmation();
   }
 
   /// Ask final confirmation via callback.
@@ -887,6 +915,7 @@ class MealVoiceController extends ChangeNotifier {
 
     await _speak(_ttsResponse);
     _startConfirmationTimeout();
+    await _restartEngineForConfirmation();
   }
 
   /// Handle final yes/no after authorization.
@@ -1071,12 +1100,6 @@ class MealVoiceController extends ChangeNotifier {
   }
 
   Future<void> startListening() async {
-    // Prevent duplicate sessions
-    if (_isListening) {
-      _addLog('Already listening — ignoring duplicate start');
-      return;
-    }
-
     if (!_permissionGranted) {
       await requestPermission();
       if (!_permissionGranted) return;
@@ -1089,8 +1112,6 @@ class MealVoiceController extends ChangeNotifier {
     _notFoundItems.clear();
     _consecutiveSttFailures = 0;
 
-    // Always use native engine for wake word (works in background via foreground service)
-    // Command processing uses Sarvam STT (better accuracy) if available
     final started = await _service.startListening();
     if (started) {
       _isListening = true;

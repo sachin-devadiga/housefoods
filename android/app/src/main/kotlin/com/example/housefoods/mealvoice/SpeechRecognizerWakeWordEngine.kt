@@ -400,29 +400,18 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
 
     /**
      * Suppress the Android system "tin" sound that plays when SpeechRecognizer starts.
-     * Mutes all audio streams briefly so the recognition startup chime is silenced.
+     * Only mutes NOTIFICATION and SYSTEM streams — never MUSIC (used by TTS/audioplayers).
      */
     private fun suppressTinSound() {
         try {
-            val streams = intArrayOf(
-                AudioManager.STREAM_NOTIFICATION,
-                AudioManager.STREAM_SYSTEM,
-                AudioManager.STREAM_MUSIC,
-                AudioManager.STREAM_ALARM,
-                AudioManager.STREAM_ACCESSIBILITY
-            )
-            for (stream in streams) {
-                try {
-                    audioManager?.adjustStreamVolume(stream, AudioManager.ADJUST_MUTE, 0)
-                } catch (_: Exception) {}
-            }
+            audioManager?.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, AudioManager.ADJUST_MUTE, 0)
+            audioManager?.adjustStreamVolume(AudioManager.STREAM_SYSTEM, AudioManager.ADJUST_MUTE, 0)
             mainHandler.postDelayed({
-                for (stream in streams) {
-                    try {
-                        audioManager?.adjustStreamVolume(stream, AudioManager.ADJUST_UNMUTE, 0)
-                    } catch (_: Exception) {}
-                }
-            }, 1500)
+                try {
+                    audioManager?.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, AudioManager.ADJUST_UNMUTE, 0)
+                    audioManager?.adjustStreamVolume(AudioManager.STREAM_SYSTEM, AudioManager.ADJUST_UNMUTE, 0)
+                } catch (_: Exception) {}
+            }, 1000)
         } catch (_: Exception) {}
     }
 
