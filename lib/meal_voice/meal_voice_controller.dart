@@ -324,10 +324,7 @@ class MealVoiceController extends ChangeNotifier {
     _notFoundItems.clear();
     notifyListeners();
 
-    // Stop native engine so it doesn't interfere with Sarvam command capture
-    await _service.stopEngine();
-
-    // Speak natural greeting
+    // Speak greeting FIRST while native engine is still alive
     final hour = DateTime.now().hour;
     String timeGreeting;
     if (hour < 12) {
@@ -346,13 +343,14 @@ class MealVoiceController extends ChangeNotifier {
     _addLog('Greeting: $greeting');
 
     if (_sarvamAvailable) {
-      // Use Sarvam cloud STT for command (better accuracy)
+      // Sarvam path: destroy native engine to free mic for flutter_sound recording
+      await _service.stopEngine();
       _addLog('Listening for command via Sarvam STT...');
       _captureWithSarvam();
     } else {
-      // Fallback to native STT for command
-      await _service.startCommandCapture();
+      // Native path: engine stays alive, switch to command capture mode
       _addLog('Listening for command via native STT...');
+      await _service.startCommandCapture();
     }
   }
 
@@ -962,9 +960,12 @@ class MealVoiceController extends ChangeNotifier {
     _pendingItems = [];
     _isProcessing = false;
 
-    // CRITICAL FIX: stopEngine() destroyed the engine object (set to null).
-    // restartWakeWordListening() does nothing on a null engine.
-    // startListening() creates a brand new engine since isRunning=false after stopEngine().
+    // Both calls needed to handle both paths:
+    // - restartWakeWordListening(): works if engine is alive (native command capture path)
+    // - startListening(): creates new engine if it was destroyed (Sarvam path)
+    // If engine is alive, startListening() is a no-op (startVoiceService returns "already running")
+    // If engine is null, restartWakeWordListening() is a no-op (?.safe call)
+    _service.restartWakeWordListening();
     _service.startListening();
     _state = MealVoiceState.listeningForWakeWord;
     _isListening = true;
