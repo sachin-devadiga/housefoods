@@ -32,7 +32,10 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
         private val WAKE_PHRASES = listOf(
             "hi meal", "hey meal", "hi meil", "hey meil",
             "hi mel", "hey mel", "hi mealin", "hey mealin",
-            "hello meal", "ok meal"
+            "hello meal", "ok meal",
+            "hi mail", "hey mail", "hi mil", "hey mil",
+            "high meal", "high mail", "high mil",
+            "hi mayo", "hey mayo"
         )
     }
 
@@ -89,14 +92,20 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
         }
 
         try {
-            speechRecognizer?.destroy()
-            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context!!)
+            if (speechRecognizer == null) {
+                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context!!)
+                Log.i(TAG, "Created new SpeechRecognizer")
+            } else {
+                speechRecognizer?.cancel()
+                Log.i(TAG, "Reusing existing SpeechRecognizer")
+            }
 
             speechRecognizer?.setRecognitionListener(createWakeWordListener())
             speechRecognizer?.startListening(createRecognitionIntent())
             isRunning = true
             isCapturingCommand = false
             commandFinalized = false
+            consecutiveErrors = 0
             Log.i(TAG, "Wake-word detection started")
             onEventCallback?.onEvent("log", "Listening for 'Hi MEAL'")
             return true
@@ -187,7 +196,8 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
     private fun createRecognitionIntent(): Intent {
         return Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US.toString())
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-IN")
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "en-IN")
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
         }
@@ -472,14 +482,12 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
         val runnable = Runnable {
             pendingRestart = null
             if (!isRunning || isCapturingCommand) return@Runnable
-            try {
-                speechRecognizer?.cancel()
-                speechRecognizer?.destroy()
-                speechRecognizer = null
-            } catch (_: Exception) {}
 
             if (recreate) {
                 try {
+                    speechRecognizer?.destroy()
+                    speechRecognizer = null
+                    Thread.sleep(500)
                     speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context!!)
                     Log.i(TAG, "Recreated SpeechRecognizer")
                 } catch (e: Exception) {
@@ -491,7 +499,7 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
             try {
                 speechRecognizer?.setRecognitionListener(createWakeWordListener())
                 speechRecognizer?.startListening(createRecognitionIntent())
-                Log.i(TAG, "SpeechRecognizer restarted after ${delayMs}ms")
+                Log.i(TAG, "SpeechRecognizer restarted after ${delayMs}ms (recreate=$recreate)")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to restart after recreate", e)
             }
