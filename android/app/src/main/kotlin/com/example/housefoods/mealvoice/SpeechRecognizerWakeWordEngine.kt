@@ -2,6 +2,7 @@ package com.example.housefoods.mealvoice
 
 import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -40,6 +41,7 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
     private var onEventCallback: WakeWordEngine.OnEngineEvent? = null
     private var isRunning = false
     private var isInitialized = false
+    private var audioManager: AudioManager? = null
 
     // Phase 2: Command capture state
     private var isCapturingCommand = false
@@ -55,6 +57,7 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
         this.context = context
         this.onDetectedCallback = onDetected
         this.onEventCallback = onEvent
+        this.audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         isInitialized = true
         Log.i(TAG, "Engine initialized")
         onEventCallback?.onEvent("log", "SpeechRecognizer engine initialized")
@@ -88,6 +91,7 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context!!)
 
             speechRecognizer?.setRecognitionListener(createWakeWordListener())
+            suppressTinSound()
             speechRecognizer?.startListening(createRecognitionIntent())
             isRunning = true
             isCapturingCommand = false
@@ -129,6 +133,7 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
             mainHandler.postDelayed({
                 try {
                     speechRecognizer?.setRecognitionListener(createCommandCaptureListener())
+                    suppressTinSound()
                     speechRecognizer?.startListening(createRecognitionIntent())
                     scheduleCommandTimeout()
                     Log.i(TAG, "Command capture started")
@@ -172,6 +177,7 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
         try {
             speechRecognizer?.stopListening()
             speechRecognizer?.setRecognitionListener(createWakeWordListener())
+            suppressTinSound()
             speechRecognizer?.startListening(createRecognitionIntent())
             Log.i(TAG, "Wake-word listening restarted")
         } catch (e: Exception) {
@@ -392,6 +398,21 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
     }
 
     /**
+     * Suppress the Android system "tin" sound that plays when SpeechRecognizer starts.
+     * Mutes the notification audio stream briefly during recognition start.
+     */
+    private fun suppressTinSound() {
+        try {
+            audioManager?.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, AudioManager.ADJUST_MUTE, 0)
+            mainHandler.postDelayed({
+                try {
+                    audioManager?.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, AudioManager.ADJUST_UNMUTE, 0)
+                } catch (_: Exception) {}
+            }, 800)
+        } catch (_: Exception) {}
+    }
+
+    /**
      * FIX #27: resetListening resets isCapturingCommand before restarting.
      */
     private fun restartListening() {
@@ -406,6 +427,7 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
                     isCapturingCommand = false // FIX #27: reset before restart
                     commandFinalized = false
                     speechRecognizer?.setRecognitionListener(createWakeWordListener())
+                    suppressTinSound()
                     speechRecognizer?.startListening(createRecognitionIntent())
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to restart", e)

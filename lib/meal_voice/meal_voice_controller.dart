@@ -130,13 +130,24 @@ class MealVoiceController extends ChangeNotifier {
   bool _batteryOptimizationWarning = false;
   bool get batteryOptimizationWarning => _batteryOptimizationWarning;
 
-  /// Speak text — prefer Sarvam TTS, fall back to device TTS.
+  /// Speak text — prefer device TTS (instant, works in background), fall back to Sarvam.
   /// Never throws — always tries both if available.
   Future<void> _speak(String text) async {
     if (text.isEmpty) return;
     _isSpeaking = true;
     try {
-      // Try Sarvam TTS first
+      // Try device TTS first — it's instant and works in background
+      if (_ttsAvailable) {
+        try {
+          _addLog('TTS: Speaking via device TTS (${text.length} chars)');
+          await _tts.speak(text);
+          _addLog('TTS: Device TTS speak completed');
+          return;
+        } catch (e) {
+          _addLog('TTS: Device TTS failed: $e — trying Sarvam');
+        }
+      }
+      // Fallback to Sarvam TTS (slower, needs network)
       if (_sarvamAvailable) {
         try {
           final lang = _settings != null
@@ -149,24 +160,13 @@ class MealVoiceController extends ChangeNotifier {
             _addLog('TTS: Sarvam speak completed');
             return;
           } else {
-            _addLog('TTS: Sarvam returned false — falling back to device TTS');
+            _addLog('TTS: Sarvam returned false');
           }
         } catch (e) {
-          _addLog('TTS: Sarvam exception: $e — falling back to device TTS');
+          _addLog('TTS: Sarvam exception: $e');
         }
       }
-      // Fallback to device TTS
-      if (_ttsAvailable) {
-        try {
-          _addLog('TTS: Speaking via device TTS (${text.length} chars)');
-          await _tts.speak(text);
-          _addLog('TTS: Device TTS speak completed');
-        } catch (e) {
-          _addLog('TTS: Device TTS also failed: $e');
-        }
-      } else {
-        _addLog('TTS: No TTS available — response not spoken');
-      }
+      _addLog('TTS: No TTS available — response not spoken');
     } finally {
       _isSpeaking = false;
     }

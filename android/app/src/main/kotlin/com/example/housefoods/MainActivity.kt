@@ -27,12 +27,10 @@ class MainActivity : FlutterActivity() {
         pendingWakeWordIntent = intent.getBooleanExtra("meal_voice_wake_word", false)
         if (pendingWakeWordIntent) {
             MealVoiceService.clearPendingWakeWord(this)
-            // Start the voice engine immediately so it's ready
-            startVoiceServiceWithEngine()
-        } else {
-            // Normal launch — create service without starting engine
-            startVoiceService()
         }
+        // Always create service without starting engine
+        // Engine starts when Flutter calls startListening via MethodChannel
+        startVoiceService()
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
