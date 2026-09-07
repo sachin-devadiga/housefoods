@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'meal_voice_controller.dart';
 import 'meal_voice_state.dart';
+import 'meal_voice_settings.dart';
 import '../features/customer/presentation/providers/cart_provider.dart';
 import '../features/customer/presentation/providers/kitchen_provider.dart';
 import '../core/services/voice_order_security_service.dart';
@@ -56,10 +57,13 @@ class _MealVoiceTestScreenState extends State<MealVoiceTestScreen> {
       }
 
       vc.requestAuthorization = () => _showPinDialog(vc);
+      final settings = MealVoiceSettings();
+      await settings.load();
       await vc.initialize(
         kitchenProvider: kitchenProvider,
         cartProvider: cartProvider,
         securityService: securityService,
+        settings: settings,
       );
 
       // Request permission and start listening

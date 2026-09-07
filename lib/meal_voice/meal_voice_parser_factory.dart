@@ -51,6 +51,21 @@ class MealVoiceParserFactory {
     return success;
   }
 
+  /// Initialize Gemini with a user-provided API key (runtime).
+  static Future<bool> initializeGeminiWithKey(String apiKey) async {
+    final parser = getGeminiParser();
+    final success = await parser.initializeWithKey(apiKey);
+    _geminiInitialized = true;
+
+    if (success) {
+      debugPrint('[MEAL Parser] Gemini parser ready (user key)');
+    } else {
+      debugPrint('[MEAL Parser] Gemini init failed with user key');
+    }
+
+    return success;
+  }
+
   /// Check if Gemini is available.
   static bool get isGeminiAvailable => _geminiParser?.isAvailable ?? false;
 

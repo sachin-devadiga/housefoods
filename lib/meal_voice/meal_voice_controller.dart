@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../features/customer/presentation/providers/cart_provider.dart';
 import '../features/customer/presentation/providers/kitchen_provider.dart';
 import '../core/services/voice_order_security_service.dart';
@@ -17,6 +18,7 @@ import 'meal_voice_tts_service.dart';
 import 'meal_voice_order_handler.dart';
 import 'sarvam_stt_service.dart';
 import 'sarvam_tts_service.dart';
+import 'meal_voice_settings.dart';
 
 /// Provider-based controller for MEAL voice engine.
 ///
@@ -34,6 +36,10 @@ class MealVoiceController extends ChangeNotifier {
   MealVoiceCommandParser? _parser;
   MealVoiceOrderHandler? _orderHandler;
   VoiceOrderSecurityService? _securityService;
+
+  // User settings (language, speaker, AI key)
+  MealVoiceSettings? _settings;
+  MealVoiceSettings? get settings => _settings;
 
   // State
   MealVoiceState _state = MealVoiceState.idle;
@@ -133,9 +139,12 @@ class MealVoiceController extends ChangeNotifier {
       // Try Sarvam TTS first
       if (_sarvamAvailable) {
         try {
-          final lang = SarvamTTSService.detectLanguage(text);
-          _addLog('TTS: Speaking via Sarvam (${text.length} chars, lang=$lang)');
-          final ok = await _sarvamTTS.speak(text, languageCode: lang);
+          final lang = _settings != null
+              ? _settings!.ttsLanguageCode
+              : SarvamTTSService.detectLanguage(text);
+          final speaker = _settings?.speaker ?? 'shruti';
+          _addLog('TTS: Speaking via Sarvam (${text.length} chars, lang=$lang, speaker=$speaker)');
+          final ok = await _sarvamTTS.speak(text, languageCode: lang, speaker: speaker);
           if (ok) {
             _addLog('TTS: Sarvam speak completed');
             return;
@@ -169,18 +178,31 @@ class MealVoiceController extends ChangeNotifier {
     CartProvider? cartProvider,
     VoiceOrderSecurityService? securityService,
     MealVoiceCommandParser? parser,
+    MealVoiceSettings? settings,
   }) async {
     _securityService = securityService;
+    _settings = settings ?? MealVoiceSettings();
+    await _settings!.load();
     _parser = parser ?? MealVoiceParserFactory.getParser();
 
-    // Initialize Gemini parser in background
-    MealVoiceParserFactory.initializeGemini().then((available) {
-      if (available) {
-        _parser = MealVoiceParserFactory.getParser();
-        _addLog('Gemini parser available');
-        notifyListeners();
-      }
-    });
+    // Initialize AI parser based on user settings
+    if (_settings!.hasAiKey && _settings!.aiProvider == 'gemini') {
+      MealVoiceParserFactory.initializeGeminiWithKey(_settings!.geminiApiKey!).then((ok) {
+        if (ok) {
+          _parser = MealVoiceParserFactory.getParser();
+          _addLog('Gemini parser ready (user key)');
+          notifyListeners();
+        }
+      });
+    } else {
+      MealVoiceParserFactory.initializeGemini().then((available) {
+        if (available) {
+          _parser = MealVoiceParserFactory.getParser();
+          _addLog('Gemini parser available');
+          notifyListeners();
+        }
+      });
+    }
 
     if (kitchenProvider != null && cartProvider != null) {
       _orderHandler = MealVoiceOrderHandler(
@@ -219,6 +241,25 @@ class MealVoiceController extends ChangeNotifier {
 
     _addLog('Engine initialized (parser: ${_parser?.parserName ?? "unknown"}, TTS: $_ttsAvailable, Sarvam: $_sarvamAvailable)');
     notifyListeners();
+
+    // Check for pending wake word from background notification
+    _checkPendingWakeWord();
+  }
+
+  /// Check if native service saved a pending wake word while app was killed.
+  /// If so, process it immediately (the event may have been lost).
+  void _checkPendingWakeWord() {
+    SharedPreferences.getInstance().then((prefs) {
+      final pending = prefs.getBool('pending_wake_word') ?? false;
+      if (pending) {
+        prefs.remove('pending_wake_word');
+        _addLog('Pending wake word found — processing');
+        // Delay slightly to ensure engine is ready
+        Future.delayed(const Duration(milliseconds: 500), () {
+          _handleWakeWordDetected(DateTime.now());
+        });
+      }
+    });
   }
 
   /// Handle events from the voice engine.
@@ -1124,7 +1165,8 @@ class MealVoiceController extends ChangeNotifier {
       _addLog('STT: Audio captured, sending to backend proxy...');
 
       // Send to STT via backend
-      final transcript = await _sarvamSTT.transcribeFile(audioPath);
+      final sttLang = _settings?.sttLanguageCode;
+      final transcript = await _sarvamSTT.transcribeFile(audioPath, languageCode: sttLang ?? 'auto');
       final sttError = _sarvamSTT.lastError;
 
       // Clean up audio file
@@ -1198,9 +1240,22 @@ class MealVoiceController extends ChangeNotifier {
   /// Called when app resumes from background.
   void onAppResumed() {
     _addLog('App resumed');
+    // Re-initialize TTS services — tokens may have expired in background
+    _reinitTts();
     if (_state != MealVoiceState.stopped && !_isListening) {
       _addLog('Restarting voice listener');
       startListening();
+    }
+  }
+
+  /// Re-initialize TTS tokens when app comes to foreground.
+  Future<void> _reinitTts() async {
+    try {
+      await _sarvamTTS.initialize();
+      _ttsAvailable = await _tts.initialize();
+      _addLog('TTS re-initialized on resume');
+    } catch (e) {
+      _addLog('TTS re-init error: $e');
     }
   }
 

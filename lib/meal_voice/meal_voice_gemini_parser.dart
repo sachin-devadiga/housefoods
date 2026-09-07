@@ -97,22 +97,35 @@ User: "Order some food"
 → {"intent":"needs_clarification","items":[],"restaurant":null,"clarification_needed":"What would you like to order?"}
 ''';
 
-  /// Initialize the Gemini model.
+  /// Initialize the Gemini model with compile-time API key.
   Future<bool> initialize() async {
     final apiKey = AppConstants.geminiApiKey;
     if (apiKey.isEmpty) {
-      debugPrint('[MEAL Gemini] No API key configured');
+      debugPrint('[MEAL Gemini] No compile-time API key configured');
       _isAvailable = false;
       return false;
     }
+    return _initWithKey(apiKey);
+  }
 
+  /// Initialize with a user-provided API key (runtime).
+  Future<bool> initializeWithKey(String apiKey) async {
+    if (apiKey.isEmpty) {
+      debugPrint('[MEAL Gemini] Empty API key');
+      _isAvailable = false;
+      return false;
+    }
+    return _initWithKey(apiKey);
+  }
+
+  Future<bool> _initWithKey(String apiKey) async {
     try {
       _model = GenerativeModel(
         model: 'gemini-1.5-flash',
         apiKey: apiKey,
         systemInstruction: Content.system(_systemPrompt),
         generationConfig: GenerationConfig(
-          temperature: 0.1, // Low temperature for consistent structured output
+          temperature: 0.1,
           topP: 0.8,
           maxOutputTokens: 512,
         ),

@@ -16,6 +16,7 @@ import '../my_favorites_screen.dart';
 import '../../../../rewards/presentation/screens/wallet_screen.dart';
 import '../../../../../meal_voice/meal_voice_screen.dart';
 import '../voice_pin_setup_screen.dart';
+import '../meal_voice_settings_screen.dart';
 
 class ProfileTab extends StatelessWidget {
   const ProfileTab({super.key});
@@ -148,6 +149,11 @@ class ProfileTab extends StatelessWidget {
             Icons.mic, 
             "MEAL Voice Assistant", 
             () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MealVoiceTestScreen()))
+          ),
+          _buildProfileOption(
+            Icons.settings_voice, 
+            "MEAL Voice Settings", 
+            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MealVoiceSettingsScreen()))
           ),
           _buildProfileOption(
             Icons.lock_outline, 
