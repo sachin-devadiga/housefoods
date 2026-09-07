@@ -24,9 +24,10 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
     companion object {
         private const val TAG = "MEAL_SpeechRec"
         private const val COMMAND_LISTEN_TIMEOUT_MS = 10000L
-        private const val RESTART_DELAY_MS = 300L
+        private const val RESTART_DELAY_MS = 500L
         private const val ERROR_BACKOFF_BASE_MS = 2000L
-        private const val ERROR_BACKOFF_MAX_MS = 30000L
+        private const val ERROR_BACKOFF_MAX_MS = 10000L
+        private const val MAX_CONSECUTIVE_ERRORS = 10
 
         private val WAKE_PHRASES = listOf(
             "hi meal", "hey meal", "hi meil", "hey meil",
@@ -42,6 +43,7 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
     private var isRunning = false
     private var isInitialized = false
     private var audioManager: AudioManager? = null
+    private var pendingRestart: Runnable? = null
 
     // Phase 2: Command capture state
     private var isCapturingCommand = false
@@ -208,10 +210,6 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
 
             override fun onEndOfSpeech() {
                 Log.d(TAG, "Speech ended (wake phase)")
-                // Only restart if still in wake-word mode
-                if (isRunning && !isCapturingCommand) {
-                    restartListening()
-                }
             }
 
             override fun onError(error: Int) {
@@ -231,18 +229,25 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
                 onEventCallback?.onEvent("log", "SpeechRecognizer error: $errorName ($error)")
                 if (isRunning && !isCapturingCommand && error != SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
                     consecutiveErrors++
+                    if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+                        Log.e(TAG, "Too many consecutive errors ($consecutiveErrors) — stopping engine")
+                        onEventCallback?.onEvent("error", "SpeechRecognizer failed after $consecutiveErrors errors. Please restart voice.")
+                        isRunning = false
+                        return
+                    }
                     val backoffMs = minOf(
                         ERROR_BACKOFF_BASE_MS * consecutiveErrors,
                         ERROR_BACKOFF_MAX_MS
                     )
                     if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
-                        // Non-critical: short backoff
                         Log.d(TAG, "No match — retrying in ${backoffMs}ms (errors: $consecutiveErrors)")
                     } else {
-                        // Critical error: longer backoff
-                        Log.w(TAG, "Error $error — retrying in ${backoffMs}ms (errors: $consecutiveErrors)")
+                        Log.w(TAG, "Error $error ($errorName) — will recreate recognizer in ${backoffMs}ms (errors: $consecutiveErrors)")
                     }
-                    restartListeningWithDelay(backoffMs)
+                    val needsRecreate = error == SpeechRecognizer.ERROR_CLIENT ||
+                        error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
+                        error == SpeechRecognizer.ERROR_AUDIO
+                    recreateAndRestartWithDelay(backoffMs, needsRecreate)
                 }
             }
 
@@ -261,6 +266,11 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
             }
 
             override fun onPartialResults(partialResults: Bundle?) {
+                val partial = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                if (partial != null && partial.isNotEmpty()) {
+                    Log.d(TAG, "Wake partial: $partial")
+                    onEventCallback?.onEvent("log", "Partial: ${partial.firstOrNull() ?: ""}")
+                }
                 if (isRunning && !isCapturingCommand) {
                     processWakeWordResults(partialResults)
                 }
@@ -429,29 +439,65 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
         } catch (_: Exception) {}
     }
 
-    /**
-     * FIX #27: resetListening resets isCapturingCommand before restarting.
-     */
     private fun restartListening() {
         restartListeningWithDelay(RESTART_DELAY_MS)
     }
 
     private fun restartListeningWithDelay(delayMs: Long) {
-        try {
-            speechRecognizer?.stopListening()
-            mainHandler.postDelayed({
-                try {
-                    isCapturingCommand = false // FIX #27: reset before restart
-                    commandFinalized = false
-            speechRecognizer?.setRecognitionListener(createWakeWordListener())
-            speechRecognizer?.startListening(createRecognitionIntent())
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to restart", e)
-                }
-            }, delayMs)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error restarting", e)
+        cancelPendingRestart()
+        val runnable = Runnable {
+            pendingRestart = null
+            if (!isRunning || isCapturingCommand) return@Runnable
+            try {
+                isCapturingCommand = false
+                commandFinalized = false
+                speechRecognizer?.setRecognitionListener(createWakeWordListener())
+                speechRecognizer?.startListening(createRecognitionIntent())
+                Log.i(TAG, "SpeechRecognizer restarted (non-fatal)")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to restart", e)
+            }
         }
+        pendingRestart = runnable
+        mainHandler.postDelayed(runnable, delayMs)
+    }
+
+    private fun cancelPendingRestart() {
+        pendingRestart?.let { mainHandler.removeCallbacks(it) }
+        pendingRestart = null
+    }
+
+    private fun recreateAndRestartWithDelay(delayMs: Long, recreate: Boolean) {
+        cancelPendingRestart()
+        val runnable = Runnable {
+            pendingRestart = null
+            if (!isRunning || isCapturingCommand) return@Runnable
+            try {
+                speechRecognizer?.cancel()
+                speechRecognizer?.destroy()
+                speechRecognizer = null
+            } catch (_: Exception) {}
+
+            if (recreate) {
+                try {
+                    speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context!!)
+                    Log.i(TAG, "Recreated SpeechRecognizer")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to recreate SpeechRecognizer", e)
+                    return@Runnable
+                }
+            }
+
+            try {
+                speechRecognizer?.setRecognitionListener(createWakeWordListener())
+                speechRecognizer?.startListening(createRecognitionIntent())
+                Log.i(TAG, "SpeechRecognizer restarted after ${delayMs}ms")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to restart after recreate", e)
+            }
+        }
+        pendingRestart = runnable
+        mainHandler.postDelayed(runnable, delayMs)
     }
 
     override fun stop() {
@@ -459,6 +505,7 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
         isCapturingCommand = false
         commandFinalized = false
         cancelCommandTimeout()
+        cancelPendingRestart()
         try {
             speechRecognizer?.stopListening()
             speechRecognizer?.cancel()
