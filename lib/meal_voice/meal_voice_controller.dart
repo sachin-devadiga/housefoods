@@ -335,7 +335,7 @@ class MealVoiceController extends ChangeNotifier {
     if (_sarvamAvailable) {
       await _service.stopEngine();
       _addLog('Listening for command via Sarvam STT...');
-      await Future.delayed(const Duration(milliseconds: 500));
+      await Future.delayed(const Duration(milliseconds: 200));
       _captureWithSarvam();
     } else {
       _addLog('Listening for command via native STT...');

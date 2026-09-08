@@ -156,8 +156,9 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
     }
 
     /**
-     * FIX #30: Guard against double-startCommandCapture.
-     * Only start if not already capturing.
+     * Switch from wake-word listening to command capture.
+     * CRITICAL: Swaps the listener on the SAME SpeechRecognizer instance.
+     * Never destroy/recreate — mic stays alive the entire time.
      */
     fun startCommandCapture(): Boolean {
         if (!isRunning || speechRecognizer == null) {
@@ -171,28 +172,32 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
         }
 
         isCapturingCommand = true
-        commandFinalized = false // FIX #28: reset finalize flag
+        commandFinalized = false
         commandResults.clear()
+        cancelPendingRestart()
 
         try {
-            speechRecognizer?.cancel()
-            speechRecognizer?.destroy()
-            speechRecognizer = null
+            // Stop current recognition but keep the SpeechRecognizer alive
+            speechRecognizer?.stopListening()
 
+            // Swap listener immediately — mic stays on
+            speechRecognizer?.setRecognitionListener(createCommandCaptureListener())
+
+            // Restart listening with new listener
             mainHandler.postDelayed({
                 try {
-                    speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context!!)
-                    speechRecognizer?.setRecognitionListener(createCommandCaptureListener())
-                    speechRecognizer?.startListening(createRecognitionIntent())
-                    scheduleCommandTimeout()
-                    Log.i(TAG, "Command capture started (fresh recognizer)")
-                    onEventCallback?.onEvent("log", "Listening for command...")
+                    if (isRunning && isCapturingCommand && speechRecognizer != null) {
+                        speechRecognizer?.startListening(createRecognitionIntent())
+                        scheduleCommandTimeout()
+                        Log.i(TAG, "Command capture started (listener swapped)")
+                        onEventCallback?.onEvent("stateChanged", "4") // LISTENING_TO_USER
+                    }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to start command capture", e)
+                    Log.e(TAG, "Failed to start command capture after swap", e)
                     onEventCallback?.onEvent("error", "Command capture failed: ${e.message}")
                     isCapturingCommand = false
                 }
-            }, RESTART_DELAY_MS)
+            }, 200) // Short delay — just enough for stopListening to settle
 
             return true
         } catch (e: Exception) {

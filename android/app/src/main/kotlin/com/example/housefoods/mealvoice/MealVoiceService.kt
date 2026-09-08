@@ -423,9 +423,29 @@ class MealVoiceService : Service() {
 
     /**
      * Start command capture (called from Flutter via MethodChannel).
+     * Plays a confirmation beep to signal "speak now".
      */
     fun startCommandCapture() {
+        playConfirmationBeep()
         wakeWordEngine?.startCommandCapture()
+    }
+
+    /**
+     * Play a short confirmation tone to signal the user to speak.
+     */
+    private fun playConfirmationBeep() {
+        try {
+            val toneGenerator = android.media.ToneGenerator(
+                android.media.AudioManager.STREAM_NOTIFICATION,
+                80
+            )
+            toneGenerator.startTone(android.media.ToneGenerator.TONE_PROP_ACK, 150)
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                toneGenerator.release()
+            }, 200)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to play confirmation beep: ${e.message}")
+        }
     }
 
     /**
