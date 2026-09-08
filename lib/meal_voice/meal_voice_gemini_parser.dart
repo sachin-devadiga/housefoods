@@ -154,7 +154,7 @@ User: "What's good today?"
         body: jsonEncode({
           'prompt': transcript + langInstruction,
           'system_prompt': _systemPrompt,
-          'model': 'gemini-2.5-flash',
+          'model': 'gemini-2.5-flash-lite',
           'temperature': 0.1,
           'max_output_tokens': 512,
         }),

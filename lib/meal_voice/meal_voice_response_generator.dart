@@ -69,7 +69,7 @@ class MealVoiceResponseGenerator {
               'You speak naturally and casually, like a helpful friend. '
               'Keep responses short (1-2 sentences). '
               'Never identify yourself as AI. Never use markdown.',
-          'model': 'gemini-2.5-flash',
+          'model': 'gemini-2.5-flash-lite',
           'temperature': 0.7,
           'max_output_tokens': 100,
         }),
