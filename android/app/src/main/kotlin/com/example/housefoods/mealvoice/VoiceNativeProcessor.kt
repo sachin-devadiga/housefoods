@@ -1,12 +1,15 @@
 package com.example.housefoods.mealvoice
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 import java.util.Locale
 
 /**
@@ -136,7 +139,8 @@ class VoiceNativeProcessor(private val context: Context) {
      */
     fun searchMenu(query: String, authToken: String): String? {
         try {
-            val url = URL("$BACKEND_URL/api/auth/kitchens/?search=$query")
+            val encodedQuery = URLEncoder.encode(query, "UTF-8")
+            val url = URL("$BACKEND_URL/api/auth/kitchens/?search=$encodedQuery")
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 setRequestProperty("Authorization", "Bearer $authToken")
@@ -162,15 +166,20 @@ class VoiceNativeProcessor(private val context: Context) {
             return
         }
         onTtsComplete = onDone
+        val mainHandler = Handler(Looper.getMainLooper())
         tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {}
             override fun onDone(utteranceId: String?) {
-                onTtsComplete?.invoke()
-                onTtsComplete = null
+                mainHandler.post {
+                    onTtsComplete?.invoke()
+                    onTtsComplete = null
+                }
             }
             override fun onError(utteranceId: String?) {
-                onTtsComplete?.invoke()
-                onTtsComplete = null
+                mainHandler.post {
+                    onTtsComplete?.invoke()
+                    onTtsComplete = null
+                }
             }
         })
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "meal_response")

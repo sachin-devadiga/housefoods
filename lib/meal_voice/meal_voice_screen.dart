@@ -107,7 +107,7 @@ class _MealVoiceTestScreenState extends State<MealVoiceTestScreen> {
   Future<void> _showPinDialog(MealVoiceController vc) async {
     if (!mounted) return;
     final total = vc.searchResults.isNotEmpty
-        ? vc.searchResults.fold<double>(0, (sum, r) => sum + double.parse(r.menuItem.price.toString()))
+        ? vc.searchResults.fold<double>(0, (sum, r) => sum + (double.tryParse(r.menuItem.price.toString()) ?? 0.0))
         : 0.0;
 
     final token = await VoicePinDialog.show(
@@ -134,7 +134,15 @@ class _MealVoiceTestScreenState extends State<MealVoiceTestScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => context.read<MealVoiceController>().initialize(),
+            onPressed: () {
+              final vc = context.read<MealVoiceController>();
+              final kitchenProvider = context.read<KitchenProvider>();
+              final cartProvider = context.read<CartProvider>();
+              vc.initialize(
+                kitchenProvider: kitchenProvider,
+                cartProvider: cartProvider,
+              );
+            },
           ),
         ],
       ),

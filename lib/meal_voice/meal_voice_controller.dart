@@ -556,18 +556,21 @@ class MealVoiceController extends ChangeNotifier {
           return true;
         case CartAddResult.cartConflict:
           _addLog('Cart conflict — different restaurant');
+          _ttsResponse = 'You have items from a different restaurant in your cart. Clear the cart first, or say "clear cart" to start fresh.';
           _state = MealVoiceState.confirmationRequired;
           notifyListeners();
           await _speak(_ttsResponse);
           await _restartEngineForConfirmation();
           return false;
-      case CartAddResult.itemUnavailable:
-        _addLog('Item unavailable: ${searchResult.menuItem.name}');
-        return false;
-      default:
-        _addLog('Failed to add to cart');
-        return false;
-    }
+        case CartAddResult.itemUnavailable:
+          _ttsResponse = 'Sorry, ${searchResult.menuItem.name} is currently unavailable.';
+          _addLog('Item unavailable: ${searchResult.menuItem.name}');
+          return false;
+        default:
+          _ttsResponse = 'Sorry, I couldn\'t add that to your cart. Please try again.';
+          _addLog('Failed to add to cart');
+          return false;
+      }
   }
 
   Future<bool> _executeRemoveFromCart(VoiceAction action) async {

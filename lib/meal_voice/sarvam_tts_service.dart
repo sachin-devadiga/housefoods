@@ -18,6 +18,7 @@ class SarvamTTSService {
   bool _isSpeaking = false;
   Completer<void>? _speakCompleter;
   String? _authToken;
+  bool _listenerRegistered = false;
 
   bool get isInitialized => _isInitialized;
   bool get isSpeaking => _isSpeaking;
@@ -39,12 +40,15 @@ class SarvamTTSService {
       return false;
     }
 
-    _audioPlayer.onPlayerComplete.listen((_) {
-      _isSpeaking = false;
-      if (_speakCompleter != null && !_speakCompleter!.isCompleted) {
-        _speakCompleter!.complete();
-      }
-    });
+    if (!_listenerRegistered) {
+      _audioPlayer.onPlayerComplete.listen((_) {
+        _isSpeaking = false;
+        if (_speakCompleter != null && !_speakCompleter!.isCompleted) {
+          _speakCompleter!.complete();
+        }
+      });
+      _listenerRegistered = true;
+    }
 
     _isInitialized = true;
     debugPrint('[SarvamTTS] Initialized (backend proxy)');
@@ -104,6 +108,9 @@ class SarvamTTSService {
         onTimeout: () {
           debugPrint('[SarvamTTS] Speech playback timeout (30s)');
           _isSpeaking = false;
+          if (_speakCompleter != null && !_speakCompleter!.isCompleted) {
+            _speakCompleter!.complete();
+          }
         },
       );
 

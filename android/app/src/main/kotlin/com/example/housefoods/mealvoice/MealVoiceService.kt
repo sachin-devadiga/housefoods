@@ -49,12 +49,14 @@ class MealVoiceService : Service() {
     }
 
     // FIX #32: Instance-level state, not static
+    @Volatile
     var isRunning = false
         private set
 
     private var wakeWordEngine: SpeechRecognizerWakeWordEngine? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var nativeProcessor: VoiceNativeProcessor? = null
+    @Volatile
     private var isNativeProcessing = false
 
     // Bridge reference — set by MainActivity (null when in separate process)
@@ -220,6 +222,7 @@ class MealVoiceService : Service() {
         wakeWordEngine = null
         releaseWakeLock()
         isRunning = false
+        bridge?.sendEvent("stateChanged", "1") // IDLE
     }
 
     /**

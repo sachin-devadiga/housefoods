@@ -97,7 +97,7 @@ CONTEXT: History, search results, cart state provided in context. Use them for f
       final context = conversation.buildContext();
 
       // The latest user message is the last item in history
-      final currentUserMessage = history.isNotEmpty ? history.last['content']! : userTranscript;
+      final currentUserMessage = history.isNotEmpty ? (history.last['content'] ?? userTranscript) : userTranscript;
       debugPrint('[MEAL Brain] Prompt (${currentUserMessage.length} chars): ${currentUserMessage.substring(0, currentUserMessage.length > 80 ? 80 : currentUserMessage.length)}...');
 
       // Try models in order — fallback if one returns 502
