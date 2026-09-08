@@ -35,8 +35,43 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
             "hello meal", "ok meal",
             "hi mail", "hey mail", "hi mil", "hey mil",
             "high meal", "high mail", "high mil",
-            "hi mayo", "hey mayo"
+            "hi mayo", "hey mayo",
+            "hi neel", "hi anil", "hi neal", "hi neele",
+            "hi neil", "hey neel", "hey anil"
         )
+
+        /**
+         * Fuzzy match: check if text starts with hi/hey/hello/ok
+         * AND contains a word that's within edit distance 2 of "meal".
+         */
+        private fun fuzzyWakeMatch(text: String): Boolean {
+            val lower = text.lowercase().trim()
+            val greetings = listOf("hi ", "hey ", "hello ", "ok ", "high ")
+            val hasGreeting = greetings.any { lower.startsWith(it) || lower.contains(it) }
+            if (!hasGreeting) return false
+
+            // Check if any word is close to "meal"
+            val words = lower.split("\\s+".toRegex())
+            for (word in words) {
+                if (editDistance(word, "meal") <= 2 || editDistance(word, "mealin") <= 2) {
+                    return true
+                }
+            }
+            return false
+        }
+
+        private fun editDistance(a: String, b: String): Int {
+            val dp = Array(a.length + 1) { IntArray(b.length + 1) }
+            for (i in 0..a.length) dp[i][0] = i
+            for (j in 0..b.length) dp[0][j] = j
+            for (i in 1..a.length) {
+                for (j in 1..b.length) {
+                    val cost = if (a[i - 1] == b[j - 1]) 0 else 1
+                    dp[i][j] = minOf(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost)
+                }
+            }
+            return dp[a.length][b.length]
+        }
     }
 
     private var context: Context? = null
@@ -241,7 +276,10 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
                 Log.w(TAG, "Recognition error: $error ($errorName)")
                 onEventCallback?.onEvent("log", "SpeechRecognizer error: $errorName ($error)")
                 if (isRunning && !isCapturingCommand && error != SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
-                    consecutiveErrors++
+                    // FIX: NO_MATCH and SPEECH_TIMEOUT are normal when nobody is speaking — don't count them
+                    if (error != SpeechRecognizer.ERROR_NO_MATCH && error != SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                        consecutiveErrors++
+                    }
                     if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
                         Log.e(TAG, "Too many consecutive errors ($consecutiveErrors) — stopping engine")
                         onEventCallback?.onEvent("error", "SpeechRecognizer failed after $consecutiveErrors errors. Please restart voice.")
@@ -301,14 +339,23 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) ?: return false
         for (match in matches) {
             val lower = match.lowercase().trim()
+            // Exact match
             for (phrase in WAKE_PHRASES) {
                 if (lower.contains(phrase)) {
-                    Log.i(TAG, "WAKE WORD DETECTED: $match")
+                    Log.i(TAG, "WAKE WORD DETECTED (exact): $match")
                     wakeDetectedThisSession = true
                     onDetectedCallback?.onDetected()
                     onEventCallback?.onEvent("log", "Wake word detected: $match")
                     return true
                 }
+            }
+            // Fuzzy match
+            if (fuzzyWakeMatch(lower)) {
+                Log.i(TAG, "WAKE WORD DETECTED (fuzzy): $match")
+                wakeDetectedThisSession = true
+                onDetectedCallback?.onDetected()
+                onEventCallback?.onEvent("log", "Wake word detected: $match")
+                return true
             }
         }
         return false

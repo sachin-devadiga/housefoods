@@ -353,6 +353,8 @@ class MealVoiceController extends ChangeNotifier {
       // Sarvam path: destroy native engine to free mic for flutter_sound recording
       await _service.stopEngine();
       _addLog('Listening for command via Sarvam STT...');
+      // Wait for mic to be fully released by SpeechRecognizer
+      await Future.delayed(const Duration(milliseconds: 500));
       _captureWithSarvam();
     } else {
       // Native path: engine stays alive, switch to command capture mode
@@ -1148,6 +1150,9 @@ class MealVoiceController extends ChangeNotifier {
       await recorder.openRecorder();
       final tempDir = await getTemporaryDirectory();
       audioPath = '${tempDir.path}/sarvam_capture.wav';
+
+      // Small delay to let audio session fully initialize (flutter_sound race condition)
+      await Future.delayed(const Duration(milliseconds: 300));
 
       await recorder.startRecorder(
         toFile: audioPath,
