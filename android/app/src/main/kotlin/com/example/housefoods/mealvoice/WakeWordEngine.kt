@@ -14,7 +14,12 @@ interface WakeWordEngine {
         fun onEvent(type: String, data: Any?)
     }
 
+    fun interface OnCommandCaptured {
+        fun onCommand(transcript: String)
+    }
+
     fun initialize(context: Context, onDetected: OnWakeWordDetected, onEvent: OnEngineEvent)
+    fun setCommandCapturedListener(listener: OnCommandCaptured?)
     fun start(): Boolean
     fun stop()
     fun release()

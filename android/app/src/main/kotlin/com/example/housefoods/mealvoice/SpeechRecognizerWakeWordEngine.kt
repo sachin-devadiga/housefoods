@@ -78,6 +78,7 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
     private var speechRecognizer: SpeechRecognizer? = null
     private var onDetectedCallback: WakeWordEngine.OnWakeWordDetected? = null
     private var onEventCallback: WakeWordEngine.OnEngineEvent? = null
+    private var onCommandCapturedCallback: WakeWordEngine.OnCommandCaptured? = null
     private var isRunning = false
     private var isInitialized = false
     private var audioManager: AudioManager? = null
@@ -103,6 +104,10 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
         isInitialized = true
         Log.i(TAG, "Engine initialized")
         onEventCallback?.onEvent("log", "SpeechRecognizer engine initialized")
+    }
+
+    override fun setCommandCapturedListener(listener: WakeWordEngine.OnCommandCaptured?) {
+        onCommandCapturedCallback = listener
     }
 
     override fun start(): Boolean {
@@ -466,6 +471,8 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
             val transcription = commandResults.toString().trim()
             Log.i(TAG, "Command transcription: $transcription")
             onEventCallback?.onEvent("commandTranscription", transcription)
+            // Also notify native listener directly (for app-killed path)
+            onCommandCapturedCallback?.onCommand(transcription)
         } else {
             onEventCallback?.onEvent("commandTimeout", "No command received")
         }

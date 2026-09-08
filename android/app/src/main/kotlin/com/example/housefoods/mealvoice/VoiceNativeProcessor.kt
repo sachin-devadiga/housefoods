@@ -189,16 +189,29 @@ class VoiceNativeProcessor(private val context: Context) {
      * Get auth token from SharedPreferences (synced by Flutter).
      */
     fun getAuthToken(): String? {
-        val prefs = context.getSharedPreferences("meal_voice_prefs", Context.MODE_PRIVATE)
-        return prefs.getString("auth_token", null)
+        // Flutter SharedPreferences plugin uses "FlutterSharedPreferences" file with "flutter." prefix
+        val flutterPrefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        val flutterToken = flutterPrefs.getString("flutter.auth_token", null)
+        if (!flutterToken.isNullOrEmpty()) return flutterToken
+
+        // Also try without prefix (if saved directly)
+        val directToken = flutterPrefs.getString("auth_token", null)
+        if (!directToken.isNullOrEmpty()) return directToken
+
+        // Also check meal_voice_prefs (native-side backup)
+        val voicePrefs = context.getSharedPreferences("meal_voice_prefs", Context.MODE_PRIVATE)
+        return voicePrefs.getString("auth_token", null)
     }
 
     /**
      * Get saved user name.
      */
     fun getUserName(): String {
-        val prefs = context.getSharedPreferences("meal_voice_prefs", Context.MODE_PRIVATE)
-        return prefs.getString("user_name", "") ?: ""
+        val flutterPrefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        val name = flutterPrefs.getString("flutter.user_name", null)
+        if (!name.isNullOrEmpty()) return name
+        val voicePrefs = context.getSharedPreferences("meal_voice_prefs", Context.MODE_PRIVATE)
+        return voicePrefs.getString("user_name", "") ?: ""
     }
 
     private val DEFAULT_SYSTEM_PROMPT = """

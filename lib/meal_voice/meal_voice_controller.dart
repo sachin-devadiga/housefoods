@@ -333,9 +333,8 @@ class MealVoiceController extends ChangeNotifier {
     _addLog('Greeting: $greeting (lang: $lang)');
 
     if (_sarvamAvailable) {
-      await _service.stopEngine();
+      // DO NOT stop engine — mic must stay alive for command capture
       _addLog('Listening for command via Sarvam STT...');
-      await Future.delayed(const Duration(milliseconds: 200));
       _captureWithSarvam();
     } else {
       _addLog('Listening for command via native STT...');

@@ -174,10 +174,16 @@ class MealVoiceService : Service() {
             context = this,
             onDetected = WakeWordEngine.OnWakeWordDetected { onWakeWordDetected() },
             onEvent = WakeWordEngine.OnEngineEvent { type, data ->
-                // FIX #33: All events go through bridge (EventChannel), not broadcast
                 bridge?.sendEvent(type, data?.toString() ?: "")
             }
         )
+        // Native command callback — fires when bridge is dead
+        wakeWordEngine!!.setCommandCapturedListener(WakeWordEngine.OnCommandCaptured { transcript ->
+            Log.i(TAG, "Native command captured via engine callback: $transcript")
+            if (bridge == null) {
+                processNativeCommand(transcript)
+            }
+        })
 
         val started = wakeWordEngine!!.start()
         if (!started) {
@@ -247,6 +253,7 @@ class MealVoiceService : Service() {
     /**
      * Capture command via native SpeechRecognizer when Flutter is dead,
      * then process it entirely in native Kotlin.
+     * Uses the SAME SpeechRecognizer from wake word engine — just swaps listener.
      */
     private fun startNativeCommandCapture() {
         if (isNativeProcessing) {
@@ -254,27 +261,50 @@ class MealVoiceService : Service() {
             return
         }
         isNativeProcessing = true
+        playConfirmationBeep()
 
-        // Stop wake word engine temporarily
-        wakeWordEngine?.stop()
+        // Use the wake word engine's startCommandCapture (swaps listener, keeps mic alive)
+        val started = wakeWordEngine?.startCommandCapture() ?: false
+        if (!started) {
+            Log.e(TAG, "Failed to start command capture via engine")
+            isNativeProcessing = false
+            // Fallback: create a standalone recognizer
+            startStandaloneCommandCapture()
+            return
+        }
 
-        // Create a new SpeechRecognizer for command capture
+        // Set timeout for native processing
+        android.os.Handler(Looper.getMainLooper()).postDelayed({
+            if (isNativeProcessing) {
+                Log.w(TAG, "Native command capture timed out")
+                isNativeProcessing = false
+                updateNotification("Listening timed out. Say 'Hi MEAL' to try again.")
+                wakeWordEngine?.stopCommandCapture()
+                restartWakeWordListening()
+            }
+        }, 15000)
+    }
+
+    /**
+     * Fallback: standalone recognizer when wake word engine is not available.
+     */
+    private fun startStandaloneCommandCapture() {
         try {
             val recognizer = android.speech.SpeechRecognizer.createSpeechRecognizer(this)
             recognizer?.setRecognitionListener(object : android.speech.RecognitionListener {
                 override fun onReadyForSpeech(params: android.os.Bundle?) {
-                    Log.i(TAG, "Native STT: Ready for speech")
+                    Log.i(TAG, "Standalone STT: Ready for speech")
                     updateNotification("Listening... Speak your command")
                 }
                 override fun onBeginningOfSpeech() {}
                 override fun onRmsChanged(rmsdB: Float) {}
                 override fun onBufferReceived(buffer: ByteArray?) {}
                 override fun onEndOfSpeech() {
-                    Log.i(TAG, "Native STT: End of speech")
+                    Log.i(TAG, "Standalone STT: End of speech")
                     updateNotification("Processing your command...")
                 }
                 override fun onError(error: Int) {
-                    Log.e(TAG, "Native STT error: $error")
+                    Log.e(TAG, "Standalone STT error: $error")
                     isNativeProcessing = false
                     updateNotification("Didn't catch that. Say 'Hi MEAL' to try again.")
                     restartWakeWordListening()
@@ -282,7 +312,7 @@ class MealVoiceService : Service() {
                 override fun onResults(results: android.os.Bundle?) {
                     val matches = results?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)
                     val transcript = matches?.firstOrNull() ?: ""
-                    Log.i(TAG, "Native STT result: $transcript")
+                    Log.i(TAG, "Standalone STT result: $transcript")
                     if (transcript.isNotEmpty()) {
                         processNativeCommand(transcript)
                     } else {
@@ -303,7 +333,6 @@ class MealVoiceService : Service() {
             }
             recognizer?.startListening(intent)
 
-            // Timeout after 12 seconds
             android.os.Handler(Looper.getMainLooper()).postDelayed({
                 if (isNativeProcessing) {
                     recognizer?.cancel()
@@ -314,9 +343,8 @@ class MealVoiceService : Service() {
             }, 12000)
 
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start native STT", e)
+            Log.e(TAG, "Failed to start standalone STT", e)
             isNativeProcessing = false
-            // Fallback: launch the app
             launchAppForCommand()
         }
     }
@@ -364,7 +392,8 @@ class MealVoiceService : Service() {
                 val needsFlutter = actions.any { action ->
                     val type = action.optString("type", "")
                     type == "add_to_cart" || type == "remove_from_cart" ||
-                    type == "clear_cart" || type == "place_order"
+                    type == "clear_cart" || type == "place_order" ||
+                    type == "search_menu" || type == "show_cart"
                 }
 
                 if (needsFlutter) {
