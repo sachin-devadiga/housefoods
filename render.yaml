@@ -40,3 +40,5 @@ services:
         sync: false
       - key: SARVAM_API_KEY
         sync: false
+      - key: GEMINI_API_KEY
+        sync: false

@@ -2430,6 +2430,7 @@ class VoiceGeminiView(APIView):
     """Proxy for Google Gemini AI. Sends prompt, returns structured response.
     
     The Gemini API key never leaves the server.
+    Uses REST API directly to avoid SDK dependency conflicts with firebase-admin.
     """
     permission_classes = [IsAuthenticated]
 
@@ -2449,24 +2450,51 @@ class VoiceGeminiView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        model_name = request.data.get('model', 'gemini-1.5-flash')
+        model_name = request.data.get('model', 'gemini-2.0-flash')
         temperature = request.data.get('temperature', 0.1)
         max_tokens = request.data.get('max_output_tokens', 512)
 
         try:
-            import google.generativeai as genai
-            genai.configure(api_key=GEMINI_API_KEY)
-            model = genai.GenerativeModel(
-                model_name,
-                system_instruction=system_prompt if system_prompt else None,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=temperature,
-                    max_output_tokens=max_tokens,
-                ),
-            )
-            response = model.generate_content(prompt)
+            import requests as http_requests
+
+            url = f'https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}'
+
+            contents = []
+            if system_prompt:
+                contents.append({
+                    'role': 'user',
+                    'parts': [{'text': system_prompt}]
+                })
+                contents.append({
+                    'role': 'model',
+                    'parts': [{'text': 'Understood. I will follow these instructions.'}]
+                })
+            contents.append({
+                'role': 'user',
+                'parts': [{'text': prompt}]
+            })
+
+            payload = {
+                'contents': contents,
+                'generationConfig': {
+                    'temperature': temperature,
+                    'maxOutputTokens': max_tokens,
+                },
+            }
+
+            response = http_requests.post(url, json=payload, timeout=20)
+            data = response.json()
+
+            if response.status_code != 200:
+                error_msg = data.get('error', {}).get('message', str(data)[:200])
+                return Response(
+                    {'error': f'Gemini API error: {error_msg}'},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+
+            text = data['candidates'][0]['content']['parts'][0]['text']
             return Response({
-                'text': response.text,
+                'text': text,
                 'model': model_name,
             }, status=status.HTTP_200_OK)
         except Exception as e:

@@ -168,7 +168,7 @@ User: "Order in Hindi" or "मुझे बिरयानी चाहिए"
         body: jsonEncode({
           'prompt': transcript,
           'system_prompt': _systemPrompt,
-          'model': 'gemini-1.5-flash',
+          'model': 'gemini-2.0-flash',
           'temperature': 0.1,
           'max_output_tokens': 512,
         }),
