@@ -1,5 +1,6 @@
 package com.example.housefoods.mealvoice
 
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -69,28 +70,43 @@ class MealVoiceService : Service() {
             "ACTION_STOP" -> stopVoiceService()
             "ACTION_START" -> startVoiceService()
             "ACTION_CREATE_ONLY" -> {
-                // Service created but don't start SpeechRecognizer yet.
-                // Flutter will call "startListening" via MethodChannel when ready.
-                Log.i(TAG, "Created only — waiting for Flutter to start listening")
-                val notification = buildNotification("MEAL ready — tap to open")
-                try {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                        startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-                    } else {
-                        startForeground(NOTIFICATION_ID, notification)
+                // Service created — check if voice was previously enabled
+                val prefs = getSharedPreferences("meal_voice_prefs", Context.MODE_PRIVATE)
+                val wasEnabled = prefs.getBoolean("voice_enabled", false)
+                if (wasEnabled) {
+                    Log.i(TAG, "Voice was enabled — auto-starting engine")
+                    startVoiceService()
+                } else {
+                    Log.i(TAG, "Created only — waiting for Flutter to start listening")
+                    val notification = buildNotification("MEAL ready — tap to open")
+                    try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+                        } else {
+                            startForeground(NOTIFICATION_ID, notification)
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "startForeground failed", e)
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "startForeground failed", e)
+                }
+            }
+            "ACTION_RESTART_ENGINE" -> {
+                Log.i(TAG, "Restart command received — restarting engine")
+                if (!isRunning) {
+                    startVoiceService()
+                } else {
+                    restartWakeWordListening()
                 }
             }
             "ACTION_START_COMMAND_CAPTURE" -> startCommandCapture()
             "ACTION_STOP_COMMAND_CAPTURE" -> stopCommandCapture()
             "ACTION_RESTART_WAKE_WORD" -> restartWakeWordListening()
             else -> {
-                // Unknown action — do nothing
                 Log.i(TAG, "Unknown action: ${intent?.action}")
             }
         }
+        // START_STICKY: if service is killed, Android restarts it
+        // Our BootReceiver + periodic alarm handle the actual engine restart
         return START_STICKY
     }
 
@@ -124,6 +140,7 @@ class MealVoiceService : Service() {
         }
 
         acquireWakeLock()
+        scheduleRestartAlarm()
 
         wakeWordEngine = SpeechRecognizerWakeWordEngine()
         wakeWordEngine!!.initialize(
@@ -155,6 +172,7 @@ class MealVoiceService : Service() {
         wakeWordEngine = null
 
         releaseWakeLock()
+        cancelRestartAlarm()
 
         // Save user preference — service was stopped
         getSharedPreferences("meal_voice_prefs", Context.MODE_PRIVATE)
@@ -191,11 +209,26 @@ class MealVoiceService : Service() {
             bridge?.sendEvent("wakeWordDetected", System.currentTimeMillis().toString())
             updateNotification("Wake word detected! Listening for command...")
         } else {
-            // Bridge is dead (app killed) — save pending flag + show actionable notification
-            Log.i(TAG, "Bridge is null — saving pending wake word flag")
+            // Bridge is dead (app killed) — launch app to process the command
+            Log.i(TAG, "Bridge is null — launching app to process wake word")
             getSharedPreferences("meal_voice_prefs", Context.MODE_PRIVATE)
                 .edit().putBoolean("pending_wake_word", true).apply()
-            showWakeWordNotification()
+
+            // Launch the app — it will pick up pending_wake_word and process it
+            val launchIntent = Intent(this, com.example.housefoods.MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra("meal_voice_wake_word", true)
+            }
+            try {
+                startActivity(launchIntent)
+                showWakeWordNotification()
+                updateNotification("Opening MEAL to process your command...")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to launch app", e)
+                showWakeWordNotification()
+            }
         }
     }
 
@@ -248,6 +281,54 @@ class MealVoiceService : Service() {
             wakeLock = null
         } catch (e: Exception) {
             Log.e(TAG, "Failed to release wake lock", e)
+        }
+    }
+
+    /**
+     * Schedule a periodic alarm to restart this service if it gets killed.
+     * Fires every 5 minutes. The alarm receiver (BootReceiver) checks
+     * if the service is already running before restarting.
+     */
+    private fun scheduleRestartAlarm() {
+        try {
+            val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val intent = Intent(this, BootReceiver::class.java).apply {
+                action = BootReceiver.ACTION_SERVICE_RESTART
+            }
+            val pendingIntent = PendingIntent.getBroadcast(
+                this, 9997, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            // Repeat every 5 minutes
+            alarmManager.setRepeating(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                System.currentTimeMillis() + 5 * 60 * 1000L,
+                5 * 60 * 1000L,
+                pendingIntent
+            )
+            Log.i(TAG, "Restart alarm scheduled (every 5 min)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to schedule restart alarm", e)
+        }
+    }
+
+    /**
+     * Cancel the periodic restart alarm.
+     */
+    private fun cancelRestartAlarm() {
+        try {
+            val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val intent = Intent(this, BootReceiver::class.java).apply {
+                action = BootReceiver.ACTION_SERVICE_RESTART
+            }
+            val pendingIntent = PendingIntent.getBroadcast(
+                this, 9997, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            alarmManager.cancel(pendingIntent)
+            Log.i(TAG, "Restart alarm cancelled")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to cancel restart alarm", e)
         }
     }
 

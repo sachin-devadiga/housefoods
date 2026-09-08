@@ -3,12 +3,14 @@ package com.example.housefoods.mealvoice
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
+import android.os.Build
 import android.util.Log
 
 /**
- * Auto-starts MealVoiceService on device boot if the user previously enabled it.
- * Uses SharedPreferences to remember the user's preference.
+ * Handles multiple events:
+ * 1. BOOT_COMPLETED — auto-start voice service on device boot
+ * 2. SERVICE_RESTART — periodic alarm to keep voice service alive
+ * 3. MY_PACKAGE_REPLACED — restart service after app update
  */
 class BootReceiver : BroadcastReceiver() {
 
@@ -16,25 +18,38 @@ class BootReceiver : BroadcastReceiver() {
         private const val TAG = "MEAL_BootReceiver"
         private const val PREFS_NAME = "meal_voice_prefs"
         private const val KEY_ENABLED = "voice_enabled"
+        const val ACTION_SERVICE_RESTART = "com.mealin.SERVICE_RESTART"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        Log.i(TAG, "Received action: ${intent.action}")
 
-        Log.i(TAG, "Boot completed — checking if voice service should start")
+        when (intent.action) {
+            Intent.ACTION_BOOT_COMPLETED,
+            ACTION_SERVICE_RESTART,
+            Intent.ACTION_MY_PACKAGE_REPLACED -> {
+                checkAndStartService(context)
+            }
+        }
+    }
 
+    private fun checkAndStartService(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val wasEnabled = prefs.getBoolean(KEY_ENABLED, false)
 
         if (wasEnabled) {
-            Log.i(TAG, "Voice service was enabled — starting on boot")
+            Log.i(TAG, "Voice service was enabled — starting")
             val serviceIntent = Intent(context, MealVoiceService::class.java).apply {
-                action = "ACTION_START"
+                action = "ACTION_RESTART_ENGINE"
             }
             try {
-                context.startForegroundService(serviceIntent)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(serviceIntent)
+                } else {
+                    context.startService(serviceIntent)
+                }
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to start service on boot", e)
+                Log.e(TAG, "Failed to start service", e)
             }
         } else {
             Log.i(TAG, "Voice service was not enabled — skipping")

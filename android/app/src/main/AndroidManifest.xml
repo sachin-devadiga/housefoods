@@ -53,12 +53,14 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="voice_assistant"/>
         </service>
-        <!-- Auto-start MEAL Voice on device boot -->
+        <!-- Auto-start MEAL Voice on device boot or app update -->
         <receiver
             android:name=".mealvoice.BootReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="com.mealin.SERVICE_RESTART"/>
             </intent-filter>
         </receiver>
         <!-- FileProvider for APK install -->

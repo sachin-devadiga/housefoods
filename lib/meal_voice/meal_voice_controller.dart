@@ -190,7 +190,25 @@ class MealVoiceController extends ChangeNotifier {
     _addLog('Engine initialized (TTS: $_ttsAvailable, Sarvam: $_sarvamAvailable)');
     notifyListeners();
 
+    // Auto-start voice service if it was previously enabled (persists across app sessions)
+    _autoStartVoiceIfNeeded();
     _checkPendingWakeWord();
+  }
+
+  /// Auto-start the voice engine if the user previously enabled it.
+  /// This ensures voice stays on even after app restart.
+  void _autoStartVoiceIfNeeded() async {
+    try {
+      final wasEnabled = await _service.isVoiceEnabledOnBoot();
+      if (wasEnabled && !_isListening && _permissionGranted) {
+        _addLog('Voice was enabled — auto-starting engine');
+        Future.delayed(const Duration(milliseconds: 1000), () {
+          startListening();
+        });
+      }
+    } catch (e) {
+      _addLog('Auto-start check failed: $e');
+    }
   }
 
   void _checkPendingWakeWord() {
