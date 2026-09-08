@@ -10,7 +10,7 @@ services:
     runtime: python
     rootDir: backend
     buildCommand: bash build.sh
-    startCommand: python manage.py safe_migrate && python manage.py create_admin && gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT
+    startCommand: python manage.py safe_migrate && gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -20,8 +20,6 @@ services:
         generateValue: true
       - key: DEBUG
         value: "False"
-      - key: ALLOWED_HOSTS
-        value: "*"
       - key: BREVO_SMTP_HOST
         value: "smtp-relay.brevo.com"
       - key: BREVO_SMTP_PORT

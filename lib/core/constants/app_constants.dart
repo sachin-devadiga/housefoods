@@ -2,9 +2,8 @@ class AppConstants {
   static const String appName = 'Mealin';
 
   // API Configuration
-  // Override with: --dart-define=API_BASE_URL=http://YOUR_IP:8000
-  // Otherwise the app auto-tries localhost, emulator host (10.0.2.2),
-  // and your machine's LAN IP so it works on any device without rebuilds.
+  // Production builds use the Render HTTPS service. A different value is
+  // permitted only for an explicitly configured development build.
   static List<String> apiBaseUrlCandidates = _resolveApiBaseUrlCandidates();
 
   static String apiBaseUrl = apiBaseUrlCandidates.first;
@@ -132,10 +131,6 @@ class AppConstants {
   // Razorpay
   // Override with: --dart-define=RAZORPAY_KEY=rzp_live_xxxx
   static const String razorpayKey = String.fromEnvironment('RAZORPAY_KEY', defaultValue: 'rzp_test_YOUR_KEY_HERE');
-
-  // Gemini AI
-  // Override with: --dart-define=GEMINI_API_KEY=your_key_here
-  static const String geminiApiKey = String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
 
   // Sarvam AI (STT/TTS) — proxied via MEALIN backend
   // API key lives ONLY on the backend (SARVAM_API_KEY env var).

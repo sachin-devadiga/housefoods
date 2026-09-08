@@ -98,8 +98,8 @@ class MealVoiceConversation {
   List<ConversationTurn> get history => List.unmodifiable(_history);
   String get detectedLanguage => _detectedLanguage;
   String? get currentRestaurant => _currentRestaurant;
-  List<Map<String, dynamic>> get lastSearchResults =>
-      List.unmodifiable(_lastSearchResults);
+  List<Map<String, dynamic>> get lastSearchResults => List.unmodifiable(
+      _lastSearchResults.map(Map<String, dynamic>.unmodifiable));
   Map<String, dynamic>? get cartSnapshot => _cartSnapshot;
   Map<String, dynamic>? get pendingConfirmation => _pendingConfirmation;
 
@@ -127,7 +127,7 @@ class MealVoiceConversation {
 
   /// Update search results context.
   void setSearchResults(List<Map<String, dynamic>> results) {
-    _lastSearchResults = results;
+    _lastSearchResults = results.map(Map<String, dynamic>.from).toList();
   }
 
   /// Update cart snapshot.

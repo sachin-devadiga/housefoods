@@ -72,9 +72,8 @@ ACTION TYPES:
 CONTEXT: History, search results, cart state provided in context. Use them for follow-ups.
 ''';
 
-  /// Models to try in order of preference (primary first, fallbacks after).
+  /// Models approved by the server-side proxy.
   static const List<String> _models = [
-    'gemini-3.5-flash-lite',
     'gemini-2.5-flash-lite',
   ];
 
@@ -139,7 +138,7 @@ CONTEXT: History, search results, cart state provided in context. Use them for f
           debugPrint('[MEAL Brain] $model returned empty text');
         } else {
           debugPrint('[MEAL Brain] $model FAILED: ${(response.body.length > 300 ? response.body.substring(0, 300) : response.body)}');
-          // If 502 (model unavailable), try next model. Otherwise stop.
+          // If 502 (model unavailable), try the next approved model.
           if (response.statusCode != 502) {
             return null;
           }

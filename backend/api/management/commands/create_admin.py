@@ -1,41 +1,23 @@
 from django.core.management.base import BaseCommand
+import os
+
 from django.contrib.auth.models import User
 
 
 class Command(BaseCommand):
-    help = 'Create default admin superuser if it does not exist'
+    help = 'Create an initial admin from environment variables (never resets one)'
 
     def handle(self, *args, **options):
-        username = 'admin'
-        email = 'admin@mealin.app'
-        password = 'admin123'
-
-        if User.objects.filter(username=username).exists():
-            user = User.objects.get(username=username)
-            if not user.is_superuser:
-                user.is_staff = True
-                user.is_superuser = True
-                user.set_password(password)
-                user.save()
-                self.stdout.write(self.style.SUCCESS(f'Upgraded {username} to superuser'))
-            else:
-                self.stdout.write(self.style.WARNING(f'User {username} already exists'))
+        if User.objects.filter(is_superuser=True).exists():
+            self.stdout.write('A superuser already exists; no changes made.')
             return
 
-        existing = User.objects.filter(is_superuser=True).first()
-        if existing:
-            existing.username = username
-            existing.email = email
-            existing.set_password(password)
-            existing.is_staff = True
-            existing.is_superuser = True
-            existing.save()
-            self.stdout.write(self.style.SUCCESS(f'Renamed superuser to: {username} / {password}'))
+        username = os.getenv('DJANGO_SUPERUSER_USERNAME')
+        email = os.getenv('DJANGO_SUPERUSER_EMAIL')
+        password = os.getenv('DJANGO_SUPERUSER_PASSWORD')
+        if not all((username, email, password)):
+            self.stdout.write('No superuser created: set DJANGO_SUPERUSER_USERNAME, DJANGO_SUPERUSER_EMAIL, and DJANGO_SUPERUSER_PASSWORD.')
             return
 
-        User.objects.create_superuser(
-            username=username,
-            email=email,
-            password=password,
-        )
-        self.stdout.write(self.style.SUCCESS(f'Superuser created: {username} / {password}'))
+        User.objects.create_superuser(username=username, email=email, password=password)
+        self.stdout.write(self.style.SUCCESS(f'Superuser {username!r} created.'))

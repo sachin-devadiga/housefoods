@@ -576,9 +576,22 @@ class MealVoiceController extends ChangeNotifier {
     if (item == null || item.isEmpty) return false;
 
     try {
-      await _orderHandler!.clearCart();
-      _addLog('Removed from cart: $item');
-      return true;
+      final result = await _orderHandler!.removeFromCart(
+        itemName: item,
+        quantity: action.quantity,
+      );
+      switch (result) {
+        case CartRemoveResult.success:
+          _addLog('Removed from cart: $item x${action.quantity}');
+          return true;
+        case CartRemoveResult.ambiguousItem:
+          _ttsResponse = 'I found more than one matching item. Which one would you like to remove?';
+          _addLog('RemoveFromCart ambiguous: $item');
+          return false;
+        default:
+          _addLog('RemoveFromCart failed: $result');
+          return false;
+      }
     } catch (e) {
       _addLog('RemoveFromCart error: $e');
       return false;

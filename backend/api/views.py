@@ -2306,6 +2306,22 @@ class ConsumeAuthorizationView(APIView):
 
 SARVAM_API_KEY = os.environ.get('SARVAM_API_KEY', '')
 SARVAM_BASE_URL = 'https://api.sarvam.ai'
+VOICE_MAX_AUDIO_BYTES = 5 * 1024 * 1024
+VOICE_MAX_TEXT_CHARS = 1_000
+SARVAM_STT_MODELS = {'saaras:v4'}
+SARVAM_TTS_MODELS = {'bulbul:v3'}
+SARVAM_TTS_SPEAKERS = {'shruti', 'shubh', 'aditya', 'tanya', 'kavya'}
+SARVAM_LANGUAGE_CODES = {
+    'en-IN', 'hi-IN', 'bn-IN', 'gu-IN', 'kn-IN', 'ml-IN', 'mr-IN',
+    'od-IN', 'pa-IN', 'ta-IN', 'te-IN',
+}
+GEMINI_VOICE_MODELS = {'gemini-2.5-flash-lite'}
+VOICE_GEMINI_SYSTEM_PROMPT = '''You are MEAL, the MEALIN food-ordering assistant.
+Reply with JSON only: {"response":"concise reply", "actions":[]}.
+Only discuss MEALIN food ordering. Never invent prices, availability, delivery
+times, or payment status; use supplied context only. Actions are requests, not
+authorization. Supported action types are search_menu, add_to_cart,
+remove_from_cart, clear_cart, show_cart, place_order, and none.'''
 
 
 class VoiceSTTView(APIView):
@@ -2314,6 +2330,7 @@ class VoiceSTTView(APIView):
     The Sarvam API key never leaves the server.
     """
     permission_classes = [IsAuthenticated]
+    throttle_scope = 'voice'
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
@@ -2330,8 +2347,17 @@ class VoiceSTTView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        if audio_file.size <= 0 or audio_file.size > VOICE_MAX_AUDIO_BYTES:
+            return Response({'error': 'audio file must be between 1 byte and 5 MB'}, status=status.HTTP_400_BAD_REQUEST)
+        if audio_file.content_type and not audio_file.content_type.startswith('audio/'):
+            return Response({'error': 'audio file must have an audio content type'}, status=status.HTTP_400_BAD_REQUEST)
+
         model = request.data.get('model', 'saaras:v4')
         language_code = request.data.get('language_code', '')
+        if model not in SARVAM_STT_MODELS:
+            return Response({'error': 'unsupported STT model'}, status=status.HTTP_400_BAD_REQUEST)
+        if language_code and language_code not in SARVAM_LANGUAGE_CODES and language_code != 'auto':
+            return Response({'error': 'unsupported language code'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Build multipart request to Sarvam
         files = {'file': (audio_file.name, audio_file.read(), audio_file.content_type)}
@@ -2373,6 +2399,7 @@ class VoiceTTSView(APIView):
     The Sarvam API key never leaves the server.
     """
     permission_classes = [IsAuthenticated]
+    throttle_scope = 'voice'
 
     def post(self, request):
         if not SARVAM_API_KEY:
@@ -2382,15 +2409,19 @@ class VoiceTTSView(APIView):
             )
 
         text = request.data.get('text', '')
-        if not text:
+        if not isinstance(text, str) or not text.strip() or len(text) > VOICE_MAX_TEXT_CHARS:
             return Response(
-                {'error': 'text is required'},
+                {'error': 'text must be 1 to 1000 characters'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         language_code = request.data.get('language_code', 'hi-IN')
         model = request.data.get('model', 'bulbul:v3')
         speaker = request.data.get('speaker', 'shruti')
+        if language_code not in SARVAM_LANGUAGE_CODES:
+            return Response({'error': 'unsupported language code'}, status=status.HTTP_400_BAD_REQUEST)
+        if model not in SARVAM_TTS_MODELS or speaker not in SARVAM_TTS_SPEAKERS:
+            return Response({'error': 'unsupported TTS model or speaker'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             resp = requests.post(
@@ -2435,6 +2466,7 @@ class VoiceGeminiView(APIView):
     Supports multi-turn conversation via conversation_history field.
     """
     permission_classes = [IsAuthenticated]
+    throttle_scope = 'voice'
 
     def post(self, request):
         GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
@@ -2445,18 +2477,30 @@ class VoiceGeminiView(APIView):
             )
 
         prompt = request.data.get('prompt', '')
-        system_prompt = request.data.get('system_prompt', '')
-        if not prompt:
+        if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > VOICE_MAX_TEXT_CHARS:
             return Response(
-                {'error': 'prompt is required'},
+                {'error': 'prompt must be 1 to 1000 characters'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         model_name = request.data.get('model', 'gemini-2.5-flash-lite')
+        if model_name not in GEMINI_VOICE_MODELS:
+            return Response({'error': 'unsupported Gemini model'}, status=status.HTTP_400_BAD_REQUEST)
         temperature = request.data.get('temperature', 0.7)
         max_tokens = request.data.get('max_output_tokens', 300)
         conversation_history = request.data.get('conversation_history', [])
         context = request.data.get('context', {})
+        if not isinstance(conversation_history, list) or len(conversation_history) > 10 or not isinstance(context, dict):
+            return Response({'error': 'invalid conversation context'}, status=status.HTTP_400_BAD_REQUEST)
+        if any(not isinstance(turn, dict) or len(str(turn.get('content', ''))) > VOICE_MAX_TEXT_CHARS for turn in conversation_history):
+            return Response({'error': 'invalid conversation history'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            temperature = max(0.0, min(float(temperature), 1.0))
+            max_tokens = max(1, min(int(max_tokens), 512))
+            if len(json.dumps(context)) > 10_000:
+                raise ValueError
+        except (TypeError, ValueError):
+            return Response({'error': 'invalid Gemini generation settings or context'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             import requests as http_requests
@@ -2465,14 +2509,15 @@ class VoiceGeminiView(APIView):
 
             contents = []
 
-            # System prompt as first turn
-            if system_prompt:
+            # The policy prompt is server-owned: an authenticated client must
+            # not be able to replace it with instructions that bypass safety.
+            if VOICE_GEMINI_SYSTEM_PROMPT:
                 context_str = ''
                 if context:
                     context_str = f'\n\nCurrent context:\n{json.dumps(context, indent=2)}'
                 contents.append({
                     'role': 'user',
-                    'parts': [{'text': system_prompt + context_str}]
+                    'parts': [{'text': VOICE_GEMINI_SYSTEM_PROMPT + context_str}]
                 })
                 contents.append({
                     'role': 'model',

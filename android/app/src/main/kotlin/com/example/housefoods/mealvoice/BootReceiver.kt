@@ -38,6 +38,13 @@ class BootReceiver : BroadcastReceiver() {
         val wasEnabled = prefs.getBoolean(KEY_ENABLED, false)
 
         if (wasEnabled) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                // Android 14+ prohibits starting a microphone foreground service
+                // from BOOT_COMPLETED because microphone permission is while-in-use.
+                // The user must open the app and explicitly restart MEAL.
+                Log.w(TAG, "Android 14+: not starting microphone service from boot")
+                return
+            }
             Log.i(TAG, "Voice service was enabled — starting")
             val serviceIntent = Intent(context, MealVoiceService::class.java).apply {
                 action = "ACTION_RESTART_ENGINE"

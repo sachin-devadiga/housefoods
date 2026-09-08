@@ -41,6 +41,8 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true
+        // Supply with -PMAPS_API_KEY=... in CI or an untracked Gradle property.
+        manifestPlaceholders["MAPS_API_KEY"] = project.findProperty("MAPS_API_KEY")?.toString() ?: ""
     }
 
     signingConfigs {
@@ -54,11 +56,12 @@ android {
 
     buildTypes {
         release {
-            signingConfig = if (keyPropertiesFile.exists()) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
+            // Never ship an APK/AAB signed with the debug certificate. Release
+            // credentials must be supplied through the ignored key.properties.
+            if (!keyPropertiesFile.exists()) {
+                throw GradleException("Missing android/key.properties: release signing is required")
             }
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

@@ -192,6 +192,13 @@ REST_FRAMEWORK = {
     'DATETIME_FORMAT': '%Y-%m-%d %H:%M:%S',
     'DATE_FORMAT': '%Y-%m-%d',
     'COERCE_DECIMAL_TO_STRING': False,
+    'DEFAULT_THROTTLE_CLASSES': (
+        'rest_framework.throttling.ScopedRateThrottle',
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        # AI/audio proxy requests incur external-provider cost.
+        'voice': os.getenv('VOICE_API_THROTTLE', '30/hour'),
+    },
 }
 
 # SimpleJWT

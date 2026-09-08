@@ -104,7 +104,7 @@ class MealVoiceService : Service() {
                     val notification = buildNotification("MEAL ready — tap to open")
                     try {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+                            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
                         } else {
                             startForeground(NOTIFICATION_ID, notification)
                         }
@@ -154,12 +154,14 @@ class MealVoiceService : Service() {
         val notification = buildNotification("Listening for 'Hi MEAL'...")
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
             } else {
                 startForeground(NOTIFICATION_ID, notification)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "startForeground failed, continuing without foreground", e)
+            Log.e(TAG, "startForeground failed; voice service will not start", e)
+            stopSelf()
+            return false
         }
 
         acquireWakeLock()

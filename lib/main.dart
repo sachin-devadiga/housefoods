@@ -57,10 +57,6 @@ void main() async {
   if (!kIsWeb && Platform.isAndroid) {
     debugPrint('[MEALIN] Running on Android device');
     debugPrint('[MEALIN] API URL: ${AppConstants.apiBaseUrl}');
-    if (AppConstants.apiBaseUrl.contains('10.0.2.2')) {
-      debugPrint('[MEALIN] For physical devices, run: flutter run --dart-define=API_BASE_URL=http://YOUR_LAN_IP:8000');
-      debugPrint('[MEALIN] Or use: adb reverse tcp:8000 tcp:8000  (then localhost works)');
-    }
   } else {
     debugPrint('[MEALIN] API URL: ${AppConstants.apiBaseUrl}');
   }

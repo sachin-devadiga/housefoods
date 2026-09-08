@@ -58,6 +58,18 @@ void main() {
           throwsA(isA<UnsupportedError>()),
         );
       });
+
+      test('does not retain mutable caller search-result maps', () {
+        final result = <String, dynamic>{'item_name': 'biryani', 'price': 200};
+        conversation.setSearchResults([result]);
+        result['price'] = 1;
+
+        expect(conversation.lastSearchResults.single['price'], 200);
+        expect(
+          () => conversation.lastSearchResults.single['price'] = 1,
+          throwsA(isA<UnsupportedError>()),
+        );
+      });
     });
 
     group('Detected language', () {

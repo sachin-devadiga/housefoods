@@ -56,6 +56,7 @@ class CartProvider extends ChangeNotifier {
       _cart = CartModel.fromMap(response);
     } catch (e) {
       _error = e.toString();
+      rethrow;
     } finally {
       notifyListeners();
     }
@@ -76,6 +77,7 @@ class CartProvider extends ChangeNotifier {
       await loadCart();
     } catch (e) {
       _error = e.toString();
+      rethrow;
     } finally {
       notifyListeners();
     }
@@ -89,6 +91,7 @@ class CartProvider extends ChangeNotifier {
       await loadCart();
     } catch (e) {
       _error = e.toString();
+      rethrow;
     } finally {
       notifyListeners();
     }
@@ -102,6 +105,7 @@ class CartProvider extends ChangeNotifier {
       _cart = null;
     } catch (e) {
       _error = e.toString();
+      rethrow;
     } finally {
       notifyListeners();
     }

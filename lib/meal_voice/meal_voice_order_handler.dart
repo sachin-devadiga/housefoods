@@ -26,6 +26,8 @@ enum CartAddResult {
   unknownError,
 }
 
+enum CartRemoveResult { success, itemNotFound, ambiguousItem, networkError }
+
 /// Handles voice command execution — searching menus and modifying cart.
 ///
 /// FIX #11: Snapshots kitchen list before iteration to avoid mutation issues.
@@ -131,6 +133,31 @@ class MealVoiceOrderHandler {
       await _cartProvider.clearCart();
     } catch (e) {
       debugPrint('[MEAL OrderHandler] Clear cart error: $e');
+    }
+  }
+
+  /// Removes up to [quantity] of a single matching cart item. A voice request
+  /// to remove an item must never silently clear the whole cart.
+  Future<CartRemoveResult> removeFromCart({
+    required String itemName,
+    int quantity = 1,
+  }) async {
+    final normalized = itemName.trim().toLowerCase();
+    if (normalized.isEmpty || quantity <= 0) return CartRemoveResult.itemNotFound;
+    final items = _cartProvider.cart?.items ?? const [];
+    final exact = items.where((item) => item.menuItemName.trim().toLowerCase() == normalized).toList();
+    final matches = exact.isNotEmpty
+        ? exact
+        : items.where((item) => item.menuItemName.toLowerCase().contains(normalized)).toList();
+    if (matches.isEmpty) return CartRemoveResult.itemNotFound;
+    if (matches.length != 1) return CartRemoveResult.ambiguousItem;
+    try {
+      final target = matches.single;
+      await _cartProvider.updateItemQuantity(target.id, target.quantity - quantity);
+      return CartRemoveResult.success;
+    } catch (e) {
+      debugPrint('[MEAL OrderHandler] Remove from cart error: $e');
+      return CartRemoveResult.networkError;
     }
   }
 

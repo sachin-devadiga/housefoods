@@ -69,7 +69,7 @@ class VoiceNativeProcessor(private val context: Context) {
             val body = JSONObject().apply {
                 put("prompt", prompt)
                 put("system_prompt", systemPrompt)
-                put("model", "gemini-3.5-flash-lite")
+                put("model", "gemini-2.5-flash-lite")
                 put("temperature", 0.7)
                 put("max_output_tokens", 300)
                 put("conversation_history", JSONArray().apply {
