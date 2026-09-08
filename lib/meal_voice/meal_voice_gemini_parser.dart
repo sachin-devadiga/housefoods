@@ -168,7 +168,7 @@ User: "Order in Hindi" or "मुझे बिरयानी चाहिए"
         body: jsonEncode({
           'prompt': transcript,
           'system_prompt': _systemPrompt,
-          'model': 'gemini-2.0-flash',
+          'model': 'gemini-2.5-flash',
           'temperature': 0.1,
           'max_output_tokens': 512,
         }),
@@ -185,7 +185,7 @@ User: "Order in Hindi" or "मुझे बिरयानी चाहिए"
         }
       }
 
-      debugPrint('[MEAL Gemini] Backend error ${response.statusCode}');
+      debugPrint('[MEAL Gemini] Backend error ${response.statusCode}: ${response.body}');
       return _parseSyncFallback(transcript);
     } catch (e) {
       debugPrint('[MEAL Gemini] Error: $e');
