@@ -44,10 +44,9 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <!-- MEAL Voice Foreground Service — runs in separate process to survive app kills -->
+        <!-- MEAL Voice Foreground Service -->
         <service
             android:name=".mealvoice.MealVoiceService"
-            android:process=":voice_service"
             android:foregroundServiceType="specialUse"
             android:exported="false">
             <property
@@ -57,7 +56,7 @@
         <!-- Auto-start MEAL Voice on device boot or app update -->
         <receiver
             android:name=".mealvoice.BootReceiver"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>

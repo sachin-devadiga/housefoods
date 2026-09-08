@@ -470,8 +470,7 @@ class MealVoiceService : Service() {
 
     /**
      * Schedule a periodic alarm to restart this service if it gets killed.
-     * Fires every 5 minutes. The alarm receiver (BootReceiver) checks
-     * if the service is already running before restarting.
+     * Uses setAlarmClock which is exempt from Doze mode.
      */
     private fun scheduleRestartAlarm() {
         try {
@@ -483,14 +482,20 @@ class MealVoiceService : Service() {
                 this, 9997, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            // Repeat every 5 minutes
-            alarmManager.setRepeating(
-                AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                System.currentTimeMillis() + 5 * 60 * 1000L,
-                5 * 60 * 1000L,
+            // Use setAlarmClock — exempt from Doze, survives process death
+            val alarmIntent = Intent(this, BootReceiver::class.java).apply {
+                action = BootReceiver.ACTION_SERVICE_RESTART
+            }
+            val alarmPending = PendingIntent.getBroadcast(
+                this, 9998, alarmIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val triggerTime = System.currentTimeMillis() + 5 * 60 * 1000L
+            alarmManager.setAlarmClock(
+                AlarmManager.AlarmClockInfo(triggerTime, alarmPending),
                 pendingIntent
             )
-            Log.i(TAG, "Restart alarm scheduled (every 5 min)")
+            Log.i(TAG, "Restart alarm scheduled (setAlarmClock, every 5 min)")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to schedule restart alarm", e)
         }
