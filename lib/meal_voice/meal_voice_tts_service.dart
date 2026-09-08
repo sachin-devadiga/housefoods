@@ -90,6 +90,20 @@ class MealVoiceTtsService {
     }
   }
 
+  /// Change the TTS language dynamically based on detected user language.
+  Future<void> setLanguage(String languageCode) async {
+    try {
+      await _tts.setLanguage(languageCode);
+      debugPrint('[MEAL TTS] Language changed to $languageCode');
+    } catch (e) {
+      debugPrint('[MEAL TTS] setLanguage failed for $languageCode: $e');
+      // Fallback to English
+      try {
+        await _tts.setLanguage('en-IN');
+      } catch (_) {}
+    }
+  }
+
   void dispose() {
     _tts.stop();
     _isInitialized = false;

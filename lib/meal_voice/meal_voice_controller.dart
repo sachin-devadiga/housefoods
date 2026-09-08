@@ -19,6 +19,7 @@ import 'meal_voice_order_handler.dart';
 import 'sarvam_stt_service.dart';
 import 'sarvam_tts_service.dart';
 import 'meal_voice_settings.dart';
+import 'meal_voice_response_generator.dart';
 
 /// Provider-based controller for MEAL voice engine.
 ///
@@ -33,6 +34,7 @@ class MealVoiceController extends ChangeNotifier {
   final MealVoiceTtsService _tts = MealVoiceTtsService();
   final SarvamSTTService _sarvamSTT = SarvamSTTService();
   final SarvamTTSService _sarvamTTS = SarvamTTSService();
+  final MealVoiceResponseGenerator _responseGen = MealVoiceResponseGenerator();
   MealVoiceCommandParser? _parser;
   MealVoiceOrderHandler? _orderHandler;
   VoiceOrderSecurityService? _securityService;
@@ -126,6 +128,10 @@ class MealVoiceController extends ChangeNotifier {
   int _consecutiveSttFailures = 0;
   static const _maxConsecutiveFailures = 3;
 
+  // Detected language from STT — used to reply in the same language
+  String _detectedLanguage = 'en-IN';
+  String get detectedLanguage => _detectedLanguage;
+
   // Battery optimization warning
   bool _batteryOptimizationWarning = false;
   bool get batteryOptimizationWarning => _batteryOptimizationWarning;
@@ -150,9 +156,7 @@ class MealVoiceController extends ChangeNotifier {
       // Fallback to Sarvam TTS (slower, needs network)
       if (_sarvamAvailable) {
         try {
-          final lang = _settings != null
-              ? _settings!.ttsLanguageCode
-              : SarvamTTSService.detectLanguage(text);
+          final lang = _detectedLanguage.isNotEmpty ? _detectedLanguage : 'hi-IN';
           final speaker = _settings?.speaker ?? 'shruti';
           _addLog('TTS: Speaking via Sarvam (${text.length} chars, lang=$lang, speaker=$speaker)');
           final ok = await _sarvamTTS.speak(text, languageCode: lang, speaker: speaker);
@@ -170,6 +174,54 @@ class MealVoiceController extends ChangeNotifier {
     } finally {
       _isSpeaking = false;
     }
+  }
+
+  /// Generate and speak a natural conversational response via Gemini.
+  /// Falls back to [fallback] if Gemini is unavailable.
+  Future<void> _respond({
+    required String context,
+    String details = '',
+    required String fallback,
+  }) async {
+    try {
+      final response = await _responseGen.respond(
+        context: context,
+        details: details,
+        languageCode: _detectedLanguage,
+      );
+      _ttsResponse = response;
+      await _speakAndReturn(response);
+      return;
+    } catch (e) {
+      _addLog('ResponseGenerator failed: $e');
+    }
+    _ttsResponse = fallback;
+    await _speakAndReturn(fallback);
+  }
+
+  /// Speak response and set state without returning to wake word.
+  Future<void> _respondAndStay({
+    required String context,
+    String details = '',
+    required String fallback,
+    MealVoiceState? state,
+  }) async {
+    try {
+      final response = await _responseGen.respond(
+        context: context,
+        details: details,
+        languageCode: _detectedLanguage,
+      );
+      _ttsResponse = response;
+      if (state != null) _state = state;
+      await _speak(response);
+      return;
+    } catch (e) {
+      _addLog('ResponseGenerator failed: $e');
+    }
+    _ttsResponse = fallback;
+    if (state != null) _state = state;
+    await _speak(fallback);
   }
 
   /// Initialize the controller.
@@ -217,6 +269,10 @@ class MealVoiceController extends ChangeNotifier {
     // Initialize STT — Sarvam cloud STT
     _sarvamAvailable = await _sarvamSTT.initialize();
     _addLog('Sarvam STT init: ${_sarvamAvailable ? "OK" : "FAILED"}');
+
+    // Initialize response generator — Gemini-powered natural responses
+    await _responseGen.initialize();
+    _addLog('Response generator init: ${_responseGen.isAvailable ? "OK" : "FALLBACK"}');
 
     // Check battery optimization (Android only)
     if (!kIsWeb && Platform.isAndroid) {
@@ -331,23 +387,47 @@ class MealVoiceController extends ChangeNotifier {
     _notFoundItems.clear();
     notifyListeners();
 
-    // Speak greeting FIRST while native engine is still alive
+    // Speak greeting in detected language
     final hour = DateTime.now().hour;
-    String timeGreeting;
-    if (hour < 12) {
-      timeGreeting = 'Good morning';
-    } else if (hour < 17) {
-      timeGreeting = 'Good afternoon';
+    final lang = _detectedLanguage;
+    final isNonLatin = lang.startsWith('hi') || lang.startsWith('bn') ||
+        lang.startsWith('gu') || lang.startsWith('kn') || lang.startsWith('ml') ||
+        lang.startsWith('mr') || lang.startsWith('od') || lang.startsWith('pa') ||
+        lang.startsWith('ta') || lang.startsWith('te');
+
+    String greeting;
+    if (isNonLatin) {
+      // Hindi/Indian languages — use Sarvam TTS for native greeting
+      if (hour < 12) {
+        greeting = _userName.isNotEmpty
+            ? 'नमस्ते $_userName! आज क्या खाना चाहेंगे?'
+            : 'नमस्ते! आज क्या ऑर्डर करना चाहेंगे?';
+      } else if (hour < 17) {
+        greeting = _userName.isNotEmpty
+            ? 'नमस्ते $_userName! दोपहर का खाना क्या चाहिए?'
+            : 'नमस्ते! आज क्या ऑर्डर करना चाहेंगे?';
+      } else {
+        greeting = _userName.isNotEmpty
+            ? 'नमस्ते $_userName! शाम का खाना क्या चाहेंगे?'
+            : 'नमस्ते! आज क्या ऑर्डर करना चाहेंगे?';
+      }
     } else {
-      timeGreeting = 'Good evening';
+      // English
+      String timeGreeting;
+      if (hour < 12) {
+        timeGreeting = 'Good morning';
+      } else if (hour < 17) {
+        timeGreeting = 'Good afternoon';
+      } else {
+        timeGreeting = 'Good evening';
+      }
+      greeting = _userName.isNotEmpty
+          ? '$timeGreeting, $_userName! What would you like to eat?'
+          : '$timeGreeting! What would you like to order?';
     }
 
-    final greeting = _userName.isNotEmpty
-        ? '$timeGreeting, $_userName! What would you like to eat?'
-        : '$timeGreeting! What would you like to order?';
-
     await _speak(greeting);
-    _addLog('Greeting: $greeting');
+    _addLog('Greeting: $greeting (lang: $lang)');
 
     if (_sarvamAvailable) {
       // Sarvam path: destroy native engine to free mic for flutter_sound recording
@@ -397,11 +477,11 @@ class MealVoiceController extends ChangeNotifier {
 
     MealVoiceCommand command;
 
-    // Try Gemini async parse if available
+    // Try Gemini async parse (it will refresh token internally)
     final currentParser = _parser ?? MealVoiceParserFactory.getParser();
-    if (currentParser is GeminiMealVoiceCommandParser && currentParser.isAvailable) {
+    if (currentParser is GeminiMealVoiceCommandParser) {
       _addLog('Parsing with Gemini...');
-      command = await currentParser.parseAsync(transcript);
+      command = await currentParser.parseAsync(transcript, languageCode: _detectedLanguage);
     } else {
       _addLog('Parsing with Regex...');
       command = currentParser.parse(transcript);
@@ -461,10 +541,14 @@ class MealVoiceController extends ChangeNotifier {
 
     try {
       await _orderHandler!.clearCart();
-      _ttsResponse = 'Cart cleared. What would you like to order?';
       _state = MealVoiceState.commandSuccess;
       _addLog('Cart cleared via voice');
-      await _speakAndReturn(_ttsResponse);
+      await _respondAndStay(
+        context: 'Cart was cleared successfully. Ask the user what they would like to order next.',
+        fallback: 'Cart cleared. What would you like to order?',
+        state: MealVoiceState.commandSuccess,
+      );
+      _returnToWakeWordListening();
     } catch (e) {
       _handleError('Failed to clear cart');
     }
@@ -522,13 +606,15 @@ class MealVoiceController extends ChangeNotifier {
     if (_notFoundItems.isNotEmpty) {
       final foundNames = _searchResults.map((r) => r.menuItem.name).join(' and ');
       final missingNames = _notFoundItems.join(' and ');
-      final msg = 'I found $foundNames, but I couldn\'t find $missingNames. '
-          'Should I just add the ones I found?';
-      _ttsResponse = msg;
       _state = MealVoiceState.confirmationRequired;
       _awaitingConfirmation = true;
       notifyListeners();
-      await _speak(msg);
+      await _respondAndStay(
+        context: 'Some items were found and some were not. Ask if they want to add only the found items.',
+        details: 'Found: $foundNames. Not found: $missingNames.',
+        fallback: 'I found $foundNames, but I couldn\'t find $missingNames. Should I just add the ones I found?',
+        state: MealVoiceState.confirmationRequired,
+      );
       _startConfirmationTimeout();
       await _restartEngineForConfirmation();
       return;
@@ -545,6 +631,8 @@ class MealVoiceController extends ChangeNotifier {
     final items = _pendingItems;
     final results = _searchResults;
 
+    String details;
+    String fallbackMsg;
     if (results.length == 1) {
       final result = results.first;
       final item = items.first;
@@ -554,9 +642,10 @@ class MealVoiceController extends ChangeNotifier {
       final name = result.menuItem.name;
       final kitchen = result.kitchen.name;
 
-      _ttsResponse = qty > 1
-          ? 'Great choice! I found $qty ${name}s from $kitchen for $total rupees. Should I add them to your cart?'
-          : 'Nice! I found $name from $kitchen for $price rupees. Want me to add it to your cart?';
+      details = 'Item: $name, Restaurant: $kitchen, Price: ₹$price, Quantity: $qty, Total: ₹$total';
+      fallbackMsg = qty > 1
+          ? 'I found $qty ${name}s from $kitchen for ₹$total. Should I add them to your cart?'
+          : 'I found $name from $kitchen for ₹$price. Want me to add it to your cart?';
     } else {
       double total = 0;
       for (int i = 0; i < results.length; i++) {
@@ -565,14 +654,20 @@ class MealVoiceController extends ChangeNotifier {
         total += result.menuItem.price * item.quantity;
       }
       final names = results.map((r) => r.menuItem.name).join(' and ');
-      _ttsResponse = 'Perfect! I found $names for a total of $total rupees. Shall I add them all to your cart?';
+      details = 'Items: $names, Total: ₹$total';
+      fallbackMsg = 'I found $names for a total of ₹$total. Shall I add them all to your cart?';
     }
 
     _state = MealVoiceState.confirmationRequired;
     _awaitingConfirmation = true;
     notifyListeners();
 
-    await _speak(_ttsResponse);
+    await _respondAndStay(
+      context: 'Items were found on the menu. Present them to the user and ask if they want to add to cart.',
+      details: details,
+      fallback: fallbackMsg,
+      state: MealVoiceState.confirmationRequired,
+    );
     _addLog('Confirmation: $_ttsResponse');
     _startConfirmationTimeout();
     // Restart engine so it can capture user's Yes/No response
@@ -652,19 +747,27 @@ class MealVoiceController extends ChangeNotifier {
     if (addedCount > 0 && failedCount == 0) {
       final total = _orderHandler!.cartTotal;
       final count = _orderHandler!.cartItemCount;
-      final msg = addedCount == _searchResults.length
-          ? 'All done! I\'ve added everything to your cart. You now have $count item${count > 1 ? 's' : ''} totalling $total rupees. Anything else?'
-          : 'Added $addedCount item${addedCount > 1 ? 's' : ''} to your cart. Total is $total rupees. Need anything else?';
-      _ttsResponse = msg;
+      final allAdded = addedCount == _searchResults.length;
+      final itemNames = _searchResults.map((r) => r.menuItem.name).join(', ');
       _state = MealVoiceState.commandSuccess;
-      _addLog(msg);
-      await _speak(msg);
+      await _respondAndStay(
+        context: allAdded
+            ? 'All items were successfully added to the cart. Tell the user what they have and the total, then ask if they want anything else.'
+            : 'Some items were added to the cart. Tell the user what was added and ask if they want anything else.',
+        details: 'Items added: $itemNames. Cart total: ₹$total. Cart count: $count.',
+        fallback: allAdded
+            ? 'All done! I\'ve added everything. You now have $count item${count > 1 ? 's' : ''} totalling ₹$total. Anything else?'
+            : 'Added $addedCount item${addedCount > 1 ? 's' : ''} to your cart. Total is ₹$total. Need anything else?',
+        state: MealVoiceState.commandSuccess,
+      );
     } else if (addedCount > 0) {
       final total = _orderHandler!.cartTotal;
-      _ttsResponse = 'I managed to add $addedCount item${addedCount > 1 ? 's' : ''}, but $failedCount couldn\'t be added. Your cart total is $total rupees. Want to try ordering something else?';
-      _state = MealVoiceState.commandSuccess;
-      _addLog(_ttsResponse);
-      await _speak(_ttsResponse);
+      await _respondAndStay(
+        context: 'Some items were added but some failed. Inform the user and ask if they want to try something else.',
+        details: 'Added: $addedCount, Failed: $failedCount. Cart total: ₹$total.',
+        fallback: 'I managed to add $addedCount item${addedCount > 1 ? 's' : ''}, but $failedCount couldn\'t be added. Your cart total is ₹$total. Want to try something else?',
+        state: MealVoiceState.commandSuccess,
+      );
     } else {
       _handleError('Sorry, couldn\'t add that to your cart. Please try again.');
       return;
@@ -677,12 +780,14 @@ class MealVoiceController extends ChangeNotifier {
   /// FIX #6: Handle cart conflict — ask user to clear cart.
   Future<void> _handleCartConflict() async {
     _pendingCartConflictClear = true;
-    _ttsResponse = 'Hmm, your cart has items from a different restaurant. '
-        'I\'ll need to clear those first. Is that okay with you?';
     _state = MealVoiceState.confirmationRequired;
     _awaitingConfirmation = true;
     notifyListeners();
-    await _speak(_ttsResponse);
+    await _respondAndStay(
+      context: 'The cart has items from a different restaurant. Ask the user if they want to clear the cart first before adding new items.',
+      fallback: 'Your cart has items from a different restaurant. I\'ll need to clear those first. Is that okay?',
+      state: MealVoiceState.confirmationRequired,
+    );
     _startConfirmationTimeout();
     await _restartEngineForConfirmation();
   }
@@ -715,10 +820,13 @@ class MealVoiceController extends ChangeNotifier {
     if (addedCount > 0) {
       final total = _orderHandler!.cartTotal;
       final count = _orderHandler!.cartItemCount;
-      _ttsResponse = 'Done! Cart cleared and items added. You now have $count item${count > 1 ? 's' : ''} totalling $total rupees. Anything else you\'d like?';
       _state = MealVoiceState.commandSuccess;
-      _addLog(_ttsResponse);
-      await _speak(_ttsResponse);
+      await _respondAndStay(
+        context: 'Cart was cleared and items were added. Tell the user what they have and the total, then ask if they want anything else.',
+        details: 'Cart count: $count. Total: ₹$total.',
+        fallback: 'Done! Cart cleared and items added. You now have $count item${count > 1 ? 's' : ''} totalling ₹$total. Anything else?',
+        state: MealVoiceState.commandSuccess,
+      );
     } else {
       _handleError('Hmm, something went wrong after clearing the cart.');
       return;
@@ -731,27 +839,33 @@ class MealVoiceController extends ChangeNotifier {
   void _handleUserDenied() {
     _awaitingConfirmation = false;
     _pendingCartConflictClear = false;
-    _ttsResponse = 'No worries! Just say "Hi MEAL" whenever you\'re ready to order.';
     _state = MealVoiceState.userDenied;
     _addLog('User denied');
-    _returnToWakeWordListening();
+    _respond(
+      context: 'The user declined the order or said no. Be friendly and let them know they can come back anytime.',
+      fallback: 'No worries! Just say "Hi MEAL" whenever you\'re ready to order.',
+    );
   }
 
   /// Handle unknown/unrecognized command.
   void _handleUnknownCommand() {
-    _ttsResponse = 'Sorry, I didn\'t quite get that. You can say things like '
-        '"Add one chicken biryani", "I want two burgers", or "Remove the coke".';    _state = MealVoiceState.commandUnknown;
+    _state = MealVoiceState.commandUnknown;
     _addLog('Unknown command');
-    _speakAndReturn(_ttsResponse);
+    _respond(
+      context: 'The voice command was not understood. Give helpful examples of what they can say, like ordering food, removing items, etc.',
+      fallback: 'Sorry, I didn\'t quite get that. You can say things like "Add one chicken biryani" or "Remove the coke".',
+    );
   }
 
   /// Handle item not found in search.
   void _handleItemNotFound(String itemName) {
-    _ttsResponse = 'Hmm, I couldn\'t find "$itemName" on any menu right now. '
-        'Would you like to try something else?';
     _state = MealVoiceState.commandError;
     _addLog('Item not found: $itemName');
-    _speakAndReturn(_ttsResponse);
+    _respond(
+      context: 'The item the user requested was not found on any menu. Suggest trying something else.',
+      details: 'Item not found: $itemName',
+      fallback: 'Hmm, I couldn\'t find "$itemName" on any menu right now. Would you like to try something else?',
+    );
   }
 
   /// Handle listening timeout (no speech after wake word).
@@ -761,13 +875,18 @@ class MealVoiceController extends ChangeNotifier {
     _confirmationTimeout?.cancel();
 
     if (_state == MealVoiceState.confirmationRequired) {
-      _ttsResponse = 'I didn\'t hear you. Say "yes" or "no", or say "Hi MEAL" to start fresh.';
+      _respond(
+        context: 'The user did not respond during a yes/no confirmation. Remind them to say yes or no.',
+        fallback: 'I didn\'t hear you. Say "yes" or "no", or say "Hi MEAL" to start fresh.',
+      );
     } else {
-      _ttsResponse = 'I didn\'t catch that. Just say "Hi MEAL" when you\'re ready to order.';
+      _respond(
+        context: 'The user did not say anything after the greeting. Remind them to say Hi MEAL when ready.',
+        fallback: 'I didn\'t catch that. Just say "Hi MEAL" when you\'re ready to order.',
+      );
     }
 
     _addLog('Timeout: $reason');
-    _speakAndReturn(_ttsResponse);
   }
 
   /// Handle confirmation timeout.
@@ -782,10 +901,11 @@ class MealVoiceController extends ChangeNotifier {
 
   /// Handle unknown confirmation response.
   void _handleConfirmationUnknown(String transcript) {
-    _ttsResponse = 'Sorry, I didn\'t understand. Please say "yes" or "no".';
     _addLog('Unknown confirmation: $transcript');
-    // Don't restart timeout — just re-listen
-    _speakAndReturn(_ttsResponse);
+    _respond(
+      context: 'The user gave an unclear yes/no response. Gently ask them to say yes or no.',
+      fallback: 'Sorry, I didn\'t understand. Please say "yes" or "no".',
+    );
   }
 
   /// Handle general errors.
@@ -796,19 +916,27 @@ class MealVoiceController extends ChangeNotifier {
     _isProcessing = false;
 
     // Provide user-friendly messages for common errors
-    String userMessage;
+    String contextMsg;
+    String fallbackMsg;
     if (message.contains('SocketException') || message.contains('Network') || message.contains('timeout')) {
-      userMessage = 'I\'m having trouble connecting to the internet. Please check your connection and try again.';
+      contextMsg = 'There is a network connectivity issue. Ask the user to check their internet connection.';
+      fallbackMsg = 'I\'m having trouble connecting. Please check your connection and try again.';
     } else if (message.contains('permission')) {
-      userMessage = 'I need microphone permission to listen. Please allow it in settings.';
+      contextMsg = 'Microphone permission is not granted. Ask the user to enable it in settings.';
+      fallbackMsg = 'I need microphone permission. Please allow it in settings.';
     } else {
-      userMessage = 'Oops, something went wrong. $message';
+      contextMsg = 'An error occurred. Tell the user something went wrong and suggest trying again.';
+      fallbackMsg = 'Oops, something went wrong. Please try again.';
     }
 
-    _ttsResponse = userMessage;
     _state = MealVoiceState.commandError;
     _addLog('Error: $message');
-    await _speakAndReturn(_ttsResponse);
+    await _respondAndStay(
+      context: contextMsg,
+      details: 'Error details: $message',
+      fallback: fallbackMsg,
+      state: MealVoiceState.commandError,
+    );
   }
 
   /// Speak a message and return to wake-word listening.
@@ -837,10 +965,11 @@ class MealVoiceController extends ChangeNotifier {
   /// Handle "place order" voice command — requires authorization.
   Future<void> _handlePlaceOrder() async {
     if (_orderHandler == null || _orderHandler!.isCartEmpty) {
-      if (_orderHandler == null || _orderHandler!.isCartEmpty) {
-      _handleError('Your cart is empty. Tell me what you\'d like to order first!');
+      _respond(
+        context: 'The user wants to place an order but the cart is empty. Ask them to add items first.',
+        fallback: 'Your cart is empty. Tell me what you\'d like to order first!',
+      );
       return;
-    }      return;
     }
 
     final total = _orderHandler!.cartTotal;
@@ -858,11 +987,14 @@ class MealVoiceController extends ChangeNotifier {
 
     // Need authorization — request PIN
     _state = MealVoiceState.awaitingAuthorization;
-    _ttsResponse = 'Your order comes to $total rupees for $itemCount item${itemCount > 1 ? 's' : ''}. '
-        'I\'ll need your Voice PIN to confirm. Please enter it on your phone.';
     notifyListeners();
 
-    await _speak(_ttsResponse);
+    await _respondAndStay(
+      context: 'The order total and item count need to be confirmed. Ask the user for their Voice PIN to complete the order.',
+      details: 'Total: ₹$total. Items: $itemCount.',
+      fallback: 'Your order comes to ₹$total for $itemCount item${itemCount > 1 ? 's' : ''}. I\'ll need your Voice PIN to confirm.',
+      state: MealVoiceState.awaitingAuthorization,
+    );
 
     // Request PIN via callback
     if (requestAuthorization != null) {
@@ -889,21 +1021,28 @@ class MealVoiceController extends ChangeNotifier {
 
   /// Called after PIN verification fails.
   void onAuthorizationFailed(String error) {
-    _ttsResponse = 'PIN verification didn\'t work. $error';
     _state = MealVoiceState.commandError;
     _addLog('Authorization failed: $error');
     notifyListeners();
-    _speakAndReturn(_ttsResponse);
+    _respond(
+      context: 'PIN verification failed. Tell the user it didn\'t work and suggest trying again.',
+      details: 'Error: $error',
+      fallback: 'PIN verification didn\'t work. $error',
+    );
   }
 
   /// Start final confirmation after authorization.
   Future<void> _startFinalConfirmation(double total, int itemCount) async {
     _awaitingFinalConfirmation = true;
-    _ttsResponse = 'Great, PIN verified! Shall I place the order for $total rupees?';
     _state = MealVoiceState.awaitingFinalConfirmation;
     notifyListeners();
 
-    await _speak(_ttsResponse);
+    await _respondAndStay(
+      context: 'PIN was verified successfully. Ask the user if they want to place the order now.',
+      details: 'Total: ₹$total. Items: $itemCount.',
+      fallback: 'PIN verified! Shall I place the order for ₹$total?',
+      state: MealVoiceState.awaitingFinalConfirmation,
+    );
     _startConfirmationTimeout();
     await _restartEngineForConfirmation();
   }
@@ -911,11 +1050,15 @@ class MealVoiceController extends ChangeNotifier {
   /// Ask final confirmation via callback.
   Future<void> _askFinalConfirmation(double total, int itemCount) async {
     _awaitingFinalConfirmation = true;
-    _ttsResponse = 'Your order comes to $total rupees. Should I go ahead and place it?';
     _state = MealVoiceState.awaitingFinalConfirmation;
     notifyListeners();
 
-    await _speak(_ttsResponse);
+    await _respondAndStay(
+      context: 'The user already has valid authorization. Ask if they want to place the order now.',
+      details: 'Total: ₹$total. Items: $itemCount.',
+      fallback: 'Your order comes to ₹$total. Should I go ahead and place it?',
+      state: MealVoiceState.awaitingFinalConfirmation,
+    );
     _startConfirmationTimeout();
     await _restartEngineForConfirmation();
   }
@@ -1194,16 +1337,27 @@ class MealVoiceController extends ChangeNotifier {
       } catch (_) {}
       audioPath = null;
 
-      if (transcript != null && transcript.trim().isNotEmpty) {
+      if (transcript != null && transcript.transcript.trim().isNotEmpty) {
         _consecutiveSttFailures = 0; // Reset on success
-        final lowerTranscript = transcript.trim().toLowerCase();
-        _addLog('STT: "$transcript"');
+        final lowerTranscript = transcript.transcript.trim().toLowerCase();
+        _addLog('STT: "${transcript.transcript}" (lang: ${transcript.languageCode})');
+        // Store detected language for TTS responses
+        if (transcript.languageCode != null && transcript.languageCode!.isNotEmpty) {
+          _detectedLanguage = transcript.languageCode!;
+          _addLog('Language detected: $_detectedLanguage');
+          // Set device TTS language to match detected language
+          if (_ttsAvailable) {
+            try {
+              await _tts.setLanguage(_detectedLanguage);
+            } catch (_) {}
+          }
+        }
         // Check for wake word in Sarvam mode
         if (_isWakeWord(lowerTranscript)) {
-          _addLog('Wake word detected in transcript: "$transcript"');
+          _addLog('Wake word detected in transcript: "${transcript.transcript}"');
           _handleWakeWordDetected(DateTime.now());
         } else {
-          _handleTranscription(transcript);
+          _handleTranscription(transcript.transcript);
         }
       } else {
         _consecutiveSttFailures++;

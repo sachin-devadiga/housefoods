@@ -10,6 +10,12 @@ import '../core/services/token_service.dart';
 ///
 /// Sends audio to MEALIN backend which proxies to Sarvam AI.
 /// The Sarvam API key never leaves the server.
+class SarvamSTTResult {
+  final String transcript;
+  final String? languageCode;
+  SarvamSTTResult(this.transcript, this.languageCode);
+}
+
 class SarvamSTTService {
   bool _isInitialized = false;
   bool _isRecording = false;
@@ -43,8 +49,8 @@ class SarvamSTTService {
     _authToken = await tokenService.getAccessToken();
   }
 
-  /// Transcribe audio from a file path.
-  Future<String?> transcribeFile(String filePath, {String languageCode = 'auto'}) async {
+  /// Transcribe audio from a file path, returning transcript and detected language.
+  Future<SarvamSTTResult?> transcribeFile(String filePath, {String languageCode = 'auto'}) async {
     if (!_isInitialized) {
       _lastError = 'Not initialized (no auth token)';
       debugPrint('[SarvamSTT] Not initialized');
@@ -65,16 +71,15 @@ class SarvamSTTService {
         debugPrint('[SarvamSTT] $_lastError');
         return null;
       }
-      return await transcribeBytes(bytes, languageCode: languageCode);
-    } catch (e) {
+      return await transcribeBytes(bytes, languageCode: languageCode);    } catch (e) {
       _lastError = 'File read error: $e';
       debugPrint('[SarvamSTT] $_lastError');
       return null;
     }
   }
 
-  /// Transcribe raw audio bytes.
-  Future<String?> transcribeBytes(List<int> audioBytes, {String languageCode = 'auto'}) async {
+  /// Transcribe raw audio bytes, returning transcript and detected language.
+  Future<SarvamSTTResult?> transcribeBytes(List<int> audioBytes, {String languageCode = 'auto'}) async {
     if (!_isInitialized) {
       _lastError = 'Not initialized';
       debugPrint('[SarvamSTT] Not initialized');
@@ -124,7 +129,10 @@ class SarvamSTTService {
         final lang = data['language_code'] as String?;
         debugPrint('[SarvamSTT] Transcript: "$transcript" (lang: $lang)');
         _lastError = null;
-        return transcript;
+        if (transcript != null && transcript.isNotEmpty) {
+          return SarvamSTTResult(transcript, lang);
+        }
+        return null;
       } else {
         final body = response.body.length > 300
             ? response.body.substring(0, 300)
