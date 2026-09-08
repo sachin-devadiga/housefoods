@@ -128,6 +128,13 @@ IMPORTANT CONTEXT NOTES:
 - NEVER say "As an AI" or "I'm an AI assistant". Just be MEAL.
 ''';
 
+  /// Models to try in order of preference (primary first, fallbacks after).
+  static const List<String> _models = [
+    'gemini-2.5-flash-lite',
+    'gemini-3.5-flash-lite',
+    'gemini-2.0-flash-lite',
+  ];
+
   /// Send a conversational turn to Gemini and get response + actions.
   Future<ConversationalResponse?> chat({
     required String userTranscript,
@@ -141,6 +148,7 @@ IMPORTANT CONTEXT NOTES:
 
     try {
       final uri = Uri.parse('${AppConstants.apiBaseUrl}/api/auth/voice/gemini/');
+      debugPrint('[MEAL Brain] URL: $uri');
 
       // Build the conversation history for Gemini
       final history = conversation.buildGeminiHistory();
@@ -148,38 +156,57 @@ IMPORTANT CONTEXT NOTES:
 
       // The latest user message is the last item in history
       final currentUserMessage = history.isNotEmpty ? history.last['content']! : userTranscript;
+      debugPrint('[MEAL Brain] Prompt (${currentUserMessage.length} chars): ${currentUserMessage.substring(0, currentUserMessage.length > 80 ? 80 : currentUserMessage.length)}...');
 
-      final response = await http.post(
-        uri,
-        headers: {
-          'Authorization': 'Bearer $_authToken',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
+      // Try models in order — fallback if one returns 502
+      for (final model in _models) {
+        debugPrint('[MEAL Brain] Trying model: $model');
+
+        final requestPayload = jsonEncode({
           'prompt': currentUserMessage,
           'system_prompt': _systemPrompt,
-          'model': 'gemini-2.5-flash-lite',
+          'model': model,
           'temperature': 0.7,
           'max_output_tokens': 300,
           'conversation_history': history.length > 1
               ? history.sublist(0, history.length - 1)
               : [],
           'context': context,
-        }),
-      ).timeout(const Duration(seconds: 15));
+        });
+        debugPrint('[MEAL Brain] Payload: ${requestPayload.length} bytes, history: ${history.length} turns');
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final text = data['text'] as String?;
-        if (text != null && text.trim().isNotEmpty) {
-          return _parseResponse(text.trim());
+        final response = await http.post(
+          uri,
+          headers: {
+            'Authorization': 'Bearer $_authToken',
+            'Content-Type': 'application/json',
+          },
+          body: requestPayload,
+        ).timeout(const Duration(seconds: 25));
+
+        debugPrint('[MEAL Brain] $model → HTTP ${response.statusCode} (${response.body.length} bytes)');
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          final text = data['text'] as String?;
+          if (text != null && text.trim().isNotEmpty) {
+            debugPrint('[MEAL Brain] $model SUCCESS: ${text.substring(0, text.length > 100 ? 100 : text.length)}...');
+            return _parseResponse(text.trim());
+          }
+          debugPrint('[MEAL Brain] $model returned empty text');
+        } else {
+          debugPrint('[MEAL Brain] $model FAILED: ${(response.body.length > 300 ? response.body.substring(0, 300) : response.body)}');
+          // If 502 (model unavailable), try next model. Otherwise stop.
+          if (response.statusCode != 502) {
+            return null;
+          }
         }
       }
 
-      debugPrint('[MEAL Brain] Backend error ${response.statusCode}: ${response.body}');
+      debugPrint('[MEAL Brain] All models failed');
       return null;
     } catch (e) {
-      debugPrint('[MEAL Brain] Error: $e');
+      debugPrint('[MEAL Brain] Exception: $e');
       return null;
     }
   }
@@ -199,11 +226,14 @@ IMPORTANT CONTEXT NOTES:
       }
       cleaned = cleaned.trim();
 
+      debugPrint('[MEAL Brain] Parsing JSON (${cleaned.length} chars): ${cleaned.substring(0, cleaned.length > 150 ? 150 : cleaned.length)}...');
       final json = jsonDecode(cleaned) as Map<String, dynamic>;
-      return ConversationalResponse.fromJson(json);
+      final result = ConversationalResponse.fromJson(json);
+      debugPrint('[MEAL Brain] Parsed OK: response=${result.response.length} chars, actions=${result.actions.length}');
+      return result;
     } catch (e) {
-      debugPrint('[MEAL Brain] JSON parse failed: $e');
-      debugPrint('[MEAL Brain] Raw text: $text');
+      debugPrint('[MEAL Brain] JSON parse FAILED: $e');
+      debugPrint('[MEAL Brain] Raw text (${text.length} chars): ${text.substring(0, text.length > 200 ? 200 : text.length)}...');
 
       // Fallback: try to extract response field only
       try {
