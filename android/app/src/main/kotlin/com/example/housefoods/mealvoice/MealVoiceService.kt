@@ -10,7 +10,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -52,8 +54,10 @@ class MealVoiceService : Service() {
 
     private var wakeWordEngine: SpeechRecognizerWakeWordEngine? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var nativeProcessor: VoiceNativeProcessor? = null
+    private var isNativeProcessing = false
 
-    // Bridge reference — set by MainActivity
+    // Bridge reference — set by MainActivity (null when in separate process)
     var bridge: MealVoiceBridge? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -61,16 +65,35 @@ class MealVoiceService : Service() {
     override fun onCreate() {
         super.onCreate()
         instance = this
-        Log.i(TAG, "Service created")
+        Log.i(TAG, "Service created (process: ${android.os.Process.myPid()})")
         createNotificationChannel()
+
+        // Initialize native processor for background command handling
+        nativeProcessor = VoiceNativeProcessor(this)
+        nativeProcessor?.initialize {
+            Log.i(TAG, "Native processor TTS ready")
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
+        // Null intent = system restart after process death (START_STICKY)
+        if (intent == null) {
+            val prefs = getSharedPreferences("meal_voice_prefs", Context.MODE_PRIVATE)
+            val wasEnabled = prefs.getBoolean("voice_enabled", false)
+            if (wasEnabled) {
+                Log.i(TAG, "System restart (null intent) — voice was enabled, auto-starting")
+                startVoiceService()
+            } else {
+                Log.i(TAG, "System restart but voice not enabled — stopping")
+                stopSelf()
+            }
+            return START_STICKY
+        }
+
+        when (intent.action) {
             "ACTION_STOP" -> stopVoiceService()
             "ACTION_START" -> startVoiceService()
             "ACTION_CREATE_ONLY" -> {
-                // Service created — check if voice was previously enabled
                 val prefs = getSharedPreferences("meal_voice_prefs", Context.MODE_PRIVATE)
                 val wasEnabled = prefs.getBoolean("voice_enabled", false)
                 if (wasEnabled) {
@@ -105,13 +128,13 @@ class MealVoiceService : Service() {
                 Log.i(TAG, "Unknown action: ${intent?.action}")
             }
         }
-        // START_STICKY: if service is killed, Android restarts it
-        // Our BootReceiver + periodic alarm handle the actual engine restart
         return START_STICKY
     }
 
     override fun onDestroy() {
         instance = null
+        nativeProcessor?.shutdown()
+        nativeProcessor = null
         stopVoiceService()
         super.onDestroy()
     }
@@ -209,26 +232,187 @@ class MealVoiceService : Service() {
             bridge?.sendEvent("wakeWordDetected", System.currentTimeMillis().toString())
             updateNotification("Wake word detected! Listening for command...")
         } else {
-            // Bridge is dead (app killed) — launch app to process the command
-            Log.i(TAG, "Bridge is null — launching app to process wake word")
-            getSharedPreferences("meal_voice_prefs", Context.MODE_PRIVATE)
-                .edit().putBoolean("pending_wake_word", true).apply()
+            // Bridge is dead — process command natively
+            Log.i(TAG, "Bridge is null — processing command natively")
+            updateNotification("Wake word detected! Listening for your order...")
+            startNativeCommandCapture()
+        }
+    }
 
-            // Launch the app — it will pick up pending_wake_word and process it
-            val launchIntent = Intent(this, com.example.housefoods.MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                        Intent.FLAG_ACTIVITY_SINGLE_TOP
-                putExtra("meal_voice_wake_word", true)
+    /**
+     * Capture command via native SpeechRecognizer when Flutter is dead,
+     * then process it entirely in native Kotlin.
+     */
+    private fun startNativeCommandCapture() {
+        if (isNativeProcessing) {
+            Log.i(TAG, "Already processing natively")
+            return
+        }
+        isNativeProcessing = true
+
+        // Stop wake word engine temporarily
+        wakeWordEngine?.stop()
+
+        // Create a new SpeechRecognizer for command capture
+        try {
+            val recognizer = android.speech.SpeechRecognizer.createSpeechRecognizer(this)
+            recognizer?.setRecognitionListener(object : android.speech.RecognitionListener {
+                override fun onReadyForSpeech(params: android.os.Bundle?) {
+                    Log.i(TAG, "Native STT: Ready for speech")
+                    updateNotification("Listening... Speak your command")
+                }
+                override fun onBeginningOfSpeech() {}
+                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onEndOfSpeech() {
+                    Log.i(TAG, "Native STT: End of speech")
+                    updateNotification("Processing your command...")
+                }
+                override fun onError(error: Int) {
+                    Log.e(TAG, "Native STT error: $error")
+                    isNativeProcessing = false
+                    updateNotification("Didn't catch that. Say 'Hi MEAL' to try again.")
+                    restartWakeWordListening()
+                }
+                override fun onResults(results: android.os.Bundle?) {
+                    val matches = results?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)
+                    val transcript = matches?.firstOrNull() ?: ""
+                    Log.i(TAG, "Native STT result: $transcript")
+                    if (transcript.isNotEmpty()) {
+                        processNativeCommand(transcript)
+                    } else {
+                        isNativeProcessing = false
+                        updateNotification("Didn't catch that. Say 'Hi MEAL' to try again.")
+                        restartWakeWordListening()
+                    }
+                }
+                override fun onPartialResults(partialResults: android.os.Bundle?) {}
+                override fun onEvent(eventType: Int, params: android.os.Bundle?) {}
+            })
+
+            val intent = android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "en-IN")
+                putExtra(android.speech.RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                putExtra(android.speech.RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
             }
+            recognizer?.startListening(intent)
+
+            // Timeout after 12 seconds
+            android.os.Handler(Looper.getMainLooper()).postDelayed({
+                if (isNativeProcessing) {
+                    recognizer?.cancel()
+                    isNativeProcessing = false
+                    updateNotification("Listening timed out. Say 'Hi MEAL' to try again.")
+                    restartWakeWordListening()
+                }
+            }, 12000)
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start native STT", e)
+            isNativeProcessing = false
+            // Fallback: launch the app
+            launchAppForCommand()
+        }
+    }
+
+    /**
+     * Process a command entirely natively: call Gemini, execute actions, speak response.
+     */
+    private fun processNativeCommand(transcript: String) {
+        val processor = nativeProcessor
+        if (processor == null) {
+            Log.e(TAG, "Native processor not initialized")
+            isNativeProcessing = false
+            launchAppForCommand()
+            return
+        }
+
+        val authToken = processor.getAuthToken()
+        if (authToken.isNullOrEmpty()) {
+            Log.e(TAG, "No auth token — cannot process natively")
+            isNativeProcessing = false
+            launchAppForCommand()
+            return
+        }
+
+        Thread {
             try {
-                startActivity(launchIntent)
-                showWakeWordNotification()
-                updateNotification("Opening MEAL to process your command...")
+                Log.i(TAG, "Calling Gemini with: $transcript")
+                val geminiResponse = processor.callGemini(
+                    prompt = transcript,
+                    authToken = authToken,
+                )
+
+                if (geminiResponse == null) {
+                    Log.e(TAG, "Gemini returned null")
+                    isNativeProcessing = false
+                    updateNotification("Sorry, I had trouble processing that. Say 'Hi MEAL' to try again.")
+                    restartWakeWordListening()
+                    return@Thread
+                }
+
+                val (responseText, actions) = processor.parseGeminiResponse(geminiResponse)
+                Log.i(TAG, "Gemini response: $responseText (${actions.size} actions)")
+
+                // Check if there are actions that need Flutter (cart, order, search)
+                val needsFlutter = actions.any { action ->
+                    val type = action.optString("type", "")
+                    type == "add_to_cart" || type == "remove_from_cart" ||
+                    type == "clear_cart" || type == "place_order"
+                }
+
+                if (needsFlutter) {
+                    // Actions require Flutter — launch the app
+                    Log.i(TAG, "Actions require Flutter — launching app")
+                    // Save the command so Flutter can pick it up
+                    getSharedPreferences("meal_voice_prefs", Context.MODE_PRIVATE)
+                        .edit()
+                        .putBoolean("pending_wake_word", true)
+                        .putString("pending_command", transcript)
+                        .apply()
+                    isNativeProcessing = false
+                    processor.speak(responseText) {
+                        launchAppForCommand()
+                    }
+                    return@Thread
+                }
+
+                // Pure conversational response — speak it and go back to listening
+                processor.speak(responseText) {
+                    Log.i(TAG, "TTS done — restarting wake word")
+                    isNativeProcessing = false
+                    updateNotification("Listening for 'Hi MEAL'...")
+                    restartWakeWordListening()
+                }
+
+                updateNotification(responseText)
+
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to launch app", e)
-                showWakeWordNotification()
+                Log.e(TAG, "Native processing failed", e)
+                isNativeProcessing = false
+                updateNotification("Something went wrong. Say 'Hi MEAL' to try again.")
+                restartWakeWordListening()
             }
+        }.start()
+    }
+
+    /**
+     * Launch the main app to process a command (fallback when native can't handle it).
+     */
+    private fun launchAppForCommand() {
+        val launchIntent = Intent(this, com.example.housefoods.MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("meal_voice_wake_word", true)
+        }
+        try {
+            startActivity(launchIntent)
+            showWakeWordNotification()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to launch app", e)
+            showWakeWordNotification()
         }
     }
 

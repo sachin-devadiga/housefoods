@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class TokenService {
   static const _accessTokenKey = 'access_token';
@@ -21,6 +23,8 @@ class TokenService {
       _storage.write(key: _accessTokenKey, value: accessToken),
       _storage.write(key: _refreshTokenKey, value: refreshToken),
     ]);
+    // Also save to SharedPreferences for native voice service cross-process access
+    await _syncToSharedPrefs(accessToken: accessToken);
   }
 
   Future<String?> getAccessToken() async {
@@ -47,6 +51,9 @@ class TokenService {
       _storage.write(key: _roleKey, value: role),
       if (name != null) _storage.write(key: _userNameKey, value: name),
     ]);
+    // Sync to SharedPreferences for native service
+    final prefs = await SharedPreferences.getInstance();
+    if (name != null) await prefs.setString('user_name', name);
   }
 
   Future<String?> getEmail() async {
@@ -67,10 +74,13 @@ class TokenService {
 
   Future<void> saveUserName(String name) async {
     await _storage.write(key: _userNameKey, value: name);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_name', name);
   }
 
   Future<void> updateAccessToken(String token) async {
     await _storage.write(key: _accessTokenKey, value: token);
+    await _syncToSharedPrefs(accessToken: token);
   }
 
   Future<void> clearSession() async {
@@ -82,10 +92,24 @@ class TokenService {
       _storage.delete(key: _roleKey),
       _storage.delete(key: _userNameKey),
     ]);
+    // Clear SharedPreferences too
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('auth_token');
+    await prefs.remove('user_name');
   }
 
   Future<bool> isLoggedIn() async {
     final token = await getAccessToken();
     return token != null && token.isNotEmpty;
+  }
+
+  /// Sync auth token to SharedPreferences for native voice service.
+  Future<void> _syncToSharedPrefs({required String accessToken}) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('auth_token', accessToken);
+    } catch (e) {
+      debugPrint('[TokenService] Failed to sync to SharedPreferences: $e');
+    }
   }
 }

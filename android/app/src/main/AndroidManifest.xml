@@ -44,9 +44,10 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <!-- MEAL Voice Foreground Service -->
+        <!-- MEAL Voice Foreground Service — runs in separate process to survive app kills -->
         <service
             android:name=".mealvoice.MealVoiceService"
+            android:process=":voice_service"
             android:foregroundServiceType="specialUse"
             android:exported="false">
             <property
