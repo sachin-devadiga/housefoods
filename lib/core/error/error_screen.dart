@@ -30,29 +30,9 @@ class GlobalErrorScreen extends StatelessWidget {
             const SizedBox(height: 40),
             ElevatedButton(
               onPressed: () {
-                // Navigate back to the initial screen
                 Navigator.of(context).popUntil((route) => route.isFirst);
               },
               child: const Text("Go to Home"),
-            ),
-            const SizedBox(height: 16),
-            TextButton(
-              onPressed: () {
-                // In development, show details; in production, show a support ID
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text("Error Details"),
-                    content: SingleChildScrollView(
-                      child: Text(errorDetails.toString()),
-                    ),
-                  ),
-                );
-              },
-              child: Text(
-                "View Technical Details",
-                style: TextStyle(color: Colors.grey[400], fontSize: 12),
-              ),
             ),
           ],
         ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import '../../../../../core/theme/app_theme.dart';
 import '../../../../../core/services/api_service.dart';
@@ -148,7 +149,7 @@ class ProfileTab extends StatelessWidget {
           _buildProfileOption(
             Icons.mic, 
             "MEAL Voice Assistant", 
-            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MealVoiceTestScreen()))
+            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MealVoiceScreen()))
           ),
           _buildProfileOption(
             Icons.settings_voice, 
@@ -182,9 +183,16 @@ class ProfileTab extends StatelessWidget {
             child: const Text("Logout"),
           ),
           const SizedBox(height: 20),
-          Text(
-            "Version 1.0.0",
-            style: TextStyle(color: Colors.grey[400], fontSize: 12),
+          FutureBuilder<PackageInfo>(
+            future: PackageInfo.fromPlatform(),
+            builder: (context, snapshot) {
+              final version = snapshot.data?.version ?? '';
+              final build = snapshot.data?.buildNumber ?? '';
+              return Text(
+                version.isNotEmpty ? 'Version $version+$build' : '',
+                style: TextStyle(color: Colors.grey[400], fontSize: 12),
+              );
+            },
           ),
         ],
       ),

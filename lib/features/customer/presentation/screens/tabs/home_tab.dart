@@ -227,7 +227,7 @@ class _HomeTabState extends State<HomeTab> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const MealVoiceTestScreen()),
+                MaterialPageRoute(builder: (context) => const MealVoiceScreen()),
               );
             },
             backgroundColor: Colors.deepPurple,

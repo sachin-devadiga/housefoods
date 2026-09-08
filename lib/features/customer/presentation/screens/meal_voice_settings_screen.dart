@@ -1,9 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/cart_provider.dart';
-import '../providers/kitchen_provider.dart';
-import '../../../../core/services/voice_order_security_service.dart';
-import '../../../../meal_voice/meal_voice_controller.dart';
 import '../../../../meal_voice/meal_voice_settings.dart';
 
 /// Settings screen for MEAL Voice Engine.
@@ -73,11 +69,6 @@ class _MealVoiceSettingsScreenState extends State<MealVoiceSettingsScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                // Test section
-                _buildSectionHeader('Test Voice'),
-                _buildTestButton(context),
-                const SizedBox(height: 24),
-
                 // Info
                 _buildInfoCard(settings),
               ],
@@ -122,31 +113,6 @@ class _MealVoiceSettingsScreenState extends State<MealVoiceSettingsScreen> {
         subtitle: Text(settings.speakerName),
         trailing: const Icon(Icons.arrow_drop_down),
         onTap: () => _showSpeakerPicker(settings),
-      ),
-    );
-  }
-
-  Widget _buildTestButton(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        onPressed: () async {
-          if (!mounted) return;
-          final vc = MealVoiceController();
-          final messenger = ScaffoldMessenger.of(context);
-          await vc.initialize(
-            kitchenProvider: context.read<KitchenProvider>(),
-            cartProvider: context.read<CartProvider>(),
-            securityService: context.read<VoiceOrderSecurityService>(),
-          );
-          await vc.startListening();
-          if (!mounted) return;
-          messenger.showSnackBar(
-            const SnackBar(content: Text('Voice test started — say "Hi MEAL"')),
-          );
-        },
-        icon: const Icon(Icons.mic, color: Colors.deepPurple),
-        label: const Text('Test Voice', style: TextStyle(color: Colors.deepPurple)),
       ),
     );
   }

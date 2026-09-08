@@ -175,15 +175,17 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
         commandResults.clear()
 
         try {
-            speechRecognizer?.stopListening()
+            speechRecognizer?.cancel()
+            speechRecognizer?.destroy()
+            speechRecognizer = null
 
-            // FIX #29: Small delay before restarting to avoid device race conditions
             mainHandler.postDelayed({
                 try {
+                    speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context!!)
                     speechRecognizer?.setRecognitionListener(createCommandCaptureListener())
                     speechRecognizer?.startListening(createRecognitionIntent())
                     scheduleCommandTimeout()
-                    Log.i(TAG, "Command capture started")
+                    Log.i(TAG, "Command capture started (fresh recognizer)")
                     onEventCallback?.onEvent("log", "Listening for command...")
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to start command capture", e)
