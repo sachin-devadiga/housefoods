@@ -2427,10 +2427,11 @@ class VoiceTTSView(APIView):
 
 
 class VoiceGeminiView(APIView):
-    """Proxy for Google Gemini AI. Sends prompt, returns structured response.
+    """Proxy for Google Gemini AI. Sends prompt with conversation context, returns structured response.
     
     The Gemini API key never leaves the server.
     Uses REST API directly to avoid SDK dependency conflicts with firebase-admin.
+    Supports multi-turn conversation via conversation_history field.
     """
     permission_classes = [IsAuthenticated]
 
@@ -2451,9 +2452,10 @@ class VoiceGeminiView(APIView):
             )
 
         model_name = request.data.get('model', 'gemini-2.5-flash-lite')
-
-        temperature = request.data.get('temperature', 0.1)
-        max_tokens = request.data.get('max_output_tokens', 512)
+        temperature = request.data.get('temperature', 0.7)
+        max_tokens = request.data.get('max_output_tokens', 300)
+        conversation_history = request.data.get('conversation_history', [])
+        context = request.data.get('context', {})
 
         try:
             import requests as http_requests
@@ -2461,18 +2463,39 @@ class VoiceGeminiView(APIView):
             url = f'https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}'
 
             contents = []
+
+            # System prompt as first turn
             if system_prompt:
+                context_str = ''
+                if context:
+                    context_str = f'\n\nCurrent context:\n{json.dumps(context, indent=2)}'
                 contents.append({
                     'role': 'user',
-                    'parts': [{'text': system_prompt}]
+                    'parts': [{'text': system_prompt + context_str}]
                 })
                 contents.append({
                     'role': 'model',
                     'parts': [{'text': 'Understood. I will follow these instructions.'}]
                 })
+
+            # Conversation history
+            for turn in conversation_history:
+                role = turn.get('role', 'user')
+                content = turn.get('content', '')
+                if content:
+                    gemini_role = 'model' if role == 'model' else 'user'
+                    contents.append({
+                        'role': gemini_role,
+                        'parts': [{'text': content}]
+                    })
+
+            # Current user message with context reminder
+            context_reminder = ''
+            if context:
+                context_reminder = f'\n\n[Current context: {json.dumps(context)}]'
             contents.append({
                 'role': 'user',
-                'parts': [{'text': prompt}]
+                'parts': [{'text': prompt + context_reminder}]
             })
 
             payload = {

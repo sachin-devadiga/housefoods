@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mealin/meal_voice/meal_voice_command.dart';
 import 'package:mealin/meal_voice/meal_voice_command_parser.dart';
@@ -5,6 +6,20 @@ import 'package:mealin/meal_voice/meal_voice_gemini_parser.dart';
 import 'package:mealin/meal_voice/meal_voice_parser_factory.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  // Register a fake platform channel handler for FlutterSecureStorage
+  // so that TokenService.getAccessToken() returns null instead of throwing.
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(
+    const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+    (MethodCall methodCall) async {
+      if (methodCall.method == 'read') {
+        return null;
+      }
+      return null;
+    },
+  );
   group('MealVoiceParserFactory', () {
     setUp(() {
       MealVoiceParserFactory.reset();

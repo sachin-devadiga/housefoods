@@ -259,14 +259,9 @@ class _MealVoiceTestScreenState extends State<MealVoiceTestScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Parsed Command', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const Text('Last Input', style: TextStyle(fontSize: 12, color: Colors.grey)),
             const SizedBox(height: 8),
-            _commandRow('Intent', cmd.intent.name.toUpperCase()),
-            _commandRow('Items', '${cmd.items.length}'),
-            for (final item in cmd.items)
-              _commandRow('  Item', '${item.quantity}x ${item.itemName}'),
-            if (cmd.hasRestaurant) _commandRow('Restaurant', cmd.restaurant!),
-            if (cmd.hasBakery) _commandRow('Bakery', cmd.bakery!),
+            Text(cmd, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
           ],
         ),
       ),
