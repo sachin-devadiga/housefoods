@@ -2450,7 +2450,7 @@ class VoiceGeminiView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        model_name = request.data.get('model', 'gemini-1.5-flash')
+        model_name = request.data.get('model', 'gemini-2.0-flash-lite')
         temperature = request.data.get('temperature', 0.1)
         max_tokens = request.data.get('max_output_tokens', 512)
 
