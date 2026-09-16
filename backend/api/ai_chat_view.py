@@ -13,7 +13,7 @@ from .ai_tools import execute_tool
 
 logger = logging.getLogger(__name__)
 
-GEMINI_CHAT_MODEL = 'gemini-2.5-flash-lite'
+GEMINI_CHAT_MODEL = 'gemini-2.5-flash'
 
 SYSTEM_PROMPT = """You are MEAL AI, the intelligent food-ordering assistant inside MEALIN.
 You help users discover restaurants, browse menus, manage their cart, apply offers, and place orders.
@@ -221,7 +221,8 @@ def _call_gemini(contents):
         'contents': contents,
         'generationConfig': {
             'temperature': 0.7,
-            'maxOutputTokens': 1024,
+            'maxOutputTokens': 2048,
+            'thinkingConfig': {'thinkingBudget': 0},
         },
         'tools': [{'function_declarations': TOOL_DECLARATIONS}],
     }
@@ -231,12 +232,15 @@ def _call_gemini(contents):
             url,
             headers={'x-goog-api-key': api_key},
             json=payload,
-            timeout=30,
+            timeout=60,
         )
         if resp.status_code != 200:
-            logger.error('Gemini chat error: %d %s', resp.status_code, resp.text[:300])
-            return None, 'Gemini API error'
+            logger.error('Gemini chat error: %d %s', resp.status_code, resp.text[:500])
+            return None, f'Gemini API error ({resp.status_code})'
         return resp.json(), None
+    except http_requests.exceptions.Timeout:
+        logger.error('Gemini chat request timed out')
+        return None, 'Gemini API timed out'
     except Exception:
         logger.exception('Gemini chat request failed')
         return None, 'Gemini service unavailable'
@@ -252,6 +256,9 @@ def _parse_gemini_response(data):
     tool_calls = []
 
     for part in parts:
+        # Skip thinking/thought parts (Gemini 2.5 returns these)
+        if part.get('thought'):
+            continue
         if 'text' in part:
             response_text = part['text']
         elif 'functionCall' in part:
@@ -360,14 +367,14 @@ class MealAIChatView(APIView):
         enriched_results = []
         for tr in tool_results:
             enriched = {
-                'name': tr['tool_name'],
+                'tool_name': tr['tool_name'],
                 'parameters': tr['parameters'],
                 'result': tr['result'],
             }
             enriched_results.append(enriched)
 
         return Response({
-            'response': response_text,
+            'response_text': response_text,
             'tool_calls': [{'name': tc['name'], 'parameters': tc['parameters']} for tc in tool_calls],
             'tool_results': enriched_results,
         })
