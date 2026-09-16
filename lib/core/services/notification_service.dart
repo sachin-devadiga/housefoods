@@ -1,5 +1,6 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'api_service.dart';
@@ -17,12 +18,22 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
   static OverlayEntry? _currentOverlay;
   static final AudioPlayer _audioPlayer = AudioPlayer();
+  static const _alarmChannel = MethodChannel('com.mealin/alarm_channel');
 
   static const _alarmTypes = {'new_order', 'new_delivery'};
 
   static Future<void> initialize() async {
+    await _createAlarmChannel();
     await _initLocalNotifications();
     await _initFCM();
+  }
+
+  static Future<void> _createAlarmChannel() async {
+    try {
+      await _alarmChannel.invokeMethod('createAlarmChannel');
+    } catch (e) {
+      debugPrint('[NotificationService] Failed to create alarm channel: $e');
+    }
   }
 
   static Future<void> _initLocalNotifications() async {
@@ -104,15 +115,21 @@ class NotificationService {
 
     final payload = 'type=$type&order_id=$orderId';
 
+    final channelId = _alarmTypes.contains(type)
+        ? 'mealin_order_alarm'
+        : 'mealin_orders';
+
     await _localNotifications.show(
       DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title,
       body,
-      const NotificationDetails(
+      NotificationDetails(
         android: AndroidNotificationDetails(
-          'mealin_orders',
-          'Mealin Orders',
-          channelDescription: 'Notifications for new orders and deliveries',
+          channelId,
+          channelId == 'mealin_order_alarm' ? 'Order Alarm' : 'Mealin Orders',
+          channelDescription: channelId == 'mealin_order_alarm'
+              ? 'Loud alarm for new orders and deliveries'
+              : 'Notifications for new orders and deliveries',
           importance: Importance.max,
           priority: Priority.high,
           playSound: true,

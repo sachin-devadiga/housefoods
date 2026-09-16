@@ -87,6 +87,10 @@ def _send_push_sync(tokens, title, body, data):
 
         from firebase_admin import messaging
 
+        notif_type = data.get('type', '') if isinstance(data, dict) else ''
+        is_alarm = notif_type in ('new_order', 'new_delivery')
+        channel_id = 'mealin_order_alarm' if is_alarm else 'mealin_orders'
+
         message = messaging.MulticastMessage(
             notification=messaging.Notification(
                 title=title,
@@ -97,7 +101,7 @@ def _send_push_sync(tokens, title, body, data):
             android=messaging.AndroidConfig(
                 priority='high',
                 notification=messaging.AndroidNotification(
-                    channel_id='mealin_orders',
+                    channel_id=channel_id,
                     priority='MAX',
                     default_sound=True,
                 ),

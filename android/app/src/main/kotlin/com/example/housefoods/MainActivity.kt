@@ -1,6 +1,11 @@
 package com.example.housefoods
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -8,6 +13,7 @@ import android.os.Looper
 import android.util.Log
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
 import com.example.housefoods.mealvoice.MealVoiceBridge
 import com.example.housefoods.mealvoice.MealVoiceService
 import com.example.housefoods.mealvoice.GeminiLiveBridge
@@ -20,25 +26,58 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Check if opened from wake word notification
         pendingWakeWordIntent = intent.getBooleanExtra("meal_voice_wake_word", false)
         if (pendingWakeWordIntent) {
             MealVoiceService.clearPendingWakeWord(this)
         }
-        // Always create service without starting engine
-        // Engine starts when Flutter calls startListening via MethodChannel
         startVoiceService()
+        createAlarmNotificationChannel()
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        // Attach MEAL Voice Bridge after service is running
         attachVoiceBridge(flutterEngine)
 
-        // Attach Gemini Live Bridge
         geminiLiveBridge = GeminiLiveBridge(flutterEngine, applicationContext)
         geminiLiveBridge?.attach()
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.mealin/alarm_channel")
+            .setMethodCallHandler { call, result ->
+                if (call.method == "createAlarmChannel") {
+                    createAlarmNotificationChannel()
+                    result.success(true)
+                } else {
+                    result.notImplemented()
+                }
+            }
+    }
+
+    private fun createAlarmNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channelId = "mealin_order_alarm"
+            val channelName = "Order Alarm"
+            val channelDesc = "Loud alarm for new orders and deliveries"
+            val importance = NotificationManager.IMPORTANCE_HIGH
+
+            val channel = NotificationChannel(channelId, channelName, importance).apply {
+                description = channelDesc
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 500, 200, 500, 200, 500)
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+            }
+
+            val alarmUri = Uri.parse("android.resource://${packageName}/raw/alarm.wav")
+            val audioAttributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+            channel.setSound(alarmUri, audioAttributes)
+
+            val nm = getSystemService(NotificationManager::class.java)
+            nm.createNotificationChannel(channel)
+            Log.i("MEAL_Main", "Alarm notification channel created")
+        }
     }
 
     private fun startVoiceService() {
