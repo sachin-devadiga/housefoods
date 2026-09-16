@@ -224,7 +224,7 @@ def _call_gemini(contents):
             'maxOutputTokens': 2048,
             'thinkingConfig': {'thinkingBudget': 0},
         },
-        'tools': [{'function_declarations': TOOL_DECLARATIONS}],
+        'tools': [{'functionDeclarations': TOOL_DECLARATIONS}],
     }
 
     try:
