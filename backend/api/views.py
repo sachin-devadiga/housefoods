@@ -1,6 +1,8 @@
 import json
+import logging
 import os
 import random
+import secrets
 import time
 import uuid
 from datetime import timedelta
@@ -32,7 +34,11 @@ from .models import (
     ChatMessage, DeliveryDocument, VoicePin, VoiceAuthorization,
 )
 from .otp_utils import send_otp_email, send_otp_email_async, t0, tlog, elapsed
-from .notification_utils import notify_chef_new_order, notify_delivery_partners
+from .notification_utils import (
+    notify_chef_new_order, notify_delivery_partners,
+    notify_customer_order_status, notify_customer_delivery_eta,
+    notify_restaurant_order_cancelled, notify_delivery_partner_accepted,
+)
 from .serializers import (
     UserProfileSerializer, UserProfileMiniSerializer, AddressSerializer,
     KitchenCategorySerializer, KitchenSerializer, KitchenListSerializer,
@@ -50,6 +56,8 @@ from .serializers import (
     AdminDeliveryDocumentSerializer, AdminDeliveryPartnerSerializer,
 )
 from .permissions import IsAdmin, IsChef, IsCustomer, IsDeliveryPartner
+
+logger = logging.getLogger(__name__)
 
 
 # ──────────────────────────────────────────────
@@ -75,7 +83,7 @@ class SendOTPView(APIView):
             )
 
         otp = OTP.generate(email)
-        tlog(f'OTP generated and saved: {otp.code}')
+        tlog(f'OTP generated and saved')
 
         # Dispatch email to background thread — response returns immediately
         send_otp_email_async(otp.email, otp.code)
@@ -661,6 +669,11 @@ class OrderStatusUpdateView(APIView):
                     role='delivery_partner', is_verified=True, is_available=True
                 ).exclude(fcm_token='')
                 notify_delivery_partners(order, delivery_partners)
+                notify_customer_order_status(order, 'being prepared')
+            elif order.delivery_status == 'picked_up':
+                notify_customer_order_status(order, 'out for delivery')
+            elif order.delivery_status == 'delivered':
+                notify_customer_order_status(order, 'delivered')
 
             return Response(OrderSerializer(order).data)
 
@@ -672,6 +685,12 @@ class OrderStatusUpdateView(APIView):
         elif new_status in ('active', 'cancelled', 'completed'):
             order.is_paused = False
         order.save()
+
+        notify_customer_order_status(order, new_status)
+
+        if new_status == 'cancelled':
+            notify_restaurant_order_cancelled(order.kitchen.chef, order)
+
         return Response(OrderSerializer(order).data)
 
 
@@ -708,6 +727,7 @@ class AcceptDeliveryView(APIView):
                 order.assigned_at = timezone.now()
                 order.delivery_fee = order.delivery_fee or Decimal('30.00')
                 order.save()
+            notify_delivery_partner_accepted(order)
             return Response(OrderSerializer(order).data)
         except Order.DoesNotExist:
             return Response({'error': 'Order not available'}, status=status.HTTP_400_BAD_REQUEST)
@@ -774,6 +794,12 @@ class UpdateDeliveryStatusView(APIView):
             elif new_status == 'delivered':
                 order.delivered_at = timezone.now()
             order.save()
+
+            if new_status == 'picked_up':
+                notify_customer_order_status(order, 'picked up by delivery partner')
+            elif new_status == 'delivered':
+                notify_customer_order_status(order, 'delivered')
+
             return Response(OrderSerializer(order).data)
         except Order.DoesNotExist:
             return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -791,8 +817,7 @@ class GenerateDeliveryOTPView(APIView):
         if order.customer != request.user.profile:
             return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
 
-        import random
-        otp = f'{random.randint(100000, 999999)}'
+        otp = f'{secrets.randbelow(900000) + 100000}'
         order.delivery_otp = otp
         order.save(update_fields=['delivery_otp'])
 
@@ -930,6 +955,9 @@ class RiderLocationUpdateView(APIView):
     permission_classes = [IsDeliveryPartner]
 
     def post(self, request):
+        import math
+        from .ai_tools import _haversine_km
+
         latitude = request.data.get('latitude')
         longitude = request.data.get('longitude')
         if latitude is None or longitude is None:
@@ -939,6 +967,36 @@ class RiderLocationUpdateView(APIView):
         profile.current_longitude = float(longitude)
         profile.location_updated_at = timezone.now()
         profile.save(update_fields=['current_latitude', 'current_longitude', 'location_updated_at'])
+
+        # Check for active assigned orders and trigger ETA notification if close
+        rider_lat = profile.current_latitude
+        rider_lng = profile.current_longitude
+        if rider_lat and rider_lng:
+            active_orders = Order.objects.filter(
+                delivery_partner=profile,
+                delivery_status='assigned',
+                status='active',
+                eta_5min_notified=False,
+                delivery_latitude__isnull=False,
+                delivery_longitude__isnull=False,
+            )
+            for order in active_orders:
+                # Skip if order was cancelled/delivered between query and processing
+                if order.status != 'active':
+                    continue
+                try:
+                    dist_km = _haversine_km(
+                        float(rider_lat), float(rider_lng),
+                        float(order.delivery_latitude), float(order.delivery_longitude),
+                    )
+                except (TypeError, ValueError):
+                    continue
+                eta_minutes = int(dist_km * 5)
+                if eta_minutes <= 7:
+                    notify_customer_delivery_eta(order, eta_minutes)
+                    order.eta_5min_notified = True
+                    order.save(update_fields=['eta_5min_notified'])
+
         return Response({'status': 'ok'})
 
 
@@ -962,6 +1020,56 @@ class RiderLocationView(APIView):
             'latitude': profile.current_latitude,
             'longitude': profile.current_longitude,
             'updated_at': profile.location_updated_at.isoformat() if profile.location_updated_at else None,
+        })
+
+
+class OrderTrackingView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            order = Order.objects.select_related('kitchen', 'customer', 'delivery_partner').get(pk=pk)
+        except Order.DoesNotExist:
+            return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if order.customer != request.user.profile and request.user.profile.role != 'admin':
+            return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
+
+        delivery_partner_data = None
+        if order.delivery_partner:
+            dp_profile = order.delivery_partner.profile
+            delivery_partner_data = {
+                'name': dp_profile.name or order.delivery_partner.get_full_name() or 'Delivery Partner',
+                'phone': dp_profile.phone,
+                'latitude': dp_profile.current_latitude,
+                'longitude': dp_profile.current_longitude,
+                'location_updated_at': dp_profile.location_updated_at.isoformat() if dp_profile.location_updated_at else None,
+            }
+
+        eta_minutes = None
+        if (order.delivery_latitude and order.delivery_longitude
+                and order.delivery_partner and order.delivery_partner.profile):
+            from .ai_tools import _haversine_km
+            dp_profile = order.delivery_partner.profile
+            if dp_profile.current_latitude and dp_profile.current_longitude:
+                dist = _haversine_km(
+                    dp_profile.current_latitude, dp_profile.current_longitude,
+                    order.delivery_latitude, order.delivery_longitude,
+                )
+                eta_minutes = int(dist * 5)
+
+        return Response({
+            'order_id': order.pk,
+            'status': order.status,
+            'delivery_status': order.delivery_status,
+            'kitchen_name': order.kitchen.name,
+            'kitchen_status': 'open' if order.kitchen.is_open else 'closed',
+            'delivery_partner': delivery_partner_data,
+            'estimated_delivery_time': eta_minutes,
+            'eta_5min_notified': order.eta_5min_notified,
+            'delivery_address': order.delivery_address,
+            'amount': float(order.amount),
+            'created_at': order.created_at.isoformat(),
         })
 
 
@@ -1283,6 +1391,9 @@ class CancelSubscriptionView(APIView):
                 description=f'Refund for cancelled subscription ({order.kitchen.name})',
             )
 
+        from .notification_utils import notify_restaurant_order_cancelled
+        notify_restaurant_order_cancelled(order.kitchen.chef, order)
+
         return Response({'success': True, 'refund_amount': refund_amount})
 
 
@@ -1422,6 +1533,7 @@ class PlaceOrderView(APIView):
             cart.save()
 
             notify_chef_new_order(order.kitchen.chef, order)
+            notify_customer_order_status(order, 'placed')
             return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
         serializer = OrderCreateSerializer(data=request.data, context={'request': request})
@@ -1444,6 +1556,7 @@ class PlaceOrderView(APIView):
         order = serializer.save()
 
         notify_chef_new_order(order.kitchen.chef, order)
+        notify_customer_order_status(order, 'placed')
 
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
@@ -1504,6 +1617,7 @@ class PlaceOrderWithWalletView(APIView):
             cart.save()
 
             notify_chef_new_order(order.kitchen.chef, order)
+            notify_customer_order_status(order, 'placed')
             return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
         serializer = OrderCreateSerializer(data=request.data, context={'request': request})
@@ -1543,6 +1657,7 @@ class PlaceOrderWithWalletView(APIView):
         )
 
         notify_chef_new_order(order.kitchen.chef, order)
+        notify_customer_order_status(order, 'placed')
 
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
@@ -2202,8 +2317,8 @@ class VerifyVoicePinView(APIView):
 
     def post(self, request):
         pin = request.data.get('pin', '')
-        if not pin:
-            return Response({'error': 'PIN is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if not pin or not pin.isdigit() or len(pin) not in (4, 6):
+            return Response({'error': 'PIN must be 4 or 6 digits'}, status=status.HTTP_400_BAD_REQUEST)
 
         profile = request.user.profile
 
@@ -2245,10 +2360,19 @@ class ResetVoicePinView(APIView):
 
     def post(self, request):
         pin = request.data.get('pin', '')
+        old_pin = request.data.get('old_pin', '')
         if not pin or not pin.isdigit() or len(pin) not in (4, 6):
             return Response({'error': 'PIN must be 4 or 6 digits'}, status=status.HTTP_400_BAD_REQUEST)
 
         profile = request.user.profile
+
+        try:
+            voice_pin = VoicePin.objects.get(user=profile)
+            if not old_pin or not check_password(old_pin, voice_pin.pin_hash):
+                return Response({'error': 'Old PIN is incorrect'}, status=status.HTTP_400_BAD_REQUEST)
+        except VoicePin.DoesNotExist:
+            pass
+
         pin_hash = make_password(pin)
 
         VoicePin.objects.update_or_create(
@@ -2379,16 +2503,18 @@ class VoiceSTTView(APIView):
                 status=status.HTTP_504_GATEWAY_TIMEOUT,
             )
         except requests.exceptions.RequestException as e:
+            logger.exception('VoiceSTT proxy error')
             return Response(
-                {'error': f'STT service unavailable: {str(e)[:100]}'},
+                {'error': 'STT service unavailable'},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
         if resp.status_code == 200:
             return Response(resp.json(), status=status.HTTP_200_OK)
         else:
+            logger.error('VoiceSTT upstream error: status=%d body=%s', resp.status_code, resp.text[:500])
             return Response(
-                {'error': f'STT service error: {resp.status_code}'},
+                {'error': 'STT service error'},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
@@ -2444,16 +2570,18 @@ class VoiceTTSView(APIView):
                 status=status.HTTP_504_GATEWAY_TIMEOUT,
             )
         except requests.exceptions.RequestException as e:
+            logger.exception('VoiceTTS proxy error')
             return Response(
-                {'error': f'TTS service unavailable: {str(e)[:100]}'},
+                {'error': 'TTS service unavailable'},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
         if resp.status_code == 200:
             return Response(resp.json(), status=status.HTTP_200_OK)
         else:
+            logger.error('VoiceTTS upstream error: status=%d body=%s', resp.status_code, resp.text[:500])
             return Response(
-                {'error': f'TTS service error: {resp.status_code}'},
+                {'error': 'TTS service error'},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
@@ -2505,7 +2633,7 @@ class VoiceGeminiView(APIView):
         try:
             import requests as http_requests
 
-            url = f'https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}'
+            url = f'https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent'
 
             contents = []
 
@@ -2525,7 +2653,10 @@ class VoiceGeminiView(APIView):
                 })
 
             # Conversation history
+            VALID_TURN_KEYS = {'role', 'content'}
             for turn in conversation_history:
+                if set(turn.keys()) - VALID_TURN_KEYS:
+                    continue
                 role = turn.get('role', 'user')
                 content = turn.get('content', '')
                 if content:
@@ -2552,23 +2683,144 @@ class VoiceGeminiView(APIView):
                 },
             }
 
-            response = http_requests.post(url, json=payload, timeout=20)
+            response = http_requests.post(
+                url,
+                headers={'x-goog-api-key': GEMINI_API_KEY},
+                json=payload,
+                timeout=20,
+            )
             data = response.json()
 
             if response.status_code != 200:
-                error_msg = data.get('error', {}).get('message', str(data)[:200])
+                error_msg = data.get('error', {}).get('message', '')
+                logger.error('Gemini API error: status=%d msg=%s', response.status_code, error_msg)
                 return Response(
-                    {'error': f'Gemini API error: {error_msg}'},
+                    {'error': 'Gemini API error'},
                     status=status.HTTP_502_BAD_GATEWAY,
                 )
 
-            text = data['candidates'][0]['content']['parts'][0]['text']
+            candidates = data.get('candidates')
+            if not candidates or not isinstance(candidates, list):
+                return Response({'error': 'No response from Gemini'}, status=status.HTTP_502_BAD_GATEWAY)
+            parts = candidates[0].get('content', {}).get('parts')
+            if not parts or not isinstance(parts, list):
+                return Response({'error': 'No response from Gemini'}, status=status.HTTP_502_BAD_GATEWAY)
+            text = parts[0].get('text', '')
+            if not text:
+                return Response({'error': 'No response from Gemini'}, status=status.HTTP_502_BAD_GATEWAY)
             return Response({
                 'text': text,
                 'model': model_name,
             }, status=status.HTTP_200_OK)
         except Exception as e:
+            logger.exception('Gemini proxy error')
             return Response(
-                {'error': f'Gemini error: {str(e)[:200]}'},
+                {'error': 'Gemini service error'},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
+
+
+class VoiceGeminiLiveSessionView(APIView):
+    """Provide a short-lived Gemini Live session configuration.
+
+    Returns the Gemini API key and session parameters so the client can
+    connect directly to Google's Gemini Live WebSocket endpoint.
+    The API key is fetched per-session and logged for audit.
+    """
+    permission_classes = [IsAuthenticated]
+    throttle_scope = 'voice'
+
+    # Rate limit: max 10 live sessions per user per hour
+    _session_log = {}  # user_id -> list of timestamps
+
+    def get(self, request):
+        GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+        if not GEMINI_API_KEY:
+            return Response(
+                {'error': 'Gemini AI not configured'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        user_id = request.user.id
+        now = time.time()
+
+        # Rate limiting
+        if user_id not in self._session_log:
+            self._session_log[user_id] = []
+        # Clean old entries (older than 1 hour)
+        self._session_log[user_id] = [
+            t for t in self._session_log[user_id] if now - t < 3600
+        ]
+        if len(self._session_log[user_id]) >= 10:
+            return Response(
+                {'error': 'Too many session requests. Try again later.'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        self._session_log[user_id].append(now)
+
+        logger.info('Gemini Live session requested by user %s', user_id)
+
+        return Response({
+            'api_key': GEMINI_API_KEY,
+            'model': 'models/gemini-2.5-flash-lite',
+            'voice': 'Aoede',
+            'system_instruction': VOICE_GEMINI_SYSTEM_PROMPT,
+            'tools': [
+                {
+                    'function_declarations': [
+                        {
+                            'name': 'search_menu',
+                            'description': 'Search for menu items on MEALIN',
+                            'parameters': {
+                                'type': 'OBJECT',
+                                'properties': {
+                                    'query': {'type': 'STRING', 'description': 'Food item to search for'},
+                                    'restaurant': {'type': 'STRING', 'description': 'Optional restaurant name'},
+                                },
+                                'required': ['query'],
+                            },
+                        },
+                        {
+                            'name': 'add_to_cart',
+                            'description': 'Add an item to the cart',
+                            'parameters': {
+                                'type': 'OBJECT',
+                                'properties': {
+                                    'item_name': {'type': 'STRING', 'description': 'Name of the food item'},
+                                    'quantity': {'type': 'INTEGER', 'description': 'Quantity to add'},
+                                    'restaurant': {'type': 'STRING', 'description': 'Restaurant name'},
+                                },
+                                'required': ['item_name'],
+                            },
+                        },
+                        {
+                            'name': 'remove_from_cart',
+                            'description': 'Remove an item from the cart',
+                            'parameters': {
+                                'type': 'OBJECT',
+                                'properties': {
+                                    'item_name': {'type': 'STRING', 'description': 'Name of the item to remove'},
+                                },
+                                'required': ['item_name'],
+                            },
+                        },
+                        {
+                            'name': 'clear_cart',
+                            'description': 'Clear all items from the cart',
+                            'parameters': {'type': 'OBJECT', 'properties': {}},
+                        },
+                        {
+                            'name': 'show_cart',
+                            'description': 'Show current cart contents',
+                            'parameters': {'type': 'OBJECT', 'properties': {}},
+                        },
+                        {
+                            'name': 'place_order',
+                            'description': 'Place the current cart as an order',
+                            'parameters': {'type': 'OBJECT', 'properties': {}},
+                        },
+                    ]
+                }
+            ],
+            'session_ttl': 300,
+        }, status=status.HTTP_200_OK)

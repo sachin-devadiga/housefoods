@@ -14,7 +14,7 @@ import java.util.Locale
 
 /**
  * Native voice processor — handles Gemini + TTS + API calls when Flutter is dead.
- * Runs in the :voice_service process.
+ * Runs in the app's main process.
  */
 class VoiceNativeProcessor(private val context: Context) {
 
@@ -25,7 +25,8 @@ class VoiceNativeProcessor(private val context: Context) {
 
     private var tts: TextToSpeech? = null
     private var ttsReady = false
-    private var onTtsComplete: (() -> Unit)? = null
+    private var ttsCounter = 0
+    private val ttsCallbacks = mutableMapOf<String, () -> Unit>()
 
     fun initialize(onReady: () -> Unit = {}) {
         tts = TextToSpeech(context) { status ->
@@ -45,6 +46,7 @@ class VoiceNativeProcessor(private val context: Context) {
         tts?.shutdown()
         tts = null
         ttsReady = false
+        ttsCallbacks.clear()
     }
 
     /**
@@ -58,9 +60,10 @@ class VoiceNativeProcessor(private val context: Context) {
         conversationHistory: List<Map<String, String>> = emptyList(),
         contextData: Map<String, Any> = emptyMap(),
     ): String? {
+        var conn: HttpURLConnection? = null
         try {
             val url = URL("$BACKEND_URL/api/auth/voice/gemini/")
-            val conn = (url.openConnection() as HttpURLConnection).apply {
+            conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 setRequestProperty("Content-Type", "application/json")
                 setRequestProperty("Authorization", "Bearer $authToken")
@@ -71,7 +74,6 @@ class VoiceNativeProcessor(private val context: Context) {
 
             val body = JSONObject().apply {
                 put("prompt", prompt)
-                put("system_prompt", systemPrompt)
                 put("model", "gemini-2.5-flash-lite")
                 put("temperature", 0.7)
                 put("max_output_tokens", 300)
@@ -104,6 +106,8 @@ class VoiceNativeProcessor(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Gemini call failed", e)
             return null
+        } finally {
+            conn?.disconnect()
         }
     }
 
@@ -129,8 +133,25 @@ class VoiceNativeProcessor(private val context: Context) {
             }
             return Pair(response, actions)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse Gemini response", e)
-            return Pair(text, emptyList())
+            Log.e(TAG, "Failed to parse Gemini response — returning cleaned text", e)
+            // Strip JSON artifacts from raw text
+            var cleaned = text.trim()
+            if (cleaned.startsWith("```json")) cleaned = cleaned.substring(7)
+            else if (cleaned.startsWith("```")) cleaned = cleaned.substring(3)
+            if (cleaned.endsWith("```")) cleaned = cleaned.substring(0, cleaned.length - 3)
+            cleaned = cleaned.trim()
+            // If it looks like JSON, try to extract just the "response" field
+            return if (cleaned.startsWith("{")) {
+                try {
+                    val json = JSONObject(cleaned)
+                    val response = json.optString("response", "I'm not sure how to help with that.")
+                    Pair(response, emptyList())
+                } catch (_: Exception) {
+                    Pair("I'm not sure how to help with that.", emptyList())
+                }
+            } else {
+                Pair(cleaned.ifEmpty { "I'm not sure how to help with that." }, emptyList())
+            }
         }
     }
 
@@ -138,10 +159,11 @@ class VoiceNativeProcessor(private val context: Context) {
      * Search menu via backend API.
      */
     fun searchMenu(query: String, authToken: String): String? {
+        var conn: HttpURLConnection? = null
         try {
             val encodedQuery = URLEncoder.encode(query, "UTF-8")
             val url = URL("$BACKEND_URL/api/auth/kitchens/?search=$encodedQuery")
-            val conn = (url.openConnection() as HttpURLConnection).apply {
+            conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 setRequestProperty("Authorization", "Bearer $authToken")
                 connectTimeout = 15000
@@ -153,6 +175,8 @@ class VoiceNativeProcessor(private val context: Context) {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Menu search failed", e)
+        } finally {
+            conn?.disconnect()
         }
         return null
     }
@@ -165,24 +189,24 @@ class VoiceNativeProcessor(private val context: Context) {
             onDone()
             return
         }
-        onTtsComplete = onDone
+        ttsCounter++
+        val utteranceId = "meal_tts_$ttsCounter"
+        ttsCallbacks[utteranceId] = onDone
         val mainHandler = Handler(Looper.getMainLooper())
         tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {}
             override fun onDone(utteranceId: String?) {
                 mainHandler.post {
-                    onTtsComplete?.invoke()
-                    onTtsComplete = null
+                    utteranceId?.let { ttsCallbacks.remove(it)?.invoke() }
                 }
             }
             override fun onError(utteranceId: String?) {
                 mainHandler.post {
-                    onTtsComplete?.invoke()
-                    onTtsComplete = null
+                    utteranceId?.let { ttsCallbacks.remove(it)?.invoke() }
                 }
             }
         })
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "meal_response")
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
     }
 
     /**

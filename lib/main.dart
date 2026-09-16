@@ -41,6 +41,8 @@ import 'features/rewards/presentation/providers/reward_provider.dart';
 import 'features/delivery_partner/presentation/providers/delivery_partner_provider.dart';
 import 'features/splash/presentation/screens/splash_screen.dart';
 import 'meal_voice/meal_voice_controller.dart';
+import 'features/ai_assistant/data/repositories/ai_chat_repository.dart';
+import 'features/ai_assistant/presentation/providers/ai_chat_provider.dart';
 
 void main() async {
   FlutterError.onError = (details) {
@@ -86,6 +88,7 @@ class MealinApp extends StatelessWidget {
     final userRepository = UserRepositoryImpl(apiService: apiService);
     final kitchenRepository = KitchenRepositoryImpl(apiService: apiService);
     final chatRepository = ChatRepositoryImpl(apiService: apiService);
+    final aiChatRepository = AiChatRepository(apiService: apiService);
     final notificationRepository = NotificationRepositoryImpl(apiService: apiService);
 
     return MultiProvider(
@@ -115,6 +118,7 @@ class MealinApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => LanguageProvider()),
         ChangeNotifierProvider(create: (_) => CartProvider()),
         ChangeNotifierProvider(create: (_) => MealVoiceController()),
+        ChangeNotifierProvider(create: (_) => AiChatProvider(aiChatRepository)),
       ],
       child: Consumer2<ThemeProvider, LanguageProvider>(
         builder: (context, themeProvider, languageProvider, child) {

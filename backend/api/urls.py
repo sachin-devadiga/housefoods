@@ -1,6 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
+from . import ai_chat_view
 
 router = DefaultRouter()
 router.register(r'kitchens/(?P<kitchen_pk>[^/.]+)/menu-categories', views.MenuCategoryViewSet, basename='menu-category')
@@ -82,6 +83,7 @@ urlpatterns = [
     # Rider Live Location
     path('delivery/location/', views.RiderLocationUpdateView.as_view(), name='rider-location-update'),
     path('orders/<int:order_id>/rider-location/', views.RiderLocationView.as_view(), name='rider-location'),
+    path('orders/<int:pk>/tracking/', views.OrderTrackingView.as_view(), name='order-tracking'),
 
     # Wallet
     path('wallet/', views.WalletView.as_view(), name='wallet'),
@@ -152,6 +154,10 @@ urlpatterns = [
     path('voice/stt/', views.VoiceSTTView.as_view(), name='voice-stt'),
     path('voice/tts/', views.VoiceTTSView.as_view(), name='voice-tts'),
     path('voice/gemini/', views.VoiceGeminiView.as_view(), name='voice-gemini'),
+    path('voice/gemini-live-session/', views.VoiceGeminiLiveSessionView.as_view(), name='voice-gemini-live-session'),
+
+    # AI Assistant
+    path('ai/chat/', ai_chat_view.MealAIChatView.as_view(), name='ai-chat'),
 
     # Include router URLs
     path('', include(router.urls)),

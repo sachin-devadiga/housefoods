@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -35,8 +34,6 @@ class UpdateInfo {
 }
 
 class UpdateService {
-  static const _channel = MethodChannel('com.mealin.app/install');
-
   /// Check backend for latest version info.
   static Future<UpdateInfo?> checkForUpdate() async {
     try {
@@ -129,14 +126,10 @@ class UpdateService {
     }
   }
 
-  /// Trigger Android package installer for the given APK file.
+  /// On Play Store builds, updates are handled by Play Store.
+  /// This method is a no-op; callers should redirect to Play Store instead.
   static Future<bool> installApk(String filePath) async {
-    try {
-      await _channel.invokeMethod('installApk', {'filePath': filePath});
-      return true;
-    } catch (e) {
-      debugPrint('[UpdateService] Install failed: $e');
-      return false;
-    }
+    debugPrint('[UpdateService] installApk called — Play Store handles updates');
+    return false;
   }
 }

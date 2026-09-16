@@ -3,10 +3,27 @@ import json
 import logging
 import threading
 from pathlib import Path
+from django.utils import timezone
+from datetime import timedelta
 
 logger = logging.getLogger(__name__)
 
 _firebase_app = None
+
+# Dedup window: don't send same notification type for same order within this window
+DEDUP_WINDOW = timedelta(minutes=2)
+
+
+def _recent_notification_exists(user, order, notif_type):
+    """Check if a notification of this type for this order was sent recently."""
+    from .models import Notification
+    cutoff = timezone.now() - DEDUP_WINDOW
+    return Notification.objects.filter(
+        user=user,
+        type=notif_type,
+        data__order_id=str(order.id),
+        created_at__gte=cutoff,
+    ).exists()
 
 
 def _get_firebase_app():
@@ -111,20 +128,38 @@ def _send_push_sync(tokens, title, body, data):
 
 
 def notify_chef_new_order(chef_profile, order):
-    """Send push notification to chef when a new order is placed."""
-    if not chef_profile or not chef_profile.fcm_token:
-        logger.info('Chef %s has no FCM token, skipping notification', chef_profile)
+    """Send push notification and create DB record when chef receives a new order."""
+    from .models import Notification
+
+    if not chef_profile:
         return
 
-    send_push_notification(
-        tokens=[chef_profile.fcm_token],
-        title='New Order Received!',
-        body=f'You have a new order #{order.id} for ₹{order.amount}. Tap to view.',
-        data={
-            'type': 'new_order',
-            'order_id': str(order.id),
-        },
+    if _recent_notification_exists(chef_profile, order, 'new_order'):
+        logger.info('Dedup: skipping duplicate new_order for chef, order %s', order.id)
+        return
+
+    title = 'New Order Received!'
+    body = f'You have a new order #{order.id} for ₹{order.amount}. Tap to view.'
+    data = {
+        'type': 'new_order',
+        'order_id': str(order.id),
+    }
+
+    Notification.objects.create(
+        user=chef_profile,
+        title=title,
+        body=body,
+        type='new_order',
+        data=data,
     )
+
+    if chef_profile.fcm_token:
+        send_push_notification(
+            tokens=[chef_profile.fcm_token],
+            title=title,
+            body=body,
+            data=data,
+        )
 
 
 def notify_delivery_partners(order, delivery_profiles):
@@ -143,3 +178,182 @@ def notify_delivery_partners(order, delivery_profiles):
             'order_id': str(order.id),
         },
     )
+
+
+def notify_customer_order_status(order, status_text):
+    """Notify customer when their order status changes."""
+    from .models import Notification
+
+    customer = order.customer
+    notif_key = f'order_status_{status_text}'
+
+    if _recent_notification_exists(customer, order, notif_key):
+        logger.info('Dedup: skipping duplicate order_status_%s for order %s', status_text, order.id)
+        return
+
+    title = 'Order Status Update'
+    body = f'Your order #{order.id} from {order.kitchen.name} is now {status_text}.'
+    data = {
+        'type': 'order_status',
+        'order_id': str(order.id),
+        'status': status_text,
+    }
+
+    Notification.objects.create(
+        user=customer,
+        title=title,
+        body=body,
+        type=notif_key,
+        data=data,
+    )
+
+    if customer.fcm_token:
+        send_push_notification(
+            tokens=[customer.fcm_token],
+            title=title,
+            body=body,
+            data=data,
+        )
+
+
+def notify_customer_delivery_eta(order, eta_minutes):
+    """Notify customer when delivery is approximately ETA minutes away."""
+    from .models import Notification
+
+    customer = order.customer
+
+    # Use the model-level dedup flag as primary guard
+    if getattr(order, 'eta_5min_notified', False):
+        logger.info('Dedup: eta_5min_notified already True for order %s', order.id)
+        return
+
+    title = 'Delivery Update'
+    body = f'Your order #{order.id} from {order.kitchen.name} is approximately {eta_minutes} minutes away.'
+    data = {
+        'type': 'delivery_eta',
+        'order_id': str(order.id),
+        'eta_minutes': str(eta_minutes),
+    }
+
+    Notification.objects.create(
+        user=customer,
+        title=title,
+        body=body,
+        type='delivery_eta',
+        data=data,
+    )
+
+    if customer.fcm_token:
+        send_push_notification(
+            tokens=[customer.fcm_token],
+            title=title,
+            body=body,
+            data=data,
+        )
+
+
+def notify_restaurant_new_order(restaurant_profile, order):
+    """Enhanced version of notify_chef_new_order with restaurant name."""
+    from .models import Notification
+
+    chef = restaurant_profile
+    if not chef:
+        return
+
+    if _recent_notification_exists(chef, order, 'new_order'):
+        logger.info('Dedup: skipping duplicate new_order for restaurant, order %s', order.id)
+        return
+
+    title = f'New Order at {order.kitchen.name}!'
+    body = f'New order #{order.id} for ₹{order.amount}. Tap to view and prepare.'
+    data = {
+        'type': 'new_order',
+        'order_id': str(order.id),
+        'restaurant_name': order.kitchen.name,
+    }
+
+    Notification.objects.create(
+        user=chef,
+        title=title,
+        body=body,
+        type='new_order',
+        data=data,
+    )
+
+    if chef.fcm_token:
+        send_push_notification(
+            tokens=[chef.fcm_token],
+            title=title,
+            body=body,
+            data=data,
+        )
+
+
+def notify_restaurant_order_cancelled(chef_profile, order):
+    """Notify restaurant when a customer cancels an order."""
+    from .models import Notification
+
+    if not chef_profile:
+        return
+
+    if _recent_notification_exists(chef_profile, order, 'order_cancelled'):
+        logger.info('Dedup: skipping duplicate order_cancelled for order %s', order.id)
+        return
+
+    title = 'Order Cancelled'
+    body = f'Order #{order.id} (₹{order.amount}) has been cancelled by the customer.'
+    data = {
+        'type': 'order_cancelled',
+        'order_id': str(order.id),
+    }
+
+    Notification.objects.create(
+        user=chef_profile,
+        title=title,
+        body=body,
+        type='order_cancelled',
+        data=data,
+    )
+
+    if chef_profile.fcm_token:
+        send_push_notification(
+            tokens=[chef_profile.fcm_token],
+            title=title,
+            body=body,
+            data=data,
+        )
+
+
+def notify_delivery_partner_accepted(order):
+    """Notify customer when a delivery partner accepts their order."""
+    from .models import Notification
+
+    customer = order.customer
+
+    if _recent_notification_exists(customer, order, 'delivery_assigned'):
+        logger.info('Dedup: skipping duplicate delivery_assigned for order %s', order.id)
+        return
+
+    rider_name = order.delivery_partner.name if order.delivery_partner else 'A delivery partner'
+    title = 'Delivery Partner Assigned'
+    body = f'{rider_name} has accepted your order #{order.id}. They will pick it up shortly.'
+    data = {
+        'type': 'delivery_assigned',
+        'order_id': str(order.id),
+    }
+
+    Notification.objects.create(
+        user=customer,
+        title=title,
+        body=body,
+        type='delivery_assigned',
+        data=data,
+    )
+
+    if customer.fcm_token:
+        send_push_notification(
+            tokens=[customer.fcm_token],
+            title=title,
+            body=body,
+            data=data,
+        )

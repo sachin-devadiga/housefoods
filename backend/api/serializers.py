@@ -245,6 +245,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'kitchen', 'order_type', 'plan', 'plan_name', 'amount', 'subtotal',
             'tax', 'platform_fee', 'tip', 'delivery_address', 'delivery_time',
             'start_date', 'end_date', 'delivery_slot_id', 'meal_type', 'items_data',
+            'delivery_latitude', 'delivery_longitude',
         ]
         read_only_fields = ['plan_name']
 

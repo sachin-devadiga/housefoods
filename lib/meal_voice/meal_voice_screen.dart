@@ -255,13 +255,13 @@ class _MealVoiceScreenState extends State<MealVoiceScreen>
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             gradient: LinearGradient(
-              colors: [bgColor, bgColor.withOpacity(0.7)],
+              colors: [bgColor, bgColor.withValues(alpha: 0.7)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
             boxShadow: [
               BoxShadow(
-                color: bgColor.withOpacity(0.3),
+                color: bgColor.withValues(alpha: 0.3),
                 blurRadius: 20,
                 spreadRadius: 2,
               ),
@@ -281,9 +281,9 @@ class _MealVoiceScreenState extends State<MealVoiceScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withOpacity(0.3)),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
         child: Text(
           label,
@@ -306,7 +306,7 @@ class _MealVoiceScreenState extends State<MealVoiceScreen>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -351,7 +351,7 @@ class _MealVoiceScreenState extends State<MealVoiceScreen>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -471,9 +471,9 @@ class _MealVoiceScreenState extends State<MealVoiceScreen>
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.05),
+        color: color.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
         children: [
@@ -491,7 +491,7 @@ class _MealVoiceScreenState extends State<MealVoiceScreen>
           Text(
             message,
             textAlign: TextAlign.center,
-            style: TextStyle(color: color.withOpacity(0.8), fontSize: 14),
+            style: TextStyle(color: color.withValues(alpha: 0.8), fontSize: 14),
           ),
         ],
       ),
@@ -527,7 +527,7 @@ class _MealVoiceScreenState extends State<MealVoiceScreen>
             ),
             boxShadow: [
               BoxShadow(
-                color: (isActive ? Colors.red : Colors.deepPurple).withOpacity(0.3),
+                color: (isActive ? Colors.red : Colors.deepPurple).withValues(alpha: 0.3),
                 blurRadius: 16,
                 spreadRadius: 2,
               ),
@@ -575,7 +575,7 @@ class _MealVoiceScreenState extends State<MealVoiceScreen>
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
+                  color: Colors.black.withValues(alpha: 0.06),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),

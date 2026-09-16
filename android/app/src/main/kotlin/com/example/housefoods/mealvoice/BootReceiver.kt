@@ -41,8 +41,38 @@ class BootReceiver : BroadcastReceiver() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 // Android 14+ prohibits starting a microphone foreground service
                 // from BOOT_COMPLETED because microphone permission is while-in-use.
-                // The user must open the app and explicitly restart MEAL.
-                Log.w(TAG, "Android 14+: not starting microphone service from boot")
+                // Post a notification telling the user to open the app.
+                Log.w(TAG, "Android 14+: posting notification for manual restart")
+                try {
+                    val channel = android.app.NotificationChannel(
+                        "meal_voice_restart",
+                        "MEAL Voice Restart",
+                        android.app.NotificationManager.IMPORTANCE_HIGH
+                    ).apply {
+                        description = "Notifies you to restart MEAL voice after boot"
+                    }
+                    val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                    manager.createNotificationChannel(channel)
+
+                    val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
+                        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    }
+                    val pendingIntent = android.app.PendingIntent.getActivity(
+                        context, 2, launchIntent,
+                        android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+                    )
+                    val notification = androidx.core.app.NotificationCompat.Builder(context, "meal_voice_restart")
+                        .setContentTitle("MEAL Voice needs restart")
+                        .setContentText("Tap to open MEAL and re-enable voice assistant")
+                        .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+                        .setContentIntent(pendingIntent)
+                        .setAutoCancel(true)
+                        .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+                        .build()
+                    manager.notify(9996, notification)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to post restart notification", e)
+                }
                 return
             }
             Log.i(TAG, "Voice service was enabled — starting")

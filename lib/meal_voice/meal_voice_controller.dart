@@ -1,13 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_sound/flutter_sound.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../features/customer/presentation/providers/cart_provider.dart';
 import '../features/customer/presentation/providers/kitchen_provider.dart';
 import '../core/services/voice_order_security_service.dart';
+import '../core/constants/app_constants.dart';
+import '../core/services/token_service.dart';
 import 'meal_voice_service.dart';
 import 'meal_voice_state.dart';
 import 'meal_voice_conversation.dart';
@@ -17,6 +18,8 @@ import 'meal_voice_order_handler.dart';
 import 'sarvam_stt_service.dart';
 import 'sarvam_tts_service.dart';
 import 'meal_voice_settings.dart';
+import 'engines/meal_voice_engine.dart';
+import 'engines/gemini_live_engine.dart';
 
 /// Conversational controller for the MEAL voice engine.
 ///
@@ -29,8 +32,21 @@ class MealVoiceController extends ChangeNotifier {
   final SarvamTTSService _sarvamTTS = SarvamTTSService();
   final MealVoiceConversationalBrain _brain = MealVoiceConversationalBrain();
   final MealVoiceConversation _conversation = MealVoiceConversation();
+  final GeminiLiveEngine _geminiLiveEngine = GeminiLiveEngine();
   MealVoiceOrderHandler? _orderHandler;
   VoiceOrderSecurityService? _securityService;
+
+  /// Active engine: 'legacy' or 'gemini_live'
+  String _activeEngine = 'legacy';
+  String get activeEngine => _activeEngine;
+
+  /// Gemini Live connection state
+  bool _geminiLiveConnected = false;
+  bool get geminiLiveConnected => _geminiLiveConnected;
+
+  /// Gemini Live fallback: if true, use legacy engine
+  bool _useGeminiLive = false;
+  bool get useGeminiLive => _useGeminiLive;
 
   MealVoiceSettings? _settings;
   MealVoiceSettings? get settings => _settings;
@@ -94,11 +110,6 @@ class MealVoiceController extends ChangeNotifier {
   String _userName = '';
   set userName(String name) => _userName = name;
 
-  bool _continuousListening = false;
-
-  int _consecutiveSttFailures = 0;
-  static const _maxConsecutiveFailures = 3;
-
   String _detectedLanguage = 'en-IN';
   String get detectedLanguage => _detectedLanguage;
 
@@ -120,6 +131,7 @@ class MealVoiceController extends ChangeNotifier {
           return;
         } catch (e) {
           _addLog('TTS: Device TTS failed: $e — trying Sarvam');
+          try { await _tts.stop(); } catch (_) {}
         }
       }
       if (_sarvamAvailable) {
@@ -188,6 +200,15 @@ class MealVoiceController extends ChangeNotifier {
     }
 
     _addLog('Engine initialized (TTS: $_ttsAvailable, Sarvam: $_sarvamAvailable)');
+
+    // Initialize Gemini Live engine preference
+    final prefs = await SharedPreferences.getInstance();
+    _useGeminiLive = prefs.getBool('use_gemini_live') ?? false;
+    if (_useGeminiLive) {
+      _addLog('Gemini Live enabled — initializing...');
+      await _initGeminiLiveEngine();
+    }
+
     notifyListeners();
 
     // Auto-start voice service if it was previously enabled (persists across app sessions)
@@ -215,11 +236,20 @@ class MealVoiceController extends ChangeNotifier {
     SharedPreferences.getInstance().then((prefs) {
       final pending = prefs.getBool('pending_wake_word') ?? false;
       if (pending) {
+        final command = prefs.getString('pending_command');
         prefs.remove('pending_wake_word');
-        _addLog('Pending wake word found — processing');
-        Future.delayed(const Duration(milliseconds: 500), () {
-          _handleWakeWordDetected(DateTime.now());
-        });
+        prefs.remove('pending_command');
+        if (command != null && command.isNotEmpty) {
+          _addLog('Pending command found: "$command" — processing directly');
+          Future.delayed(const Duration(milliseconds: 500), () {
+            _handleTranscription(command);
+          });
+        } else {
+          _addLog('Pending wake word found — listening for command');
+          Future.delayed(const Duration(milliseconds: 500), () {
+            _handleWakeWordDetected(DateTime.now());
+          });
+        }
       }
     });
   }
@@ -329,17 +359,16 @@ class MealVoiceController extends ChangeNotifier {
           : '$timeGreeting! What would you like to order?';
     }
 
-    await _speak(greeting);
     _addLog('Greeting: $greeting (lang: $lang)');
 
-    if (_sarvamAvailable) {
-      // DO NOT stop engine — mic must stay alive for command capture
-      _addLog('Listening for command via Sarvam STT...');
-      _captureWithSarvam();
-    } else {
-      _addLog('Listening for command via native STT...');
-      await _service.startCommandCapture();
-    }
+    // Start command capture FIRST — do NOT wait for TTS (TTS may hang on some devices)
+    _addLog('Starting native command capture...');
+    await _service.startCommandCapture();
+
+    // Speak greeting in parallel (non-blocking) — don't let TTS delay listening
+    _speak(greeting).catchError((e) {
+      _addLog('TTS greeting failed (non-fatal): $e');
+    });
   }
 
   void _handleTranscription(String transcript) {
@@ -682,11 +711,8 @@ class MealVoiceController extends ChangeNotifier {
 
   void _startListeningForNextTurn() {
     _startListeningTimeout();
-    if (_sarvamAvailable) {
-      _captureWithSarvam();
-    } else {
-      _service.startCommandCapture();
-    }
+    // ALWAYS use native STT — same SpeechRecognizer instance, no mic conflict
+    _service.startCommandCapture();
   }
 
   Future<void> _speakAndReturn(String message) async {
@@ -696,11 +722,9 @@ class MealVoiceController extends ChangeNotifier {
   }
 
   Future<void> _restartEngineForConfirmation() async {
-    if (!_sarvamAvailable) return;
     _addLog('Restarting engine for confirmation...');
     try {
-      await _service.startListening();
-      await Future.delayed(const Duration(milliseconds: 400));
+      // ALWAYS use native STT — swaps listener on same SpeechRecognizer
       await _service.startCommandCapture();
       _addLog('Engine restarted for confirmation listening');
     } catch (e) {
@@ -792,7 +816,6 @@ class MealVoiceController extends ChangeNotifier {
     _isProcessing = false;
 
     _service.restartWakeWordListening();
-    _service.startListening();
     _state = MealVoiceState.listeningForWakeWord;
     _isListening = true;
     _lastTranscript = 'Listening for "Hi MEAL"...';
@@ -818,6 +841,7 @@ class MealVoiceController extends ChangeNotifier {
     if (text.contains(RegExp(r'[\u0B80-\u0BFF]'))) return 'ta-IN';
     if (text.contains(RegExp(r'[\u0C00-\u0C7F]'))) return 'te-IN';
     if (text.contains(RegExp(r'[\u0930-\u094F]'))) return 'mr-IN';
+    if (text.contains(RegExp(r'[a-zA-Z]'))) return 'en-IN';
     return '';
   }
 
@@ -859,14 +883,32 @@ class MealVoiceController extends ChangeNotifier {
 
     _ttsResponse = '';
     _lastTranscript = '';
-    _consecutiveSttFailures = 0;
 
+    // Try Gemini Live if enabled and not connected
+    if (_useGeminiLive && !_geminiLiveConnected) {
+      _addLog('Attempting Gemini Live connection...');
+      await _geminiLiveEngine.startListening();
+      // Give it a moment to connect
+      await Future.delayed(const Duration(seconds: 2));
+      if (_geminiLiveConnected) {
+        _addLog('Gemini Live connected — using live engine');
+        _isListening = true;
+        _state = MealVoiceState.listeningForWakeWord;
+        _lastTranscript = 'Listening for "Hi MEAL"...';
+        notifyListeners();
+        return;
+      }
+      _addLog('Gemini Live not available — using legacy engine');
+    }
+
+    // Legacy engine (native SpeechRecognizer)
     final started = await _service.startListening();
     if (started) {
       _isListening = true;
       _state = MealVoiceState.listeningForWakeWord;
       _lastTranscript = 'Listening for "Hi MEAL"...';
       _addLog('Native engine started for wake word detection');
+      _activeEngine = 'legacy';
     } else {
       _lastTranscript = 'Failed to start voice engine';
       _ttsResponse = 'Voice recognition is not available on this device.';
@@ -876,119 +918,7 @@ class MealVoiceController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _captureWithSarvam() async {
-    FlutterSoundRecorder? recorder;
-    String? audioPath;
-    try {
-      final status = await Permission.microphone.request();
-      if (!status.isGranted) {
-        _addLog('STT: Microphone permission denied');
-        _handleError('Microphone permission denied');
-        return;
-      }
-
-      _addLog('STT: Starting recording...');
-
-      recorder = FlutterSoundRecorder();
-      await recorder.openRecorder();
-      final tempDir = await getTemporaryDirectory();
-      audioPath = '${tempDir.path}/sarvam_capture.wav';
-
-      await Future.delayed(const Duration(milliseconds: 300));
-
-      await recorder.startRecorder(
-        toFile: audioPath,
-        codec: Codec.pcm16WAV,
-        sampleRate: 16000,
-        numChannels: 1,
-      );
-
-      _lastTranscript = 'Listening...';
-      notifyListeners();
-
-      _addLog('STT: Recording for 12s...');
-      await Future.delayed(const Duration(seconds: 12));
-
-      try {
-        await recorder.stopRecorder();
-      } catch (e) {
-        _addLog('STT: stopRecorder error (non-fatal): $e');
-      }
-      try {
-        await recorder.closeRecorder();
-      } catch (e) {
-        _addLog('STT: closeRecorder error (non-fatal): $e');
-      }
-      recorder = null;
-
-      _addLog('STT: Audio captured, sending to backend proxy...');
-
-      final sttLang = _settings?.sttLanguageCode;
-      final transcript = await _sarvamSTT.transcribeFile(audioPath, languageCode: sttLang ?? 'auto');
-      final sttError = _sarvamSTT.lastError;
-
-      try {
-        await File(audioPath).delete();
-      } catch (_) {}
-      audioPath = null;
-
-      if (transcript != null && transcript.transcript.trim().isNotEmpty) {
-        _consecutiveSttFailures = 0;
-        _addLog('STT: "${transcript.transcript}" (lang: ${transcript.languageCode})');
-        if (transcript.languageCode != null && transcript.languageCode!.isNotEmpty) {
-          _detectedLanguage = transcript.languageCode!;
-          _addLog('Language detected: $_detectedLanguage');
-          if (_ttsAvailable) {
-            try {
-              await _tts.setLanguage(_detectedLanguage);
-            } catch (_) {}
-          }
-        }
-
-        final lowerTranscript = transcript.transcript.trim().toLowerCase();
-        if (_isWakeWord(lowerTranscript)) {
-          _addLog('Wake word detected in transcript: "${transcript.transcript}"');
-          _handleWakeWordDetected(DateTime.now());
-        } else {
-          _handleTranscription(transcript.transcript);
-        }
-      } else {
-        _consecutiveSttFailures++;
-        final errorDetail = sttError ?? 'empty transcript';
-        _addLog('STT failed ($_consecutiveSttFailures/$_maxConsecutiveFailures): $errorDetail');
-
-        if (_consecutiveSttFailures >= _maxConsecutiveFailures) {
-          _consecutiveSttFailures = 0;
-          _handleError('Speech recognition is not working. $errorDetail');
-          return;
-        }
-
-        if (_continuousListening) {
-          _lastTranscript = 'Listening... (attempt ${_consecutiveSttFailures + 1})';
-          notifyListeners();
-          _captureWithSarvam();
-        } else {
-          _lastTranscript = 'No speech detected. Tap mic to try again.';
-          _state = MealVoiceState.idle;
-          _isListening = false;
-          notifyListeners();
-        }
-      }
-    } catch (e) {
-      if (recorder != null) {
-        try { await recorder.stopRecorder(); } catch (_) {}
-        try { await recorder.closeRecorder(); } catch (_) {}
-      }
-      if (audioPath != null) {
-        try { await File(audioPath).delete(); } catch (_) {}
-      }
-      _addLog('STT: Recording exception: $e');
-      _handleError('Recording failed: $e');
-    }
-  }
-
   Future<void> stopListening() async {
-    _continuousListening = false;
     _listeningTimeoutTimer?.cancel();
     await _tts.stop();
     await _sarvamTTS.stop();
@@ -1030,7 +960,6 @@ class MealVoiceController extends ChangeNotifier {
     _authorizationConsumed = false;
     _isProcessing = false;
     _isSpeaking = false;
-    _continuousListening = false;
     _conversation.reset();
     _logs.clear();
     _addLog('User state reset');
@@ -1064,33 +993,173 @@ class MealVoiceController extends ChangeNotifier {
     }
   }
 
-  static bool _isWakeWord(String lowerTranscript) {
-    final cleaned = lowerTranscript.replaceAll(RegExp(r'[^\w\s]'), ' ').trim();
-    final patterns = [
-      RegExp(r'\bhi\b.*?\bmeal\b'),
-      RegExp(r'\bhey\b.*?\bmeal\b'),
-      RegExp(r'\bhello\b.*?\bmeal\b'),
-      RegExp(r'\bok\b.*?\bmeal\b'),
-      RegExp(r'\bstart\b.*?\bmeal\b'),
-      RegExp(r'\bhi\b.*?\bmeel\b'),
-      RegExp(r'\bhey\b.*?\bmeel\b'),
-      RegExp(r'\bhi\b.*?\bmeil\b'),
-      RegExp(r'\bhey\b.*?\bmeil\b'),
-      RegExp(r'\bhimeal\b'),
-      RegExp(r'\bheymeal\b'),
-    ];
-    for (final pattern in patterns) {
-      if (pattern.hasMatch(cleaned)) return true;
+  /// Initialize the Gemini Live engine.
+  Future<void> _initGeminiLiveEngine() async {
+    try {
+      final tokenService = TokenService();
+      final token = await tokenService.getAccessToken();
+      if (token == null || token.isEmpty) {
+        _addLog('Gemini Live: No auth token available');
+        return;
+      }
+
+      final initialized = await _geminiLiveEngine.initialize(
+        backendUrl: AppConstants.apiBaseUrl,
+        authToken: token,
+        onLog: (log) => _addLog(log),
+        onEvent: _handleGeminiLiveEvent,
+      );
+
+      if (initialized) {
+        _addLog('Gemini Live engine initialized successfully');
+      } else {
+        _addLog('Gemini Live engine init failed — using legacy');
+        _useGeminiLive = false;
+      }
+    } catch (e) {
+      _addLog('Gemini Live init error: $e — using legacy');
+      _useGeminiLive = false;
     }
-    const simplePhrases = [
-      'hi meal', 'hey meal', 'hello meal', 'ok meal', 'start meal',
-      'hi meel', 'hey meel', 'hi meil', 'hey meil',
-      'himeal', 'heymeal', 'hellomeal', 'okmeal', 'startmeal',
-    ];
-    for (final phrase in simplePhrases) {
-      if (cleaned.contains(phrase)) return true;
+  }
+
+  /// Handle events from the Gemini Live engine.
+  void _handleGeminiLiveEvent(MealVoiceEngineEvent event) {
+    switch (event) {
+      case EngineConnected():
+        _geminiLiveConnected = true;
+        _activeEngine = 'gemini_live';
+        _addLog('Gemini Live connected');
+        notifyListeners();
+        break;
+
+      case EngineDisconnected():
+        _geminiLiveConnected = false;
+        _activeEngine = 'legacy';
+        _addLog('Gemini Live disconnected: ${event.reason}');
+        notifyListeners();
+        break;
+
+      case EngineTranscription():
+        if (event.isFinal) {
+          _handleTranscription(event.text);
+        } else {
+          _lastTranscript = event.text;
+          notifyListeners();
+        }
+        break;
+
+      case EngineResponse():
+        _ttsResponse = event.text;
+        _addLog('Gemini Live response: ${event.text.substring(0, event.text.length > 100 ? 100 : event.text.length)}');
+        // Parse the response for actions (if JSON format)
+        _processGeminiLiveResponse(event.text);
+        break;
+
+      case EngineFunctionCall():
+        _handleGeminiLiveFunctionCall(event.name, event.args);
+        break;
+
+      case EngineErrorEvent():
+        _addLog('Gemini Live error: ${event.message}');
+        if (event.recoverable) {
+          // Fall back to legacy engine
+          _useGeminiLive = false;
+          _activeEngine = 'legacy';
+          _addLog('Falling back to legacy engine');
+        }
+        notifyListeners();
+        break;
+
+      case EngineStateChangedEvent():
+        _addLog('Gemini Live state: ${event.newState}');
+        break;
+
+      case EngineAudioOutput():
+        // Audio is handled natively by Kotlin
+        break;
     }
-    return false;
+  }
+
+  /// Handle a function call from Gemini Live.
+  void _handleGeminiLiveFunctionCall(String name, Map<String, dynamic> args) {
+    _addLog('Gemini Live function call: $name($args)');
+
+    // Convert to VoiceAction and execute
+    final action = VoiceAction(
+      type: name,
+      params: Map<String, dynamic>.from(args),
+    );
+
+    _executeAction(action).then((success) {
+      // Send response back to Gemini Live
+      _geminiLiveEngine.sendFunctionResponse('', {
+        'success': success,
+        'message': success ? 'Action executed' : 'Action failed',
+      });
+    });
+  }
+
+  /// Process a Gemini Live text response for actions.
+  void _processGeminiLiveResponse(String text) {
+    try {
+      var cleaned = text.trim();
+      if (cleaned.startsWith('```json')) {
+        cleaned = cleaned.substring(7);
+      } else if (cleaned.startsWith('```')) {
+        cleaned = cleaned.substring(3);
+      }
+      if (cleaned.endsWith('```')) {
+        cleaned = cleaned.substring(0, cleaned.length - 3);
+      }
+      cleaned = cleaned.trim();
+
+      if (cleaned.startsWith('{')) {
+        final json = Map<String, dynamic>.from(
+          const JsonDecoder().convert(cleaned) as Map,
+        );
+        final responseText = json['response'] as String? ?? text;
+        _ttsResponse = responseText;
+
+        final actions = (json['actions'] as List?)?.map((a) {
+          return VoiceAction.fromJson(Map<String, dynamic>.from(a as Map));
+        }).toList() ?? [];
+
+        if (actions.isNotEmpty) {
+          for (final action in actions) {
+            _executeAction(action);
+          }
+        }
+      }
+    } catch (_) {
+      // Not JSON — use as-is
+      _ttsResponse = text;
+    }
+
+    // Speak the response
+    final staysListening = _ttsResponse.isNotEmpty;
+    if (staysListening) {
+      _state = MealVoiceState.commandSuccess;
+      _speak(_ttsResponse);
+    }
+    notifyListeners();
+  }
+
+  /// Toggle between Gemini Live and legacy engine.
+  Future<void> toggleEngine() async {
+    _useGeminiLive = !_useGeminiLive;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('use_gemini_live', _useGeminiLive);
+
+    if (_useGeminiLive) {
+      _addLog('Switching to Gemini Live engine');
+      await _initGeminiLiveEngine();
+    } else {
+      _addLog('Switching to legacy engine');
+      await _geminiLiveEngine.disconnect();
+      _geminiLiveConnected = false;
+      _activeEngine = 'legacy';
+    }
+    notifyListeners();
   }
 
   @override
@@ -1100,6 +1169,7 @@ class MealVoiceController extends ChangeNotifier {
     _tts.dispose();
     _sarvamSTT.dispose();
     _sarvamTTS.dispose();
+    _geminiLiveEngine.dispose();
     super.dispose();
   }
 }

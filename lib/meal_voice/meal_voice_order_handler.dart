@@ -100,6 +100,7 @@ class MealVoiceOrderHandler {
     required int quantity,
   }) async {
     try {
+      if (quantity <= 0) return CartAddResult.itemNotFound;
       final item = searchResult.menuItem;
       final kitchen = searchResult.kitchen;
 

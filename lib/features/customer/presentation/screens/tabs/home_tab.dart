@@ -13,6 +13,7 @@ import '../kitchen_map_screen.dart';
 import '../../../../../core/theme/app_theme.dart';
 import '../../../../../meal_voice/meal_voice_controller.dart';
 import '../../../../../meal_voice/meal_voice_screen.dart';
+import '../../../../ai_assistant/presentation/screens/ai_chat_screen.dart';
 
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
@@ -98,13 +99,96 @@ class _HomeTabState extends State<HomeTab> {
                   ),
                 ),
 
-                // 2. Category Filter
+                // 2. Ask MEAL AI Card
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const AiChatScreen(),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              AppTheme.primaryColor,
+                              AppTheme.primaryColor.withValues(alpha: 0.85),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.primaryColor.withValues(alpha: 0.25),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.auto_awesome,
+                                color: Colors.white,
+                                size: 22,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Ask MEAL AI',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Get personalized food recommendations',
+                                    style: TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              Icons.arrow_forward_ios,
+                              color: Colors.white.withValues(alpha: 0.7),
+                              size: 16,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // 3. Category Filter
                 const SliverToBoxAdapter(child: CategorySelector()),
 
-                // 3. Promo Banners
+                // 4. Promo Banners
                 const SliverToBoxAdapter(child: PromoCarousel()),
 
-                // 4. Quick Cuisine Grid
+                // 5. Quick Cuisine Grid
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -120,7 +204,7 @@ class _HomeTabState extends State<HomeTab> {
                   ),
                 ),
 
-                // 5. Curated Collection: Top Rated
+                // 6. Curated Collection: Top Rated
                 if (provider.topRatedKitchens.isNotEmpty && !provider.isLoading)
                   SliverToBoxAdapter(
                     child: KitchenHorizontalList(
@@ -129,7 +213,7 @@ class _HomeTabState extends State<HomeTab> {
                     ),
                   ),
 
-                // 6. Curated Collection: Healthy Picks
+                // 7. Curated Collection: Healthy Picks
                 if (provider.healthyKitchens.isNotEmpty && !provider.isLoading)
                   SliverToBoxAdapter(
                     child: KitchenHorizontalList(
@@ -138,7 +222,7 @@ class _HomeTabState extends State<HomeTab> {
                     ),
                   ),
 
-                // 7. Main Feed Header
+                // 8. Main Feed Header
                 const SliverToBoxAdapter(
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(16, 24, 16, 12),
@@ -149,7 +233,7 @@ class _HomeTabState extends State<HomeTab> {
                   ),
                 ),
 
-                // 8. Initial Loading State (Shimmers)
+                // 9. Initial Loading State (Shimmers)
                 if (provider.isLoading && provider.kitchens.isEmpty)
                   SliverPadding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -161,7 +245,7 @@ class _HomeTabState extends State<HomeTab> {
                     ),
                   ),
 
-                // 9. Error State
+                // 10. Error State
                 if (provider.error != null && provider.kitchens.isEmpty)
                   SliverFillRemaining(
                     child: Center(
@@ -180,7 +264,7 @@ class _HomeTabState extends State<HomeTab> {
                     ),
                   ),
 
-                // 10. Kitchen/Restaurant List
+                // 11. Kitchen/Restaurant List
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   sliver: SliverList(
@@ -204,7 +288,7 @@ class _HomeTabState extends State<HomeTab> {
                   ),
                 ),
 
-                // 11. Pagination Loading Footer
+                // 12. Pagination Loading Footer
                 if (provider.isLoading && provider.kitchens.isNotEmpty)
                   const SliverToBoxAdapter(
                     child: Padding(

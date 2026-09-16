@@ -58,6 +58,8 @@ class MealVoiceService : Service() {
     private var nativeProcessor: VoiceNativeProcessor? = null
     @Volatile
     private var isNativeProcessing = false
+    @Volatile
+    private var isShuttingDown = false
 
     // Bridge reference — set by MainActivity (null when in separate process)
     var bridge: MealVoiceBridge? = null
@@ -135,8 +137,10 @@ class MealVoiceService : Service() {
 
     override fun onDestroy() {
         instance = null
+        isShuttingDown = true
         nativeProcessor?.shutdown()
         nativeProcessor = null
+        releaseWakeLock()
         stopVoiceService()
         super.onDestroy()
     }
@@ -147,7 +151,7 @@ class MealVoiceService : Service() {
             return true
         }
 
-        Log.i(TAG, "Starting wake-word detection")
+        Log.i(TAG, "=== startVoiceService() CALLED ===")
 
         // Save user preference for auto-start on boot
         getSharedPreferences("meal_voice_prefs", Context.MODE_PRIVATE)
@@ -237,14 +241,14 @@ class MealVoiceService : Service() {
      */
     private fun onWakeWordDetected() {
         Log.i(TAG, "=== WAKE WORD DETECTED ===")
+        Log.i(TAG, "bridge=${bridge != null}, isRunning=$isRunning")
 
         if (bridge != null) {
-            // Bridge is alive — send event directly to Flutter
+            Log.i(TAG, "Sending wakeWordDetected event to Flutter")
             bridge?.sendEvent("wakeWordDetected", System.currentTimeMillis().toString())
             updateNotification("Wake word detected! Listening for command...")
         } else {
-            // Bridge is dead — process command natively
-            Log.i(TAG, "Bridge is null — processing command natively")
+            Log.i(TAG, "Bridge is NULL — processing command natively")
             updateNotification("Wake word detected! Listening for your order...")
             startNativeCommandCapture()
         }
@@ -290,6 +294,8 @@ class MealVoiceService : Service() {
      */
     private fun startStandaloneCommandCapture() {
         try {
+            // Release the engine's SpeechRecognizer first to avoid mic conflict
+            wakeWordEngine?.stop()
             val recognizer = android.speech.SpeechRecognizer.createSpeechRecognizer(this)
             recognizer?.setRecognitionListener(object : android.speech.RecognitionListener {
                 override fun onReadyForSpeech(params: android.os.Bundle?) {
@@ -370,6 +376,10 @@ class MealVoiceService : Service() {
         }
 
         Thread {
+            if (isShuttingDown) {
+                Log.w(TAG, "Service shutting down — aborting native command processing")
+                return@Thread
+            }
             try {
                 Log.i(TAG, "Calling Gemini with: $transcript")
                 val geminiResponse = processor.callGemini(
@@ -400,10 +410,16 @@ class MealVoiceService : Service() {
                     // Actions require Flutter — launch the app
                     Log.i(TAG, "Actions require Flutter — launching app")
                     // Save the command so Flutter can pick it up
+                    // Write to FlutterSharedPreferences so Flutter can read it
+                    getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                        .edit()
+                        .putBoolean("flutter.pending_wake_word", true)
+                        .putString("flutter.pending_command", transcript)
+                        .apply()
+                    // Also write to meal_voice_prefs for native-side checkPendingWakeWord
                     getSharedPreferences("meal_voice_prefs", Context.MODE_PRIVATE)
                         .edit()
                         .putBoolean("pending_wake_word", true)
-                        .putString("pending_command", transcript)
                         .apply()
                     isNativeProcessing = false
                     processor.speak(responseText) {
@@ -455,8 +471,18 @@ class MealVoiceService : Service() {
      * Plays a confirmation beep to signal "speak now".
      */
     fun startCommandCapture() {
+        Log.i(TAG, "=== startCommandCapture() CALLED ===")
+        Log.i(TAG, "bridge=${bridge != null}, engine=${wakeWordEngine != null}, running=${wakeWordEngine?.isListening()}")
+        if (wakeWordEngine == null) {
+            Log.e(TAG, "startCommandCapture: wakeWordEngine is NULL!")
+            return
+        }
         playConfirmationBeep()
-        wakeWordEngine?.startCommandCapture()
+        val started = wakeWordEngine?.startCommandCapture() ?: false
+        Log.i(TAG, "startCommandCapture() result: $started")
+        if (!started) {
+            Log.w(TAG, "Engine failed to start command capture")
+        }
     }
 
     /**
@@ -500,7 +526,7 @@ class MealVoiceService : Service() {
                 PowerManager.PARTIAL_WAKE_LOCK,
                 "mealvoice:wakelock"
             ).apply {
-                acquire(60 * 60 * 1000L) // 1 hour max, will be released when service stops
+                acquire()
             }
             Log.i(TAG, "Wake lock acquired")
         } catch (e: Exception) {
@@ -536,17 +562,9 @@ class MealVoiceService : Service() {
                 this, 9997, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            // Use setAlarmClock — exempt from Doze, survives process death
-            val alarmIntent = Intent(this, BootReceiver::class.java).apply {
-                action = BootReceiver.ACTION_SERVICE_RESTART
-            }
-            val alarmPending = PendingIntent.getBroadcast(
-                this, 9998, alarmIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
             val triggerTime = System.currentTimeMillis() + 5 * 60 * 1000L
             alarmManager.setAlarmClock(
-                AlarmManager.AlarmClockInfo(triggerTime, alarmPending),
+                AlarmManager.AlarmClockInfo(triggerTime, pendingIntent),
                 pendingIntent
             )
             Log.i(TAG, "Restart alarm scheduled (setAlarmClock, every 5 min)")

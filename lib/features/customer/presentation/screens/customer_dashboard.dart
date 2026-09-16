@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../ai_assistant/presentation/screens/ai_chat_screen.dart';
 import '../../../notifications/presentation/screens/notifications_screen.dart';
 import '../../../chat/presentation/screens/inbox_screen.dart';
 import 'tabs/home_tab.dart';
@@ -74,6 +75,16 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
           BottomNavigationBarItem(icon: Icon(Icons.receipt_long_outlined), activeIcon: Icon(Icons.receipt_long), label: 'Orders'),
           BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: 'Profile'),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const AiChatScreen()),
+          );
+        },
+        backgroundColor: AppTheme.primaryColor,
+        child: const Icon(Icons.auto_awesome, color: Colors.white),
       ),
     );
   }

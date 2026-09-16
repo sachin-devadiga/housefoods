@@ -37,24 +37,32 @@ class MealVoiceBridge(
         methodChannel?.setMethodCallHandler { call, result ->
             when (call.method) {
                 "requestMicrophonePermission" -> result.success(true)
-                "startListening" -> result.success(service.startVoiceService())
+                "startListening" -> {
+                    Log.i("MEAL_Bridge", "startListening called from Flutter")
+                    result.success(service.startVoiceService())
+                }
                 "stopListening" -> {
+                    Log.i("MEAL_Bridge", "stopListening called from Flutter")
                     service.stopVoiceService()
                     result.success(true)
                 }
                 "stopEngine" -> {
+                    Log.i("MEAL_Bridge", "stopEngine called from Flutter")
                     service.stopEngine()
                     result.success(true)
                 }
                 "startCommandCapture" -> {
+                    Log.i("MEAL_Bridge", "startCommandCapture called from Flutter")
                     service.startCommandCapture()
                     result.success(true)
                 }
                 "stopCommandCapture" -> {
+                    Log.i("MEAL_Bridge", "stopCommandCapture called from Flutter")
                     service.stopCommandCapture()
                     result.success(true)
                 }
                 "restartWakeWordListening" -> {
+                    Log.i("MEAL_Bridge", "restartWakeWordListening called from Flutter")
                     service.restartWakeWordListening()
                     result.success(true)
                 }
@@ -98,6 +106,7 @@ class MealVoiceBridge(
     fun sendEvent(type: String, data: Any? = null) {
         val event = mutableMapOf<String, Any?>("type" to type)
         if (data != null) event["data"] = data
+        Log.i("MEAL_Bridge", "sendEvent: type=$type, data=$data")
         mainHandler.post {
             try {
                 eventSink?.success(event)

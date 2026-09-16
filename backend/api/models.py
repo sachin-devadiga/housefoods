@@ -309,6 +309,9 @@ class Order(models.Model):
     picked_up_at = models.DateTimeField(null=True, blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
     delivery_otp = models.CharField(max_length=6, blank=True, default='')
+    delivery_latitude = models.FloatField(null=True, blank=True)
+    delivery_longitude = models.FloatField(null=True, blank=True)
+    eta_5min_notified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

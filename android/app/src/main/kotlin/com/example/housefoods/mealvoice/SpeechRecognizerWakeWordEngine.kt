@@ -47,7 +47,7 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
         private fun fuzzyWakeMatch(text: String): Boolean {
             val lower = text.lowercase().trim()
             val greetings = listOf("hi ", "hey ", "hello ", "ok ", "high ")
-            val hasGreeting = greetings.any { lower.startsWith(it) || lower.contains(it) }
+            val hasGreeting = greetings.any { lower.startsWith(it) }
             if (!hasGreeting) return false
 
             // Check if any word is close to "meal"
@@ -166,8 +166,9 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
      * Never destroy/recreate — mic stays alive the entire time.
      */
     fun startCommandCapture(): Boolean {
+        Log.i(TAG, "startCommandCapture: isRunning=$isRunning, recognizer=${speechRecognizer != null}, isCapturing=$isCapturingCommand, wakeDetected=$wakeDetectedThisSession")
         if (!isRunning || speechRecognizer == null) {
-            Log.e(TAG, "Cannot start command capture — not running")
+            Log.e(TAG, "Cannot start command capture — not running (isRunning=$isRunning, recognizer=${speechRecognizer != null})")
             return false
         }
 
@@ -182,27 +183,38 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
         cancelPendingRestart()
 
         try {
-            // Stop current recognition but keep the SpeechRecognizer alive
             speechRecognizer?.stopListening()
 
-            // Swap listener immediately — mic stays on
-            speechRecognizer?.setRecognitionListener(createCommandCaptureListener())
-
-            // Restart listening with new listener
             mainHandler.postDelayed({
                 try {
                     if (isRunning && isCapturingCommand && speechRecognizer != null) {
-                        speechRecognizer?.startListening(createRecognitionIntent())
-                        scheduleCommandTimeout()
-                        Log.i(TAG, "Command capture started (listener swapped)")
-                        onEventCallback?.onEvent("stateChanged", "4") // LISTENING_TO_USER
+                        speechRecognizer?.setRecognitionListener(createCommandCaptureListener())
+                        mainHandler.postDelayed({
+                            try {
+                                if (isRunning && isCapturingCommand && speechRecognizer != null) {
+                                    speechRecognizer?.startListening(createRecognitionIntent())
+                                    scheduleCommandTimeout()
+                                    Log.i(TAG, "Command capture started (listener swapped + restarted)")
+                                    onEventCallback?.onEvent("stateChanged", "4")
+                                } else {
+                                    Log.w(TAG, "Command capture start skipped: isRunning=$isRunning, isCapturing=$isCapturingCommand, recognizer=${speechRecognizer != null}")
+                                }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Failed to start listening after swap", e)
+                                onEventCallback?.onEvent("error", "Command capture failed: ${e.message}")
+                                isCapturingCommand = false
+                            }
+                        }, 300)
+                    } else {
+                        Log.w(TAG, "Command capture skipped: isRunning=$isRunning, isCapturing=$isCapturingCommand, recognizer=${speechRecognizer != null}")
+                        isCapturingCommand = false
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to start command capture after swap", e)
                     onEventCallback?.onEvent("error", "Command capture failed: ${e.message}")
                     isCapturingCommand = false
                 }
-            }, 200) // Short delay — just enough for stopListening to settle
+            }, 400)
 
             return true
         } catch (e: Exception) {
@@ -349,6 +361,7 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
 
     private fun processWakeWordResults(results: Bundle?): Boolean {
         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) ?: return false
+        Log.i(TAG, "processWakeWordResults: checking ${matches.size} matches, callback=${onDetectedCallback != null}")
         for (match in matches) {
             val lower = match.lowercase().trim()
             // Exact match
@@ -356,7 +369,9 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
                 if (lower.contains(phrase)) {
                     Log.i(TAG, "WAKE WORD DETECTED (exact): $match")
                     wakeDetectedThisSession = true
+                    Log.i(TAG, "Calling onDetectedCallback...")
                     onDetectedCallback?.onDetected()
+                    Log.i(TAG, "onDetectedCallback called successfully")
                     onEventCallback?.onEvent("log", "Wake word detected: $match")
                     return true
                 }
@@ -365,7 +380,9 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
             if (fuzzyWakeMatch(lower)) {
                 Log.i(TAG, "WAKE WORD DETECTED (fuzzy): $match")
                 wakeDetectedThisSession = true
+                Log.i(TAG, "Calling onDetectedCallback...")
                 onDetectedCallback?.onDetected()
+                Log.i(TAG, "onDetectedCallback called successfully")
                 onEventCallback?.onEvent("log", "Wake word detected: $match")
                 return true
             }
@@ -378,36 +395,47 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
     private fun createCommandCaptureListener(): RecognitionListener {
         return object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {
-                Log.i(TAG, "Ready for command")
+                Log.i(TAG, "CmdCapture: Ready for speech")
                 onEventCallback?.onEvent("stateChanged", "4") // LISTENING_TO_USER
             }
 
             override fun onBeginningOfSpeech() {
-                Log.d(TAG, "Command speech started")
+                Log.i(TAG, "CmdCapture: Speech started")
                 onEventCallback?.onEvent("log", "Speech detected")
-                cancelCommandTimeout() // User started speaking, cancel timeout
+                cancelCommandTimeout()
             }
 
             override fun onRmsChanged(rmsdB: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
 
             override fun onEndOfSpeech() {
-                Log.d(TAG, "Command speech ended")
-                // FIX #28: Only finalize once
+                Log.i(TAG, "CmdCapture: Speech ended")
                 if (!commandFinalized) {
                     finalizeCommand()
                 }
             }
 
             override fun onError(error: Int) {
-                Log.w(TAG, "Command recognition error: $error")
-                // FIX #28: Only finalize once
+                val errorName = when(error) {
+                    SpeechRecognizer.ERROR_AUDIO -> "AUDIO"
+                    SpeechRecognizer.ERROR_CLIENT -> "CLIENT"
+                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "PERMISSIONS"
+                    SpeechRecognizer.ERROR_NETWORK -> "NETWORK"
+                    SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "NETWORK_TIMEOUT"
+                    SpeechRecognizer.ERROR_NO_MATCH -> "NO_MATCH"
+                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "BUSY"
+                    SpeechRecognizer.ERROR_SERVER -> "SERVER"
+                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "SPEECH_TIMEOUT"
+                    else -> "UNKNOWN_$error"
+                }
+                Log.w(TAG, "CmdCapture: Error $error ($errorName) finalized=$commandFinalized results=${commandResults.length}")
                 if (commandFinalized) return
 
                 when (error) {
                     SpeechRecognizer.ERROR_NO_MATCH,
                     SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
                         if (commandResults.isEmpty()) {
+                            Log.i(TAG, "CmdCapture: No results — sending timeout")
                             onEventCallback?.onEvent("commandTimeout", "No speech detected")
                             isCapturingCommand = false
                         } else {
@@ -415,27 +443,27 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
                         }
                     }
                     SpeechRecognizer.ERROR_CLIENT -> {
-                        // Recognition was stopped externally — if we have results, use them
                         if (commandResults.isNotEmpty()) {
                             finalizeCommand()
                         } else {
-                            isCapturingCommand = false
+                            Log.i(TAG, "CmdCapture: ERROR_CLIENT with no results — keeping alive")
                         }
                     }
                     else -> {
                         if (error != SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
                             onEventCallback?.onEvent("error", "Speech error: $error")
-                            isCapturingCommand = false
                         }
+                        isCapturingCommand = false
                     }
                 }
             }
 
             override fun onResults(results: Bundle?) {
-                // FIX #28: Only finalize once
+                Log.i(TAG, "CmdCapture: onResults finalized=$commandFinalized")
                 if (commandFinalized) return
 
                 val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                Log.i(TAG, "CmdCapture: results=$matches")
                 if (!matches.isNullOrEmpty()) {
                     commandResults.clear()
                     commandResults.append(matches[0])
@@ -450,6 +478,7 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
                 if (!matches.isNullOrEmpty()) {
                     commandResults.clear()
                     commandResults.append(matches[0])
+                    Log.d(TAG, "CmdCapture: partial='${matches[0]}'")
                     onEventCallback?.onEvent("speechPartial", matches[0])
                 }
             }
@@ -557,11 +586,21 @@ class SpeechRecognizerWakeWordEngine : WakeWordEngine {
                 try {
                     speechRecognizer?.destroy()
                     speechRecognizer = null
-                    Thread.sleep(500)
-                    speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context!!)
-                    Log.i(TAG, "Recreated SpeechRecognizer")
+                    // Use postDelayed instead of Thread.sleep to avoid blocking main thread
+                    mainHandler.postDelayed({
+                        try {
+                            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context!!)
+                            Log.i(TAG, "Recreated SpeechRecognizer")
+                            speechRecognizer?.setRecognitionListener(createWakeWordListener())
+                            speechRecognizer?.startListening(createRecognitionIntent())
+                            Log.i(TAG, "SpeechRecognizer restarted after recreate")
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to recreate SpeechRecognizer", e)
+                        }
+                    }, 500)
+                    return@Runnable
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to recreate SpeechRecognizer", e)
+                    Log.e(TAG, "Failed to destroy SpeechRecognizer", e)
                     return@Runnable
                 }
             }
