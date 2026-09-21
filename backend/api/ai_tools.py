@@ -1,5 +1,6 @@
 import math
 import logging
+import re
 from decimal import Decimal
 
 from django.db import transaction
@@ -54,6 +55,58 @@ def _cart_summary(cart):
 # Individual tool functions
 # ---------------------------------------------------------------------------
 
+def _normalize_food_term(term):
+    """Normalize a food search term for better fuzzy matching."""
+    term = term.lower().strip()
+    # Common misspelling corrections
+    corrections = {
+        'biriyani': 'biryani',
+        'birani': 'biryani',
+        'briyani': 'biryani',
+        'biryiani': 'biryani',
+        'brian': 'biryani',
+        'paneer': 'paneer',
+        'panner': 'paneer',
+        'momos': 'momos',
+        'momo': 'momos',
+        'magnurian': 'manchurian',
+        'manchurian': 'manchurian',
+        'manchuria': 'manchurian',
+        'dosha': 'dosa',
+        'dosa': 'dosa',
+        'idli': 'idli',
+        'idly': 'idli',
+        'noodles': 'noodles',
+        'noodl': 'noodles',
+        'sandwich': 'sandwich',
+        'sandwitch': 'sandwich',
+        'burger': 'burger',
+        'burgur': 'burger',
+        'pizza': 'pizza',
+        'piza': 'pizza',
+        'shawarma': 'shawarma',
+        'shwarma': 'shawarma',
+        'shawama': 'shawarma',
+        'paratha': 'paratha',
+        'parota': 'paratha',
+        'parotta': 'paratha',
+        'thali': 'thali',
+        'tali': 'thali',
+        'tikka': 'tikka',
+        'tika': 'tikka',
+        'samosa': 'samosa',
+        'somosa': 'samosa',
+        'chole': 'chole',
+        'chhole': 'chole',
+        'butter chicken': 'butter chicken',
+        'butter chickn': 'butter chicken',
+    }
+    for wrong, correct in corrections.items():
+        if term == wrong or term.startswith(wrong):
+            term = term.replace(wrong, correct, 1)
+    return term
+
+
 def search_food(params, user_profile):
     food = params.get('food', '')
     max_price = params.get('max_price')
@@ -71,8 +124,11 @@ def search_food(params, user_profile):
         kitchen__is_open=True,
     ).select_related('kitchen')
 
-    # Multi-word search: match each word independently for better recall
-    words = food.split()
+    # Normalize and build search words
+    normalized = _normalize_food_term(food)
+    words = normalized.split()
+
+    # Strategy 1: Direct match on normalized terms
     if words:
         q = Q()
         for w in words:
@@ -90,7 +146,6 @@ def search_food(params, user_profile):
     user_lon = getattr(user_profile, 'current_longitude', None)
 
     results = []
-    # Process all matching items (no arbitrary cutoff)
     for item in base_qs.iterator(chunk_size=200):
         try:
             k_lat = float(item.kitchen.latitude) if item.kitchen.latitude else None
@@ -140,6 +195,45 @@ def search_food(params, user_profile):
             'description': item.description or '',
         })
 
+    # Strategy 2: If no results and search had multi-word, try individual word search
+    if not results and len(words) > 1:
+        for w in words:
+            if len(w) < 3:
+                continue
+            fallback_qs = MenuItem.objects.filter(
+                is_available=True,
+                kitchen__status='approved',
+                kitchen__is_open=True,
+                name__icontains=w,
+            ).select_related('kitchen')
+            for item in fallback_qs.iterator(chunk_size=100):
+                # Avoid duplicates
+                if any(r['item_id'] == item.pk for r in results):
+                    continue
+                try:
+                    k_lat = float(item.kitchen.latitude) if item.kitchen.latitude else None
+                    k_lon = float(item.kitchen.longitude) if item.kitchen.longitude else None
+                except (TypeError, ValueError):
+                    k_lat, k_lon = None, None
+                dist = _haversine_km(float(user_lat or 0), float(user_lon or 0), k_lat, k_lon) if (user_lat and user_lon and k_lat and k_lon) else 999.0
+                eta = _estimate_eta(dist, item.preparation_time or 20)
+                rating_val = float(item.kitchen.rating or 0)
+                price_val = float(item.price or 0)
+                results.append({
+                    'item_id': item.pk,
+                    'item_name': item.name,
+                    'price': price_val,
+                    'restaurant_name': item.kitchen.name,
+                    'restaurant_id': item.kitchen.pk,
+                    'rating': rating_val,
+                    'total_ratings': int(item.kitchen.total_ratings or 0),
+                    'distance_km': round(dist, 2),
+                    'estimated_minutes': eta,
+                    'is_veg': item.is_veg,
+                    'image_url': item.image_url or '',
+                    'description': item.description or '',
+                })
+
     if not results:
         return {'results': [], 'message': 'No matching items found'}
 
@@ -164,6 +258,70 @@ def search_food(params, user_profile):
         results.sort(key=_score, reverse=True)
 
     return {'results': results[:10]}
+
+
+def list_restaurants(params, user_profile):
+    """List all open, approved restaurants/kitchens."""
+    max_price = params.get('max_price')
+    is_veg = params.get('is_veg')
+    sort_by = params.get('sort_by', 'rating')
+
+    kitchens = Kitchen.objects.filter(
+        status='approved',
+        is_open=True,
+    )
+
+    user_lat = getattr(user_profile, 'current_latitude', None)
+    user_lon = getattr(user_profile, 'current_longitude', None)
+
+    results = []
+    for kitchen in kitchens.iterator(chunk_size=100):
+        try:
+            k_lat = float(kitchen.latitude) if kitchen.latitude else None
+            k_lon = float(kitchen.longitude) if kitchen.longitude else None
+        except (TypeError, ValueError):
+            k_lat, k_lon = None, None
+
+        dist = _haversine_km(float(user_lat or 0), float(user_lon or 0), k_lat, k_lon) if (user_lat and user_lon and k_lat and k_lon) else 999.0
+
+        menu_items = MenuItem.objects.filter(kitchen=kitchen, is_available=True)
+        if max_price is not None:
+            menu_items = menu_items.filter(price__lte=Decimal(str(max_price)))
+        if is_veg is not None:
+            menu_items = menu_items.filter(is_veg=bool(is_veg))
+
+        item_count = menu_items.count()
+        if item_count == 0:
+            continue
+
+        rating_val = float(kitchen.rating or 0)
+        total_ratings_val = int(kitchen.total_ratings or 0)
+        eta = _estimate_eta(dist, 20)
+
+        results.append({
+            'restaurant_id': kitchen.pk,
+            'restaurant_name': kitchen.name,
+            'rating': rating_val,
+            'total_ratings': total_ratings_val,
+            'distance_km': round(dist, 2),
+            'estimated_minutes': eta,
+            'menu_items_count': item_count,
+            'description': kitchen.description or '',
+            'image_url': kitchen.image_url or '',
+            'is_veg': kitchen.is_pure_veg if hasattr(kitchen, 'is_pure_veg') else False,
+        })
+
+    if not results:
+        return {'results': [], 'message': 'No restaurants currently available'}
+
+    if sort_by == 'rating':
+        results.sort(key=lambda r: (-r['rating'], -r['total_ratings']))
+    elif sort_by == 'distance':
+        results.sort(key=lambda r: r['distance_km'])
+    elif sort_by == 'fastest':
+        results.sort(key=lambda r: r['estimated_minutes'])
+
+    return {'results': results[:15]}
 
 
 def get_cart(params, user_profile):
@@ -551,6 +709,7 @@ def place_order(params, user_profile):
 
 TOOLS = {
     'search_food': search_food,
+    'list_restaurants': list_restaurants,
     'get_cart': get_cart,
     'add_to_cart': add_to_cart,
     'update_cart_item': update_cart_item,

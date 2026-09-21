@@ -54,16 +54,52 @@ RULES:
 
 # Food-related keywords to detect when we should force search_food
 _FOOD_KEYWORDS = [
-    'eat', 'food', 'hungry', 'order', 'biryani', 'pizza', 'burger', 'dosa', 'idli',
+    'eat', 'food', 'hungry', 'biryani', 'pizza', 'burger', 'dosa', 'idli',
     'noodles', 'rice', 'curry', 'chicken', 'mutton', 'paneer', 'veg', 'non-veg',
     'thali', 'butter chicken', 'tikka', 'samosa', 'momos', 'shawarma', 'wrap',
     'sandwich', 'pasta', 'fried rice', 'manchurian', 'dal', 'roti', 'naan',
     'paratha', 'chole', 'pav bhaji', 'vada pav', 'bhel', 'chaat', 'juice',
     'shake', 'coffee', 'tea', 'snacks', 'breakfast', 'lunch', 'dinner', 'meal',
-    'best', 'cheap', 'near', 'vegan', 'spicy', 'sweet', 'dish', 'cuisine',
-    'restaurant', 'kitchen', 'menu', 'dish', 'recommend', 'suggest', 'what.*eat',
-    'kya khana', 'kya khau', 'bhookh', 'khana', 'dhaba',
+    'dish', 'cuisine', 'recommend', 'suggest', 'kya khana', 'kya khau',
+    'bhookh', 'khana', 'dhaba',
 ]
+
+# Restaurant listing keywords — these should call list_restaurants, NOT search_food
+_RESTAURANT_KEYWORDS = [
+    'restaurant.*available', 'restaurant.*open', 'which restaurant', 'what restaurant',
+    'restaurants near', 'show.*restaurant', 'list.*restaurant', 'restaurants',
+    'kitchen.*available', 'kitchen.*open', 'which kitchen', 'what kitchen',
+    'open now', 'available now',
+]
+
+# Detect restaurant listing queries
+_RESTAURANT_QUERY_RE = re.compile('|'.join(_RESTAURANT_KEYWORDS), re.IGNORECASE)
+
+# Detect "order me X" / "I want X" food queries
+_ORDER_KEYWORDS = [
+    'order', 'want', 'get me', 'find me', 'search', 'look for',
+    'what should i', 'something', 'craving',
+]
+
+
+def _is_food_query(message):
+    """Detect if a message is food-related and should trigger search_food."""
+    msg_lower = message.lower().strip()
+
+    # If it's a restaurant listing query, return False (handled separately)
+    if _RESTAURANT_QUERY_RE.search(msg_lower):
+        return False
+
+    for kw in _FOOD_KEYWORDS:
+        if re.search(kw, msg_lower):
+            return True
+    return False
+
+
+def _is_restaurant_query(message):
+    """Detect if a message is asking about available restaurants."""
+    msg_lower = message.lower().strip()
+    return bool(_RESTAURANT_QUERY_RE.search(msg_lower))
 
 _TOOL_DECLARATIONS = [
     {
@@ -79,6 +115,18 @@ _TOOL_DECLARATIONS = [
                 'restaurant': {'type': 'STRING', 'description': 'Filter by restaurant/kitchen name'},
             },
             'required': ['food'],
+        },
+    },
+    {
+        'name': 'list_restaurants',
+        'description': 'List all currently open and available restaurants/kitchens. Use when user asks "which restaurants are available", "what restaurants are open", "show me restaurants", etc.',
+        'parameters': {
+            'type': 'OBJECT',
+            'properties': {
+                'max_price': {'type': 'NUMBER', 'description': 'Filter by max price in ₹'},
+                'is_veg': {'type': 'BOOLEAN', 'description': 'Filter for pure veg restaurants only'},
+                'sort_by': {'type': 'STRING', 'enum': ['rating', 'distance', 'fastest'], 'description': 'Sort restaurants by'},
+            },
         },
     },
     {
@@ -405,10 +453,19 @@ class MealAIChatView(APIView):
         # Execute tools from Gemini's response
         tool_results = _execute_tool_calls(tool_calls, user_profile) if tool_calls else []
 
-        # FORCE search_food if Gemini didn't call it but should have
-        if not tool_results and _is_food_query(message):
-            logger.info('[MEAL-AI] Gemini did not call tools for food query — forcing search_food')
-            tool_results = _force_search_food(message, user_profile)
+        # FORCE tool calls if Gemini didn't call them but should have
+        if not tool_results:
+            if _is_restaurant_query(message):
+                logger.info('[MEAL-AI] Gemini did not call tools for restaurant query — forcing list_restaurants')
+                result = execute_tool('list_restaurants', {}, user_profile)
+                tool_results = [{
+                    'tool_name': 'list_restaurants',
+                    'parameters': {},
+                    'result': result,
+                }]
+            elif _is_food_query(message):
+                logger.info('[MEAL-AI] Gemini did not call tools for food query — forcing search_food')
+                tool_results = _force_search_food(message, user_profile)
 
         # If tools were called, do a second Gemini pass with the results
         if tool_results:
