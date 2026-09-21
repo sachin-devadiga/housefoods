@@ -258,21 +258,44 @@ def _parse_gemini_response(data):
         return '', []
 
     parts = candidates[0].get('content', {}).get('parts', [])
-    response_text = ''
+    raw_text = ''
     tool_calls = []
 
     for part in parts:
-        # Skip thinking/thought parts (Gemini 2.5 returns these)
         if part.get('thought'):
             continue
         if 'text' in part:
-            response_text = part['text']
+            raw_text = part['text']
         elif 'functionCall' in part:
             fc = part['functionCall']
             tool_calls.append({
                 'name': fc.get('name', ''),
                 'parameters': fc.get('args', {}),
             })
+
+    response_text = raw_text
+
+    # Try to parse the response as JSON to extract the "response" field
+    if raw_text:
+        try:
+            import re
+            # Strip markdown code fences if present
+            cleaned = raw_text.strip()
+            if cleaned.startswith('```'):
+                cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned)
+                cleaned = re.sub(r'\s*```$', '', cleaned)
+            parsed = json.loads(cleaned)
+            if isinstance(parsed, dict):
+                if 'response' in parsed:
+                    response_text = parsed['response']
+                if 'tool_calls' in parsed and isinstance(parsed['tool_calls'], list) and not tool_calls:
+                    tool_calls = [
+                        {'name': tc.get('name', ''), 'parameters': tc.get('parameters', {})}
+                        for tc in parsed['tool_calls']
+                        if tc.get('name')
+                    ]
+        except (json.JSONDecodeError, TypeError):
+            pass
 
     return response_text, tool_calls
 
