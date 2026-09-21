@@ -5,7 +5,7 @@ import os
 import requests as http_requests
 
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -383,4 +383,40 @@ class MealAIChatView(APIView):
             'response_text': response_text,
             'tool_calls': [{'name': tc['name'], 'parameters': tc['parameters']} for tc in tool_calls],
             'tool_results': enriched_results,
+        })
+
+
+class TestGeminiKeyView(APIView):
+    """Temporary endpoint to diagnose Gemini API key issues."""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        import requests as http_requests
+        api_key = os.environ.get('GEMINI_API_KEY', '')
+        if not api_key:
+            return Response({'error': 'GEMINI_API_KEY env var is EMPTY'}, status=200)
+
+        results = {}
+        for model in ['gemini-2.5-flash-lite', 'gemini-2.0-flash-001', 'gemini-1.5-flash', 'gemini-2.5-flash']:
+            url = f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}'
+            try:
+                resp = http_requests.post(
+                    url,
+                    json={'contents': [{'parts': [{'text': 'Say hi in 5 words'}]}]},
+                    timeout=15,
+                )
+                data = resp.json()
+                if resp.status_code == 200:
+                    text = data.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '')
+                    results[model] = {'status': 'OK', 'text': text}
+                else:
+                    err = data.get('error', {})
+                    results[model] = {'status': resp.status_code, 'error': err.get('message', resp.text[:200])}
+            except Exception as e:
+                results[model] = {'status': 'exception', 'error': str(e)}
+
+        return Response({
+            'key_length': len(api_key),
+            'key_prefix': api_key[:8] + '...' if len(api_key) > 8 else '(short)',
+            'results': results,
         })
