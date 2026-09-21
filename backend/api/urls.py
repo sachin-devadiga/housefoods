@@ -158,7 +158,6 @@ urlpatterns = [
 
     # AI Assistant
     path('ai/chat/', ai_chat_view.MealAIChatView.as_view(), name='ai-chat'),
-    path('ai/test-gemini/', ai_chat_view.TestGeminiKeyView.as_view(), name='test-gemini'),
 
     # Include router URLs
     path('', include(router.urls)),

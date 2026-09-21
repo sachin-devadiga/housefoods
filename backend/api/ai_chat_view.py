@@ -5,7 +5,7 @@ import os
 import requests as http_requests
 
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -19,37 +19,29 @@ GEMINI_CHAT_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.6-flash']
 SYSTEM_PROMPT = """You are MEAL AI, the intelligent food-ordering assistant inside MEALIN.
 You help users discover restaurants, browse menus, manage their cart, apply offers, and place orders.
 
-RULES:
-- You MUST use the provided tools to fetch real data. Never invent restaurant names, prices, ratings, or menu items.
+CRITICAL RULES:
+- ALWAYS use the provided tools to fetch real data. NEVER say you don't have access to data or databases. You DO have access through tools.
+- When a user mentions ANY food item, restaurant, or dish name — IMMEDIATELY call search_food. Do NOT respond without calling the tool first.
+- Never invent restaurant names, prices, ratings, or menu items.
 - If a user asks something unrelated to food ordering, politely redirect them.
 - Support conversational context and follow-up questions.
-- Ask clarifying questions when the user's request is ambiguous.
-- You may support multiple languages (English, Hindi, Kannada, etc.) — reply in the language the user uses.
+- Reply in the language the user uses.
 - Keep responses concise and conversational.
-- When adding to cart, confirm with the user before placing the order.
 - Always show prices in ₹ (Indian Rupees).
 
-TOOL USAGE:
-- Use search_food when the user wants to find food items.
-- Use get_cart to show the user their current cart.
-- Use add_to_cart when the user wants to add an item.
-- Use update_cart_item to change quantity.
-- Use remove_from_cart to remove an item.
-- Use clear_cart to empty the cart.
-- Use get_restaurant_details for restaurant info.
-- Use get_menu_item_details for specific item info.
-- Use get_applicable_offers when the user asks about discounts or coupons.
-- Use validate_order before confirming an order.
-- Use get_order_status to check an order.
-- Use set_payment_method to record payment preference.
-- Use place_order to place an order from the user's cart.
+WHEN TO CALL TOOLS:
+- User mentions a food item (e.g. "biryani", "pizza", "dosa") → call search_food
+- User asks about their cart → call get_cart
+- User wants to add an item to cart → call add_to_cart
+- User wants to change quantity → call update_cart_item
+- User wants to remove an item → call remove_from_cart
+- User asks about a specific restaurant → call get_restaurant_details
+- User asks about offers/discounts → call get_applicable_offers
+- User wants to place order → call validate_order then place_order
+- User asks about order status → call get_order_status
 
-Respond in valid JSON:
-{
-  "response": "your conversational reply",
-  "tool_calls": [{"name": "tool_name", "parameters": {...}}, ...]
-}
-If no tool is needed, return tool_calls as an empty list."""
+After receiving tool results, present them to the user in a friendly, organized way.
+When showing search results, highlight the best options with name, price, rating, and estimated delivery time."""
 
 
 TOOL_DECLARATIONS = [
@@ -305,7 +297,9 @@ def _execute_tool_calls(tool_calls, user_profile):
     for tc in tool_calls:
         name = tc.get('name', '')
         params = tc.get('parameters', {})
+        logger.info('[MEAL-AI] Tool call: %s params=%s', name, json.dumps(params, default=str)[:200])
         result = execute_tool(name, params, user_profile)
+        logger.info('[MEAL-AI] Tool result: %s → %s', name, json.dumps(result, default=str)[:300])
         if name == 'set_payment_method' and 'method' in result:
             result['payment_method_stored'] = True
         results.append({
@@ -322,8 +316,8 @@ def _build_results_context(tool_results):
     for tr in tool_results:
         result_str = json.dumps(tr['result'], default=str)
         # Truncate very large results to stay within token limits
-        if len(result_str) > 2000:
-            result_str = result_str[:2000] + '...(truncated)'
+        if len(result_str) > 4000:
+            result_str = result_str[:4000] + '...(truncated)'
         lines.append(f"[Tool: {tr['tool_name']}]\n{result_str}")
     return '\n\n'.join(lines)
 
@@ -360,12 +354,15 @@ class MealAIChatView(APIView):
                     pass
 
         # First Gemini call — may request tool calls
+        logger.info('[MEAL-AI] User=%s message="%s"', request.user.pk, message[:100])
         contents = _build_gemini_contents(message, conversation_history)
         data, err = _call_gemini(contents)
         if err:
+            logger.error('[MEAL-AI] Gemini error: %s', err)
             return Response({'error': err}, status=status.HTTP_502_BAD_GATEWAY)
 
         response_text, tool_calls = _parse_gemini_response(data)
+        logger.info('[MEAL-AI] Gemini response: text="%s" tools=%s', response_text[:150], [tc['name'] for tc in tool_calls])
 
         # Execute tools
         tool_results = _execute_tool_calls(tool_calls, user_profile) if tool_calls else []
@@ -373,18 +370,17 @@ class MealAIChatView(APIView):
         # If tools were called, do a second Gemini pass with the results
         if tool_results:
             results_ctx = _build_results_context(tool_results)
-            followup_parts = []
-            if response_text:
-                followup_parts.append(response_text)
-            followup_parts.append(f"\n\nTool results:\n{results_ctx}")
-            followup_parts.append(
-                '\n\nNow respond to the user with the above information. '
-                'Use the tool data directly — do not make up values. '
-                'If the results show errors, explain them to the user clearly.'
+            followup = (
+                f"Tool execution results:\n{results_ctx}\n\n"
+                "Present these results to the user in a friendly way. "
+                "Use the actual data from the tool results — prices, names, ratings, etc. "
+                "Do NOT make up values. If results are empty, tell the user no matches were found and suggest alternatives."
             )
 
-            contents.append({'role': 'model', 'parts': [{'text': response_text or ''}]})
-            contents.append({'role': 'user', 'parts': [{'text': ''.join(followup_parts)}]})
+            # Add the model's function call turn, then tool results as a user message
+            model_text = response_text or 'Let me search for that.'
+            contents.append({'role': 'model', 'parts': [{'text': model_text}]})
+            contents.append({'role': 'user', 'parts': [{'text': followup}]})
 
             data2, err2 = _call_gemini(contents)
             if not err2:
@@ -406,40 +402,4 @@ class MealAIChatView(APIView):
             'response_text': response_text,
             'tool_calls': [{'name': tc['name'], 'parameters': tc['parameters']} for tc in tool_calls],
             'tool_results': enriched_results,
-        })
-
-
-class TestGeminiKeyView(APIView):
-    """Temporary endpoint to diagnose Gemini API key issues."""
-    permission_classes = [AllowAny]
-
-    def get(self, request):
-        import requests as http_requests
-        api_key = os.environ.get('GEMINI_API_KEY', '')
-        if not api_key:
-            return Response({'error': 'GEMINI_API_KEY env var is EMPTY'}, status=200)
-
-        results = {}
-        for model in ['gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-flash']:
-            url = f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}'
-            try:
-                resp = http_requests.post(
-                    url,
-                    json={'contents': [{'parts': [{'text': 'Say hi in 5 words'}]}]},
-                    timeout=15,
-                )
-                data = resp.json()
-                if resp.status_code == 200:
-                    text = data.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '')
-                    results[model] = {'status': 'OK', 'text': text}
-                else:
-                    err = data.get('error', {})
-                    results[model] = {'status': resp.status_code, 'error': err.get('message', resp.text[:200])}
-            except Exception as e:
-                results[model] = {'status': 'exception', 'error': str(e)}
-
-        return Response({
-            'key_length': len(api_key),
-            'key_prefix': api_key[:8] + '...' if len(api_key) > 8 else '(short)',
-            'results': results,
         })
