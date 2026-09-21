@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 
 import requests as http_requests
 
@@ -13,78 +14,98 @@ from .ai_tools import execute_tool
 
 logger = logging.getLogger(__name__)
 
-GEMINI_CHAT_MODEL = 'gemini-3.5-flash-lite'
-GEMINI_CHAT_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.6-flash']
+GEMINI_CHAT_MODEL = 'gemini-2.5-flash'
+GEMINI_CHAT_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3.5-flash-lite', 'gemini-3.6-flash']
 
-SYSTEM_PROMPT = """You are MEAL AI, the intelligent food-ordering assistant inside MEALIN.
-You help users discover restaurants, browse menus, manage their cart, apply offers, and place orders.
+SYSTEM_PROMPT = """You are MEAL AI, the in-app assistant for MEALIN — a food ordering app (like Zomato/Swiggy).
 
-CRITICAL RULES:
-- ALWAYS use the provided tools to fetch real data. NEVER say you don't have access to data or databases. You DO have access through tools.
-- When a user mentions ANY food item, restaurant, or dish name — IMMEDIATELY call search_food. Do NOT respond without calling the tool first.
-- Never invent restaurant names, prices, ratings, or menu items.
-- If a user asks something unrelated to food ordering, politely redirect them.
-- Support conversational context and follow-up questions.
-- Reply in the language the user uses.
-- Keep responses concise and conversational.
-- Always show prices in ₹ (Indian Rupees).
+ABOUT MEALIN APP:
+- Users can browse kitchens (restaurants), view menus, add items to cart, and place orders
+- Orders can be paid via Cash on Delivery (COD) or Online payment
+- Users can track order status and delivery partner location in real-time
+- Users can rate kitchens, add favorites, view order history
+- Delivery partners can see assigned deliveries and update status
+- Kitchens (chefs) can manage their menu, daily fulfillment, and view orders
+- The app supports vegetarian/non-vegetarian filters
+- Prices are in Indian Rupees (₹)
 
-WHEN TO CALL TOOLS:
-- User mentions a food item (e.g. "biryani", "pizza", "dosa") → call search_food
-- User asks about their cart → call get_cart
-- User wants to add an item to cart → call add_to_cart
-- User wants to change quantity → call update_cart_item
-- User wants to remove an item → call remove_from_cart
-- User asks about a specific restaurant → call get_restaurant_details
-- User asks about offers/discounts → call get_applicable_offers
-- User wants to place order → call validate_order then place_order
-- User asks about order status → call get_order_status
+YOUR CAPABILITIES — YOU MUST USE TOOLS:
+1. SEARCH FOOD: When user asks about ANY food — "what to eat", "biryani", "pizza near me", "best dosa", "cheap food", "veg options", "non-veg" — call search_food IMMEDIATELY
+2. VIEW CART: When user asks "what's in my cart", "my order", "cart total" — call get_cart
+3. ADD TO CART: When user says "add X to cart", "order X", "I want X" — call add_to_cart (use item_id from search results)
+4. REMOVE FROM CART: "remove X", "cancel X" — call remove_from_cart
+5. UPDATE QUANTITY: "increase quantity", "2 of X" — call update_cart_item
+6. RESTAURANT DETAILS: "tell me about restaurant X", "menu of X" — call get_restaurant_details
+7. OFFERS: "any discounts", "coupon code", "offers" — call get_applicable_offers
+8. PLACE ORDER: "place order", "checkout", "confirm order", "pay now" — call validate_order then place_order
+9. ORDER STATUS: "where is my order", "track order", "order status" — call get_order_status
+10. PAYMENT: "pay with COD", "cash on delivery", "online payment" — call set_payment_method
 
-After receiving tool results, present them to the user in a friendly, organized way.
-When showing search results, highlight the best options with name, price, rating, and estimated delivery time."""
+RULES:
+- NEVER say you don't have access to data. You DO — use the tools.
+- NEVER make up restaurant names, prices, or menu items. Only use data from tools.
+- When user says "what should I eat" — call search_food with a broad query like "popular" or "best" to show real options.
+- When showing results, format them nicely: item name, price, rating, restaurant, delivery time.
+- If search returns no results, say so and suggest trying different keywords.
+- Support Hindi, English, and casual language.
+- Be conversational but efficient. Help the user order food in as few steps as possible.
+- For COD orders, confirm the order details before placing.
+- Always show prices with ₹ symbol."""
 
+# Food-related keywords to detect when we should force search_food
+_FOOD_KEYWORDS = [
+    'eat', 'food', 'hungry', 'order', 'biryani', 'pizza', 'burger', 'dosa', 'idli',
+    'noodles', 'rice', 'curry', 'chicken', 'mutton', 'paneer', 'veg', 'non-veg',
+    'thali', 'butter chicken', 'tikka', 'samosa', 'momos', 'shawarma', 'wrap',
+    'sandwich', 'pasta', 'fried rice', 'manchurian', 'dal', 'roti', 'naan',
+    'paratha', 'chole', 'pav bhaji', 'vada pav', 'bhel', 'chaat', 'juice',
+    'shake', 'coffee', 'tea', 'snacks', 'breakfast', 'lunch', 'dinner', 'meal',
+    'best', 'cheap', 'near', 'vegan', 'spicy', 'sweet', 'dish', 'cuisine',
+    'restaurant', 'kitchen', 'menu', 'dish', 'recommend', 'suggest', 'what.*eat',
+    'kya khana', 'kya khau', 'bhookh', 'khana', 'dhaba',
+]
 
-TOOL_DECLARATIONS = [
+_TOOL_DECLARATIONS = [
     {
         'name': 'search_food',
-        'description': 'Search for food items across restaurants',
+        'description': 'Search for food items across restaurants. Use this for ANY food-related query including "what should I eat", specific dish names, cuisine types, price filters, etc.',
         'parameters': {
             'type': 'OBJECT',
             'properties': {
-                'food': {'type': 'STRING', 'description': 'Food item to search for'},
-                'max_price': {'type': 'NUMBER', 'description': 'Maximum price filter'},
-                'sort_preference': {'type': 'STRING', 'enum': ['best_value', 'cheapest', 'fastest', 'best_rated'], 'description': 'Sort preference'},
+                'food': {'type': 'STRING', 'description': 'Food item, cuisine, or search term (e.g. "biryani", "pizza", "best rated", "cheap meals")'},
+                'max_price': {'type': 'NUMBER', 'description': 'Maximum price filter in ₹'},
+                'sort_preference': {'type': 'STRING', 'enum': ['best_value', 'cheapest', 'fastest', 'best_rated'], 'description': 'How to sort results'},
                 'is_veg': {'type': 'BOOLEAN', 'description': 'Filter for vegetarian only'},
-                'restaurant': {'type': 'STRING', 'description': 'Filter by restaurant name'},
+                'restaurant': {'type': 'STRING', 'description': 'Filter by restaurant/kitchen name'},
             },
             'required': ['food'],
         },
     },
     {
         'name': 'get_cart',
-        'description': 'Get the user\'s current cart contents',
+        'description': 'Get the user\'s current cart contents with items, quantities, and total',
         'parameters': {'type': 'OBJECT', 'properties': {}},
     },
     {
         'name': 'add_to_cart',
-        'description': 'Add a menu item to the cart',
+        'description': 'Add a menu item to the cart. Use the item_id from search_food results.',
         'parameters': {
             'type': 'OBJECT',
             'properties': {
-                'item_id': {'type': 'INTEGER', 'description': 'Menu item ID'},
+                'item_id': {'type': 'INTEGER', 'description': 'Menu item ID from search results'},
                 'quantity': {'type': 'INTEGER', 'description': 'Quantity (default 1)'},
-                'special_instructions': {'type': 'STRING', 'description': 'Special instructions'},
+                'special_instructions': {'type': 'STRING', 'description': 'Any special requests'},
             },
             'required': ['item_id'],
         },
     },
     {
         'name': 'update_cart_item',
-        'description': 'Update quantity of a cart item',
+        'description': 'Update quantity of an item in the cart',
         'parameters': {
             'type': 'OBJECT',
             'properties': {
-                'item_id': {'type': 'INTEGER', 'description': 'Cart item ID'},
+                'item_id': {'type': 'INTEGER', 'description': 'Menu item ID'},
                 'quantity': {'type': 'INTEGER', 'description': 'New quantity'},
             },
             'required': ['item_id', 'quantity'],
@@ -96,7 +117,7 @@ TOOL_DECLARATIONS = [
         'parameters': {
             'type': 'OBJECT',
             'properties': {
-                'item_id': {'type': 'INTEGER', 'description': 'Cart item ID'},
+                'item_id': {'type': 'INTEGER', 'description': 'Menu item ID to remove'},
             },
             'required': ['item_id'],
         },
@@ -108,11 +129,11 @@ TOOL_DECLARATIONS = [
     },
     {
         'name': 'get_restaurant_details',
-        'description': 'Get detailed restaurant info including full menu',
+        'description': 'Get detailed restaurant/kitchen info including full menu',
         'parameters': {
             'type': 'OBJECT',
             'properties': {
-                'restaurant_id': {'type': 'INTEGER', 'description': 'Restaurant ID'},
+                'restaurant_id': {'type': 'INTEGER', 'description': 'Restaurant/kitchen ID'},
             },
             'required': ['restaurant_id'],
         },
@@ -130,23 +151,23 @@ TOOL_DECLARATIONS = [
     },
     {
         'name': 'get_applicable_offers',
-        'description': 'Get coupons/discounts applicable to an order value',
+        'description': 'Get available coupons/discounts for an order value',
         'parameters': {
             'type': 'OBJECT',
             'properties': {
-                'order_value': {'type': 'NUMBER', 'description': 'Current order value'},
+                'order_value': {'type': 'NUMBER', 'description': 'Current order value in ₹'},
             },
             'required': ['order_value'],
         },
     },
     {
         'name': 'validate_order',
-        'description': 'Validate the cart is ready for order placement',
+        'description': 'Validate the cart is ready for checkout',
         'parameters': {'type': 'OBJECT', 'properties': {}},
     },
     {
         'name': 'get_order_status',
-        'description': 'Get status of an existing order',
+        'description': 'Get status and tracking info for an order',
         'parameters': {
             'type': 'OBJECT',
             'properties': {
@@ -157,23 +178,23 @@ TOOL_DECLARATIONS = [
     },
     {
         'name': 'set_payment_method',
-        'description': 'Record payment method preference',
+        'description': 'Set payment method for the order (COD or online)',
         'parameters': {
             'type': 'OBJECT',
             'properties': {
-                'method': {'type': 'STRING', 'enum': ['cod', 'online', 'wallet'], 'description': 'Payment method'},
+                'method': {'type': 'STRING', 'enum': ['cod', 'online', 'wallet'], 'description': 'Payment method: cod=cash on delivery, online=digital payment'},
             },
             'required': ['method'],
         },
     },
     {
         'name': 'place_order',
-        'description': 'Place an order from the user\'s current cart. Validates cart, kitchen, items, and address before creating the order.',
+        'description': 'Place an order from the cart. Validates everything and creates the order.',
         'parameters': {
             'type': 'OBJECT',
             'properties': {
-                'payment_method': {'type': 'STRING', 'enum': ['cod', 'online'], 'description': 'Payment method: cod for cash on delivery, online for digital payment'},
-                'address_id': {'type': 'INTEGER', 'description': 'Delivery address ID (optional, uses default if not provided)'},
+                'payment_method': {'type': 'STRING', 'enum': ['cod', 'online'], 'description': 'cod for cash on delivery, online for digital payment'},
+                'address_id': {'type': 'INTEGER', 'description': 'Delivery address ID (optional, uses default)'},
                 'special_instructions': {'type': 'STRING', 'description': 'Special instructions for the order'},
             },
             'required': ['payment_method'],
@@ -182,15 +203,43 @@ TOOL_DECLARATIONS = [
 ]
 
 
+def _is_food_query(message):
+    """Detect if a message is food-related and should trigger search_food."""
+    msg_lower = message.lower().strip()
+    for kw in _FOOD_KEYWORDS:
+        if re.search(kw, msg_lower):
+            return True
+    return False
+
+
+def _detect_search_term(message):
+    """Extract a food search term from a natural language message."""
+    msg = message.lower().strip()
+    # Remove common filler words
+    fillers = [
+        'find me', 'show me', 'search for', 'look for', 'i want', 'i need',
+        'get me', 'can you find', 'can i get', 'do you have', 'any',
+        'what about', 'how about', 'something like', 'something with',
+        'order', 'eat', 'food', 'please', '?', '.', '!', 'hey', 'hi',
+        'what should i', 'i want to', 'let me', 'tell me about',
+        'kya hai', 'dikhao', 'chahiye', 'khaiye',
+    ]
+    cleaned = msg
+    for f in fillers:
+        cleaned = cleaned.replace(f, ' ')
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    return cleaned or 'popular'
+
+
 def _build_gemini_contents(message, conversation_history):
     contents = []
 
     # System prompt as first user/model turn pair
     contents.append({'role': 'user', 'parts': [{'text': SYSTEM_PROMPT}]})
-    contents.append({'role': 'model', 'parts': [{'text': 'Understood. I am MEAL AI, ready to help with food ordering.'}]})
+    contents.append({'role': 'model', 'parts': [{'text': 'Understood. I am MEAL AI, ready to help you order food on MEALIN!'}]})
 
-    # Rolling context: keep last 12 turns to stay within token limits
-    history = (conversation_history or [])[-12:]
+    # Rolling context: keep last 10 turns
+    history = (conversation_history or [])[-10:]
 
     for turn in history:
         role = turn.get('role', 'user')
@@ -204,7 +253,7 @@ def _build_gemini_contents(message, conversation_history):
     return contents
 
 
-def _call_gemini(contents):
+def _call_gemini(contents, tool_config=None):
     api_key = os.environ.get('GEMINI_API_KEY', '')
     if not api_key:
         return None, 'Gemini API not configured'
@@ -217,10 +266,11 @@ def _call_gemini(contents):
             'generationConfig': {
                 'temperature': 0.7,
                 'maxOutputTokens': 2048,
-                'thinkingConfig': {'thinkingBudget': 0},
             },
-            'tools': [{'functionDeclarations': TOOL_DECLARATIONS}],
+            'tools': [{'functionDeclarations': _TOOL_DECLARATIONS}],
         }
+        if tool_config:
+            payload['toolConfig'] = tool_config
 
         try:
             resp = http_requests.post(
@@ -250,44 +300,20 @@ def _parse_gemini_response(data):
         return '', []
 
     parts = candidates[0].get('content', {}).get('parts', [])
-    raw_text = ''
+    response_text = ''
     tool_calls = []
 
     for part in parts:
         if part.get('thought'):
             continue
         if 'text' in part:
-            raw_text = part['text']
+            response_text = part['text']
         elif 'functionCall' in part:
             fc = part['functionCall']
             tool_calls.append({
                 'name': fc.get('name', ''),
                 'parameters': fc.get('args', {}),
             })
-
-    response_text = raw_text
-
-    # Try to parse the response as JSON to extract the "response" field
-    if raw_text:
-        try:
-            import re
-            # Strip markdown code fences if present
-            cleaned = raw_text.strip()
-            if cleaned.startswith('```'):
-                cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned)
-                cleaned = re.sub(r'\s*```$', '', cleaned)
-            parsed = json.loads(cleaned)
-            if isinstance(parsed, dict):
-                if 'response' in parsed:
-                    response_text = parsed['response']
-                if 'tool_calls' in parsed and isinstance(parsed['tool_calls'], list) and not tool_calls:
-                    tool_calls = [
-                        {'name': tc.get('name', ''), 'parameters': tc.get('parameters', {})}
-                        for tc in parsed['tool_calls']
-                        if tc.get('name')
-                    ]
-        except (json.JSONDecodeError, TypeError):
-            pass
 
     return response_text, tool_calls
 
@@ -315,11 +341,22 @@ def _build_results_context(tool_results):
     lines = []
     for tr in tool_results:
         result_str = json.dumps(tr['result'], default=str)
-        # Truncate very large results to stay within token limits
         if len(result_str) > 4000:
             result_str = result_str[:4000] + '...(truncated)'
         lines.append(f"[Tool: {tr['tool_name']}]\n{result_str}")
     return '\n\n'.join(lines)
+
+
+def _force_search_food(message, user_profile):
+    """Force-call search_food when Gemini didn't call it but should have."""
+    search_term = _detect_search_term(message)
+    logger.info('[MEAL-AI] Force search_food with term: %s', search_term)
+    result = execute_tool('search_food', {'food': search_term}, user_profile)
+    return [{
+        'tool_name': 'search_food',
+        'parameters': {'food': search_term},
+        'result': result,
+    }]
 
 
 class MealAIChatView(APIView):
@@ -353,8 +390,9 @@ class MealAIChatView(APIView):
                 except (TypeError, ValueError):
                     pass
 
-        # First Gemini call — may request tool calls
         logger.info('[MEAL-AI] User=%s message="%s"', request.user.pk, message[:100])
+
+        # First Gemini call
         contents = _build_gemini_contents(message, conversation_history)
         data, err = _call_gemini(contents)
         if err:
@@ -362,10 +400,15 @@ class MealAIChatView(APIView):
             return Response({'error': err}, status=status.HTTP_502_BAD_GATEWAY)
 
         response_text, tool_calls = _parse_gemini_response(data)
-        logger.info('[MEAL-AI] Gemini response: text="%s" tools=%s', response_text[:150], [tc['name'] for tc in tool_calls])
+        logger.info('[MEAL-AI] Gemini pass1: text="%s" tools=%s', response_text[:150], [tc['name'] for tc in tool_calls])
 
-        # Execute tools
+        # Execute tools from Gemini's response
         tool_results = _execute_tool_calls(tool_calls, user_profile) if tool_calls else []
+
+        # FORCE search_food if Gemini didn't call it but should have
+        if not tool_results and _is_food_query(message):
+            logger.info('[MEAL-AI] Gemini did not call tools for food query — forcing search_food')
+            tool_results = _force_search_food(message, user_profile)
 
         # If tools were called, do a second Gemini pass with the results
         if tool_results:
@@ -373,12 +416,12 @@ class MealAIChatView(APIView):
             followup = (
                 f"Tool execution results:\n{results_ctx}\n\n"
                 "Present these results to the user in a friendly way. "
-                "Use the actual data from the tool results — prices, names, ratings, etc. "
-                "Do NOT make up values. If results are empty, tell the user no matches were found and suggest alternatives."
+                "Use the actual data — item names, prices in ₹, ratings, restaurant names, delivery times. "
+                "Format results as a clean list. Do NOT make up values. "
+                "If results are empty, tell the user no matches were found and suggest they try different keywords."
             )
 
-            # Add the model's function call turn, then tool results as a user message
-            model_text = response_text or 'Let me search for that.'
+            model_text = response_text or 'Let me look that up for you.'
             contents.append({'role': 'model', 'parts': [{'text': model_text}]})
             contents.append({'role': 'user', 'parts': [{'text': followup}]})
 
@@ -388,15 +431,21 @@ class MealAIChatView(APIView):
                 if response_text2:
                     response_text = response_text2
 
-        # Build tool_results with item details for frontend card rendering
+        # Fallback: if still no response, provide a default
+        if not response_text:
+            if tool_results:
+                response_text = "Here are the results I found!"
+            else:
+                response_text = "I'm here to help you order food on MEALIN! Try asking me to search for a dish, check your cart, or place an order."
+
+        # Build enriched results for frontend card rendering
         enriched_results = []
         for tr in tool_results:
-            enriched = {
+            enriched_results.append({
                 'tool_name': tr['tool_name'],
                 'parameters': tr['parameters'],
                 'result': tr['result'],
-            }
-            enriched_results.append(enriched)
+            })
 
         return Response({
             'response_text': response_text,
