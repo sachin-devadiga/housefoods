@@ -30,7 +30,7 @@ class _ChefDashboardState extends State<ChefDashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Chef Portal"),
+        title: const Text("MEALIN RESTO"),
         backgroundColor: AppTheme.secondaryColor,
         foregroundColor: Colors.white,
         actions: [

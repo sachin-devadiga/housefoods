@@ -13,6 +13,7 @@ import '../../../chef/presentation/screens/chef_dashboard.dart';
 import '../../../customer/presentation/screens/customer_dashboard.dart';
 import '../../../delivery_partner/presentation/screens/delivery_partner_dashboard.dart';
 import '../../../onboarding/presentation/screens/onboarding_screen.dart';
+import '../../../auth/presentation/screens/login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -87,10 +88,17 @@ class _SplashScreenState extends State<SplashScreen> {
     if (!mounted) return;
 
     if (profile == null) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const OnboardingScreen()),
-      );
+      if (RoleConfig.isDedicated && RoleConfig.role != AppRole.customer) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const OnboardingScreen()),
+        );
+      }
     } else {
       final role = RoleConfig.isDedicated ? RoleConfig.roleName : (profile['role'] as String? ?? 'customer');
       Widget destination;
@@ -141,7 +149,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final appName = RoleConfig.isDedicated ? RoleConfig.appName : 'Mealin';
+    final appName = RoleConfig.isDedicated ? RoleConfig.appName : 'MEALIN';
     final subtitle = RoleConfig.isDedicated
         ? RoleConfig.splashSubtitle
         : 'Order food from your favorite restaurants';

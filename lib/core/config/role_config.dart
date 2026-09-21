@@ -34,13 +34,13 @@ class RoleConfig {
   static String get appName {
     switch (role) {
       case AppRole.customer:
-        return 'Mealin';
+        return 'MEALIN';
       case AppRole.chef:
-        return 'Mealin Kitchen';
+        return 'MEALIN RESTO';
       case AppRole.deliveryPartner:
-        return 'Mealin Delivery';
+        return 'MEALIN RIDER';
       case null:
-        return 'Mealin';
+        return 'MEALIN';
     }
   }
 
@@ -60,13 +60,13 @@ class RoleConfig {
   static String get loginTitle {
     switch (role) {
       case AppRole.customer:
-        return 'Welcome to Mealin';
+        return 'Welcome to MEALIN';
       case AppRole.chef:
-        return 'Welcome to Mealin Kitchen';
+        return 'Welcome to MEALIN RESTO';
       case AppRole.deliveryPartner:
-        return 'Welcome to Mealin Delivery';
+        return 'Welcome to MEALIN RIDER';
       case null:
-        return 'Welcome to Mealin';
+        return 'Welcome to MEALIN';
     }
   }
 }

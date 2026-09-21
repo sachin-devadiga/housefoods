@@ -8,11 +8,11 @@ import '../../domain/models/menu_item_model.dart';
 import '../providers/kitchen_provider.dart';
 import '../providers/review_provider.dart';
 import '../providers/cart_provider.dart';
-import '../widgets/subscription_plan_card.dart';
+import '../providers/favorites_provider.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import '../widgets/review_card.dart';
 import '../widgets/meal_calendar_widget.dart';
 import '../../../chat/presentation/screens/chat_screen.dart';
-import 'checkout_screen.dart';
 import 'cart_screen.dart';
 
 class KitchenDetailsScreen extends StatefulWidget {
@@ -105,10 +105,6 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
                       const SizedBox(height: 16),
                       _buildMenuItemsList(isOpen),
                       const SizedBox(height: 32),
-                      _buildSectionTitle("Subscription Plans"),
-                      const SizedBox(height: 16),
-                      _buildPlansList(isOpen),
-                      const SizedBox(height: 32),
                       _buildSectionTitle("Reviews"),
                       const SizedBox(height: 16),
                       _buildReviewsList(),
@@ -136,6 +132,20 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
       expandedHeight: 250,
       pinned: true,
       actions: [
+        Consumer2<AuthProvider, FavoritesProvider>(
+          builder: (context, authProvider, favoritesProvider, child) {
+            final uid = authProvider.userProfile?['uid'] ?? '';
+            if (uid.isEmpty) return const SizedBox.shrink();
+            final isFav = favoritesProvider.isFavorite(widget.kitchen.id);
+            return IconButton(
+              icon: Icon(
+                isFav ? Icons.favorite : Icons.favorite_border,
+                color: isFav ? Colors.red : null,
+              ),
+              onPressed: () => favoritesProvider.toggleFavorite(uid, widget.kitchen.id),
+            );
+          },
+        ),
         IconButton(
           icon: const Icon(Icons.chat_bubble_outline),
           onPressed: () {
@@ -221,50 +231,6 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
           ],
         ),
       ],
-    );
-  }
-
-  Widget _buildPlansList(bool isOpen) {
-    return Consumer<KitchenProvider>(
-      builder: (context, provider, child) {
-        if (provider.isPlansLoading) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (provider.plans.isEmpty) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Text("No active plans available."),
-            ),
-          );
-        }
-
-        return ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: provider.plans.length,
-          itemBuilder: (context, index) {
-            final plan = provider.plans[index];
-            return SubscriptionPlanCard(
-              plan: plan,
-              onSelect: () {
-                if (isOpen) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => CheckoutScreen(
-                        kitchen: widget.kitchen,
-                        plan: plan,
-                      ),
-                    ),
-                  );
-                }
-              },
-            );
-          },
-        );
-      },
     );
   }
 

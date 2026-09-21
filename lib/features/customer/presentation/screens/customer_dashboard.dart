@@ -35,7 +35,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Mealin"),
+        title: const Text("MEALIN"),
         actions: [
           IconButton(
             icon: const Icon(Icons.chat_outlined),

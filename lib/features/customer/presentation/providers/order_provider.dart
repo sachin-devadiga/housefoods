@@ -260,7 +260,7 @@ class OrderProvider extends ChangeNotifier {
     notifyListeners();
     try {
       final now = DateTime.now();
-      if (now.isAfter(order.endDate)) throw "Subscription has ended.";
+      if (now.isAfter(order.endDate)) throw "Plan has ended.";
       final totalDays = order.endDate.difference(order.startDate).inDays;
       final remainingDays = order.endDate.difference(now).inDays;
       final refundAmount = (order.amount / (totalDays > 0 ? totalDays : 1)) *

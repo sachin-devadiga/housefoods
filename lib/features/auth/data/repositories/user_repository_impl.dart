@@ -72,6 +72,7 @@ class UserRepositoryImpl implements UserRepository {
     await _ensureAuthenticated();
     await _api.post(
       '${AppConstants.toggleFavoriteEndpoint}/$kitchenId/',
+      body: {'is_favorite': isFavorite},
     );
   }
 }

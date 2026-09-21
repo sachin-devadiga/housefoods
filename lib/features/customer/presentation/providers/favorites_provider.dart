@@ -23,7 +23,7 @@ class FavoritesProvider extends ChangeNotifier {
     return _favoriteKitchenIds.contains(kitchenId);
   }
 
-  /// Toggle favorite status locally and in Firestore
+  /// Toggle favorite status locally and on server
   Future<void> toggleFavorite(String uid, String kitchenId) async {
     final currentlyFavorite = _favoriteKitchenIds.contains(kitchenId);
     

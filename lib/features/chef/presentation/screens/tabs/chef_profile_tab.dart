@@ -116,7 +116,7 @@ class ChefProfileTab extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           Text(
-            "Chef Portal v1.0.0",
+            "MEALIN RESTO v1.0.0",
             style: TextStyle(color: Colors.grey[400], fontSize: 12),
           ),
         ],

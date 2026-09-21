@@ -23,14 +23,12 @@ class _DailyFulfillmentScreenState extends State<DailyFulfillmentScreen> {
     _refreshList();
   }
 
-  void _refreshList() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final chefProvider = context.read<ChefProvider>();
-      final kitchenId = chefProvider.myKitchen?['id'];
-      if (kitchenId != null) {
-        context.read<OrderProvider>().fetchTodayDeliveries(kitchenId);
-      }
-    });
+  Future<void> _refreshList() async {
+    final chefProvider = context.read<ChefProvider>();
+    final kitchenId = chefProvider.myKitchen?['id'];
+    if (kitchenId != null) {
+      await context.read<OrderProvider>().fetchTodayDeliveries(kitchenId);
+    }
   }
 
   @override
@@ -54,7 +52,7 @@ class _DailyFulfillmentScreenState extends State<DailyFulfillmentScreen> {
           final groupedDeliveries = provider.getGroupedTodayDeliveries;
 
           return RefreshIndicator(
-            onRefresh: () async => _refreshList(),
+            onRefresh: () async { await _refreshList(); },
             child: ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: groupedDeliveries.keys.length,

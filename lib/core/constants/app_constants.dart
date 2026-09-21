@@ -1,5 +1,5 @@
 class AppConstants {
-  static const String appName = 'Mealin';
+  static const String appName = 'MEALIN';
 
   // API Configuration
   // Production builds use the Render HTTPS service. A different value is

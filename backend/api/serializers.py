@@ -207,7 +207,9 @@ class KitchenListSerializer(CamelCaseModelSerializer):
             'name', 'description', 'status',
             'is_open', 'is_veg', 'rating', 'total_ratings', 'latitude', 'longitude',
             'address', 'image_url', 'specialties', 'categories',
-            'categories_list', 'gallery_images',
+            'categories_list', 'gallery_images', 'phone',
+            'fssai_number', 'id_proof_url', 'license_url',
+            'business_hours',
             'created_at',
         ]
 

@@ -135,7 +135,7 @@ class _ManageDishesScreenState extends State<ManageDishesScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: dishMap['isVeg'] == true ? Colors.green : Colors.red,
+                      color: (dishMap['isVeg'] == true || dishMap['is_veg'] == true) ? Colors.green : Colors.red,
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: const Icon(Icons.circle, size: 8, color: Colors.white),

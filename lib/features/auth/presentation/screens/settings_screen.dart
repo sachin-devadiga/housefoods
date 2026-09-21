@@ -6,6 +6,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/theme_provider.dart';
 import '../../../../core/localization/language_provider.dart';
+import '../../../../core/config/role_config.dart';
 import '../providers/auth_provider.dart';
 import 'login_screen.dart';
 
@@ -167,7 +168,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           
           const SizedBox(height: 40),
-          Center(child: Text("Mealin v$_appVersion", style: TextStyle(color: Colors.grey[400], fontSize: 12))),
+          Center(child: Text("${RoleConfig.appName} v$_appVersion", style: TextStyle(color: Colors.grey[400], fontSize: 12))),
           const SizedBox(height: 20),
         ],
       ),

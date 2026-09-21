@@ -95,7 +95,7 @@ class ProfileTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final profile = authProvider.userProfile;
-    final name = profile?['name'] ?? 'Mealin User';
+    final name = profile?['name'] ?? 'User';
     final phone = profile?['phone'] ?? '';
     final photoUrl = profile?['avatar_url'] ?? profile?['avatarUrl'] ?? profile?['photoUrl'];
 

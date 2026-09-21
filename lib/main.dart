@@ -123,7 +123,7 @@ class MealinApp extends StatelessWidget {
       child: Consumer2<ThemeProvider, LanguageProvider>(
         builder: (context, themeProvider, languageProvider, child) {
           return MaterialApp(
-            title: 'Mealin',
+            title: 'MEALIN',
             debugShowCheckedModeBanner: false,
             navigatorKey: NavigationService.navigatorKey,
             theme: AppTheme.lightTheme,

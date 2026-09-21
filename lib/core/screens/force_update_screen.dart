@@ -74,7 +74,7 @@ class _ForceUpdateScreenState extends State<ForceUpdateScreen> {
               Text(
                 widget.updateMessage.isNotEmpty
                     ? widget.updateMessage
-                    : "We've added new features and improvements to make your Mealin experience even better. Please update to continue.",
+                    : "We've added new features and improvements to make your MEALIN experience even better. Please update to continue.",
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey[600], fontSize: 16, height: 1.5),
               ),

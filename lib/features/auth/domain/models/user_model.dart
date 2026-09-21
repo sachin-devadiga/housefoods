@@ -69,7 +69,7 @@ class UserModel {
       addresses: (map['addresses'] as List? ?? [])
           .map((e) => AddressModel.fromMap(Map<String, dynamic>.from(e)))
           .toList(),
-      favoriteKitchenIds: List<String>.from(map['favoriteKitchenIds'] ?? map['favorite_kitchen_ids'] ?? []),
+      favoriteKitchenIds: (map['favoriteKitchenIds'] as List? ?? map['favorite_kitchen_ids'] as List? ?? []).map((e) => e.toString()).toList(),
       referralCode: map['referralCode'] ?? map['referral_code'] ?? '',
       referredBy: map['referredBy'] ?? map['referred_by'],
       walletBalance: (map['walletBalance'] ?? map['wallet_balance'] ?? 0.0).toDouble(),

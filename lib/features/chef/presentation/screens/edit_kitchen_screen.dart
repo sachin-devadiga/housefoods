@@ -75,6 +75,9 @@ class _EditKitchenScreenState extends State<EditKitchenScreen> {
         status: widget.kitchen.status,
         latitude: widget.kitchen.latitude,
         longitude: widget.kitchen.longitude,
+        fssaiNumber: widget.kitchen.fssaiNumber,
+        idProofUrl: widget.kitchen.idProofUrl,
+        licenseUrl: widget.kitchen.licenseUrl,
       );
 
       try {

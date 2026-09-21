@@ -58,7 +58,7 @@ class _DeliveryPartnerHomeTabState extends State<DeliveryPartnerHomeTab> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Available Deliveries')),
+      appBar: AppBar(title: const Text('MEALIN RIDER')),
       body: Consumer<DeliveryPartnerProvider>(
         builder: (context, provider, child) {
           if (provider.isLoading) {

@@ -59,7 +59,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final showRolePicker = !RoleConfig.isDedicated;
-    final appTitle = RoleConfig.isDedicated ? RoleConfig.loginTitle : 'Welcome to Mealin';
+    final appTitle = RoleConfig.isDedicated ? RoleConfig.loginTitle : 'Welcome to MEALIN';
 
     return Scaffold(
       backgroundColor: Colors.white,

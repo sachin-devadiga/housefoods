@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../../core/theme/app_theme.dart';
 import '../../../../auth/presentation/providers/auth_provider.dart';
-import '../../../../customer/domain/models/subscription_plan_model.dart';
 import '../../providers/chef_provider.dart';
-import '../add_plan_screen.dart';
+import '../add_dish_screen.dart';
 import '../kitchen_setup_screen.dart';
 import '../manage_dishes_screen.dart';
 
@@ -41,120 +40,40 @@ class _ChefMenuTabState extends State<ChefMenuTab> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // Case 1: No Kitchen Setup Yet
           if (provider.myKitchen == null) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.storefront, size: 80, color: AppTheme.secondaryColor),
-                    const SizedBox(height: 24),
-                    const Text(
-                      "Setup Your Kitchen",
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      "To start selling your home-cooked meals, you first need to register your kitchen details.",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                    const SizedBox(height: 32),
-                    ElevatedButton(
-                      onPressed: () => Navigator.push(
-                        context, 
-                        MaterialPageRoute(builder: (_) => const KitchenSetupScreen())
-                      ).then((_) => _loadData()),
-                      style: ElevatedButton.styleFrom(backgroundColor: AppTheme.secondaryColor),
-                      child: const Text("Get Started"),
-                    ),
-                  ],
-                ),
-              ),
+            return _buildEmptyState(
+              icon: Icons.storefront,
+              title: "Setup Your Kitchen",
+              subtitle: "Register your kitchen to start selling meals.",
+              actionLabel: "Get Started",
+              onAction: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const KitchenSetupScreen()),
+              ).then((_) => _loadData()),
             );
           }
 
-          // Case 2: Kitchen is Pending Approval
           if (provider.myKitchen!['status'] == 'pending') {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.pending_actions, size: 80, color: Colors.orange),
-                    const SizedBox(height: 24),
-                    const Text(
-                      "Verification Pending",
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      "Your kitchen application is being reviewed by our team. This usually takes 24-48 hours.",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                    const SizedBox(height: 32),
-                    OutlinedButton(
-                      onPressed: _loadData,
-                      child: const Text("Refresh Status"),
-                    ),
-                  ],
-                ),
-              ),
+            return _buildEmptyState(
+              icon: Icons.pending_actions,
+              iconColor: Colors.orange,
+              title: "Verification Pending",
+              subtitle: "Your kitchen application is being reviewed. This usually takes 24-48 hours.",
+              actionLabel: "Refresh Status",
+              onAction: _loadData,
+              isOutlined: true,
             );
           }
 
-          // Case 3: Kitchen is Rejected
           if (provider.myKitchen!['status'] == 'rejected') {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.error_outline, size: 80, color: Colors.red),
-                    const SizedBox(height: 24),
-                    const Text(
-                      "Application Rejected",
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      "Unfortunately, your kitchen application was not approved. Please contact support for more details.",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                  ],
-                ),
-              ),
+            return _buildEmptyState(
+              icon: Icons.error_outline,
+              iconColor: Colors.red,
+              title: "Application Rejected",
+              subtitle: "Your kitchen application was not approved. Please contact support.",
             );
           }
 
-          // Case 4: Kitchen approved but no plans added
-          if (provider.myPlans.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.restaurant_menu, size: 64, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
-                  const Text("Your kitchen is live!", style: TextStyle(fontWeight: FontWeight.bold)),
-                  const Text("Now add your first subscription plan.", style: TextStyle(color: Colors.grey)),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddPlanScreen())),
-                    style: ElevatedButton.styleFrom(backgroundColor: AppTheme.secondaryColor),
-                    child: const Text("Create a Plan"),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          // Case 5: Kitchen and Plans exist
           return RefreshIndicator(
             onRefresh: () async => _loadData(),
             child: ListView(
@@ -164,12 +83,12 @@ class _ChefMenuTabState extends State<ChefMenuTab> {
                   children: [
                     const Icon(Icons.restaurant_menu, size: 20),
                     const SizedBox(width: 8),
-                    const Text("Menu Items", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const Text("Your Menu", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                     const Spacer(),
                     TextButton.icon(
                       onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ManageDishesScreen())),
                       icon: const Icon(Icons.restaurant, size: 18),
-                      label: const Text("Manage"),
+                      label: const Text("Manage All"),
                     ),
                   ],
                 ),
@@ -177,14 +96,32 @@ class _ChefMenuTabState extends State<ChefMenuTab> {
                 if (provider.myDishes.isEmpty)
                   Card(
                     child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text("No dishes added yet. Add dishes from the menu tab.", style: TextStyle(color: Colors.grey[600])),
+                      padding: const EdgeInsets.all(24),
+                      child: Center(
+                        child: Column(
+                          children: [
+                            Icon(Icons.fastfood_outlined, size: 48, color: Colors.grey[400]),
+                            const SizedBox(height: 12),
+                            Text("No dishes added yet", style: TextStyle(color: Colors.grey[600], fontSize: 14)),
+                            const SizedBox(height: 4),
+                            Text("Tap + to add your first dish", style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+                          ],
+                        ),
+                      ),
                     ),
                   )
                 else
-                  ...provider.myDishes.take(3).map((dish) => Card(
+                  ...provider.myDishes.map((dish) => Card(
+                    margin: const EdgeInsets.only(bottom: 8),
                     child: ListTile(
-                      leading: Icon(dish['is_veg'] == true ? Icons.circle : Icons.circle, color: dish['is_veg'] == true ? Colors.green : Colors.red, size: 12),
+                      leading: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: (dish['is_veg'] == true || dish['isVeg'] == true) ? Colors.green : Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
                       title: Text(dish['name'] ?? 'Unnamed', style: const TextStyle(fontWeight: FontWeight.w500)),
                       subtitle: Text("₹${dish['price'] ?? '0'}"),
                       trailing: Row(
@@ -202,31 +139,6 @@ class _ChefMenuTabState extends State<ChefMenuTab> {
                       ),
                     ),
                   )),
-                const SizedBox(height: 24),
-                const Text("Subscription Plans", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                ...provider.myPlans.map((planData) {
-                  final plan = SubscriptionPlanModel.fromMap(planData, planData['id']?.toString() ?? '');
-                  return Card(
-                    child: ListTile(
-                      title: Text(plan.name, style: const TextStyle(fontWeight: FontWeight.w500)),
-                      subtitle: Text("₹${plan.price.toStringAsFixed(0)} • ${plan.durationDays} days"),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.edit, size: 18),
-                            onPressed: () => _showEditPlanDialog(context, provider, planData),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete, size: 18, color: Colors.red),
-                            onPressed: () => _confirmDeletePlan(context, provider, planData),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }),
               ],
             ),
           );
@@ -237,7 +149,7 @@ class _ChefMenuTabState extends State<ChefMenuTab> {
           if (provider.myKitchen == null || provider.myKitchen!['status'] != 'approved') return const SizedBox.shrink();
           return FloatingActionButton(
             backgroundColor: AppTheme.secondaryColor,
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddPlanScreen())),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddDishScreen())),
             child: const Icon(Icons.add, color: Colors.white),
           );
         },
@@ -245,58 +157,38 @@ class _ChefMenuTabState extends State<ChefMenuTab> {
     );
   }
 
-  void _confirmDeletePlan(BuildContext context, ChefProvider provider, Map<String, dynamic> plan) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Delete Plan"),
-        content: Text("Delete '${plan['name']}'? This cannot be undone."),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await provider.deletePlan(plan['id']);
-            },
-            child: const Text("Delete", style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showEditPlanDialog(BuildContext context, ChefProvider provider, Map<String, dynamic> plan) {
-    final nameCtrl = TextEditingController(text: plan['name'] ?? '');
-    final priceCtrl = TextEditingController(text: '${plan['price'] ?? ''}');
-    final durationCtrl = TextEditingController(text: '${plan['duration_days'] ?? ''}');
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Edit Plan"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
+  Widget _buildEmptyState({
+    required IconData icon,
+    Color iconColor = const Color(0xFF8D6E63),
+    required String title,
+    required String subtitle,
+    String? actionLabel,
+    VoidCallback? onAction,
+    bool isOutlined = false,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: "Plan Name")),
-            const SizedBox(height: 8),
-            TextField(controller: priceCtrl, decoration: const InputDecoration(labelText: "Price (₹)"), keyboardType: TextInputType.number),
-            const SizedBox(height: 8),
-            TextField(controller: durationCtrl, decoration: const InputDecoration(labelText: "Duration (days)"), keyboardType: TextInputType.number),
+            Icon(icon, size: 80, color: iconColor),
+            const SizedBox(height: 24),
+            Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            Text(subtitle, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[600])),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 32),
+              isOutlined
+                  ? OutlinedButton(onPressed: onAction, child: Text(actionLabel))
+                  : ElevatedButton(
+                      onPressed: onAction,
+                      style: ElevatedButton.styleFrom(backgroundColor: AppTheme.secondaryColor),
+                      child: Text(actionLabel),
+                    ),
+            ],
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await provider.updatePlan(plan['id'], {
-                'name': nameCtrl.text,
-                'price': double.tryParse(priceCtrl.text) ?? 0,
-                'duration_days': int.tryParse(durationCtrl.text) ?? 0,
-              });
-            },
-            child: const Text("Save"),
-          ),
-        ],
       ),
     );
   }
@@ -325,7 +217,7 @@ class _ChefMenuTabState extends State<ChefMenuTab> {
     final nameCtrl = TextEditingController(text: dish['name'] ?? '');
     final priceCtrl = TextEditingController(text: '${dish['price'] ?? ''}');
     final descCtrl = TextEditingController(text: dish['description'] ?? '');
-    bool isVeg = dish['is_veg'] ?? false;
+    bool isVeg = dish['is_veg'] ?? dish['isVeg'] ?? false;
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(

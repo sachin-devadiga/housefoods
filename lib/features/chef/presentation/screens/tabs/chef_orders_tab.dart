@@ -44,7 +44,7 @@ class _ChefOrdersTabState extends State<ChefOrdersTab> {
               children: [
                 Icon(Icons.assignment_outlined, size: 64, color: Colors.grey[400]),
                 const SizedBox(height: 16),
-                const Text("No active subscriptions found.", style: TextStyle(color: Colors.grey)),
+                const Text("No active orders found.", style: TextStyle(color: Colors.grey)),
               ],
             ),
           );

@@ -28,8 +28,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     ),
     OnboardingInfo(
       imagePath: 'assets/images/onboarding2.png',
-      title: 'Order or Subscribe',
-      description: 'Order your favorite meals anytime or subscribe for weekly/monthly meal plans. Fast delivery to your doorstep.',
+      title: 'Easy Ordering',
+      description: 'Order your favorite meals anytime. Add to cart, checkout, and get fast delivery to your doorstep.',
     ),
     OnboardingInfo(
       imagePath: 'assets/images/onboarding3.png',

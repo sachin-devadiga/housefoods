@@ -65,7 +65,7 @@ class OrderDetailsScreen extends StatelessWidget {
                   Navigator.pop(context); // Close dialog
                   Navigator.pop(context); // Back to list
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Subscription cancelled and refund processed.")),
+                    const SnackBar(content: Text("Plan cancelled and refund processed.")),
                   );
                 },
                 onError: (error) {
@@ -102,7 +102,7 @@ class OrderDetailsScreen extends StatelessWidget {
             _buildSectionTitle("Kitchen Details"),
             _buildKitchenInfo(),
             const SizedBox(height: 24),
-            _buildSectionTitle("Subscription Details"),
+            _buildSectionTitle("Plan Details"),
             _buildPlanInfo(),
             const SizedBox(height: 24),
             _buildSectionTitle("Delivery Address"),

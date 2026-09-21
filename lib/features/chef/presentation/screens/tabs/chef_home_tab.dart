@@ -37,6 +37,12 @@ class _ChefHomeTabState extends State<ChefHomeTab> {
     return Consumer<ChefProvider>(
       builder: (context, provider, child) {
         final kitchen = provider.myKitchen;
+        final status = kitchen?['status']?.toString().toLowerCase() ?? '';
+
+        if (status != 'approved') {
+          return _buildPendingApproval(context, status);
+        }
+
         bool isOpen = kitchen?['isOpen'] ?? false;
 
         return RefreshIndicator(
@@ -63,7 +69,7 @@ class _ChefHomeTabState extends State<ChefHomeTab> {
                 // Stats Row
                 Row(
                   children: [
-                    _buildStatCard("Active Subs", orderProvider.customerOrders.length.toString(), Icons.people, Colors.blue),
+                    _buildStatCard("Active Orders", orderProvider.customerOrders.length.toString(), Icons.receipt_long, Colors.blue),
                     const SizedBox(width: 12),
                     // Reactive Today's Meal Count
                     _buildStatCard(
@@ -156,7 +162,7 @@ class _ChefHomeTabState extends State<ChefHomeTab> {
                   ),
                 ),
                 Text(
-                  isOpen ? "Customers can see and subscribe" : "Hidden from search results",
+                  isOpen ? "Customers can browse and order" : "Hidden from search results",
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
               ],
@@ -211,6 +217,38 @@ class _ChefHomeTabState extends State<ChefHomeTab> {
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
       subtitle: Text(subtitle, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
       trailing: const Icon(Icons.chevron_right),
+    );
+  }
+
+  Widget _buildPendingApproval(BuildContext context, String status) {
+    final isRejected = status == 'rejected';
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              isRejected ? Icons.cancel_outlined : Icons.hourglass_top,
+              size: 80,
+              color: isRejected ? Colors.red : Colors.orange,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              isRejected ? "Application Rejected" : "Verification Pending",
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              isRejected
+                  ? "Your kitchen application was rejected. Please contact support or update your details and reapply."
+                  : "Your kitchen application is under review. You'll be able to manage your kitchen once approved.",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey[600], fontSize: 15),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

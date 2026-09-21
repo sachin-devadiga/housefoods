@@ -35,7 +35,7 @@ class OrderSuccessScreen extends StatelessWidget {
               ),
               const SizedBox(height: 32),
               const Text(
-                "Subscription Active!",
+                "Plan Active!",
                 style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),

@@ -25,9 +25,6 @@ class ChefProvider extends ChangeNotifier {
   Map<String, dynamic>? _myKitchen;
   Map<String, dynamic>? get myKitchen => _myKitchen;
 
-  List<Map<String, dynamic>> _myPlans = [];
-  List<Map<String, dynamic>> get myPlans => _myPlans;
-
   List<Map<String, dynamic>> _myDishes = [];
   List<Map<String, dynamic>> get myDishes => _myDishes;
 
@@ -73,7 +70,6 @@ class ChefProvider extends ChangeNotifier {
       final kitchens = (data['data'] as List?) ?? [];
       if (kitchens.isNotEmpty) {
         _myKitchen = kitchens.first as Map<String, dynamic>;
-        await fetchMyPlans();
         await fetchDishes();
         await calculateEarnings();
         await fetchPayoutHistory();
@@ -290,6 +286,7 @@ class ChefProvider extends ChangeNotifier {
         '${AppConstants.kitchenDailyMenusEndpoint}/$kitchenId/daily-menus/',
         body: menuData,
       );
+      await fetchMyKitchen(_myKitchen!['chef']?.toString() ?? '');
     } catch (e) {
       rethrow;
     } finally {
@@ -326,75 +323,12 @@ class ChefProvider extends ChangeNotifier {
     try {
       kitchenData['status'] = 'pending';
       final data = await _api.post(AppConstants.kitchensEndpoint, body: kitchenData);
-      _myKitchen = data;
+      final kitchen = data['data'] ?? data;
+      if (kitchen is Map<String, dynamic>) {
+        _myKitchen = kitchen;
+      }
     } catch (e) {
       debugPrint("Create kitchen error: $e");
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> addPlan(Map<String, dynamic> planData) async {
-    if (_myKitchen == null) return;
-    _isLoading = true;
-    notifyListeners();
-    try {
-      final kitchenId = _myKitchen!['id'];
-      await _api.post(
-        '${AppConstants.plansEndpoint}/$kitchenId/plans/',
-        body: planData,
-      );
-      await fetchMyPlans();
-    } catch (e) {
-      debugPrint("Add plan error: $e");
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> fetchMyPlans() async {
-    if (_myKitchen == null) return;
-    try {
-      final kitchenId = _myKitchen!['id'];
-      final data = await _api.get('${AppConstants.plansEndpoint}/$kitchenId/plans/');
-      _myPlans = ((data['data'] as List?) ?? []).cast<Map<String, dynamic>>();
-      notifyListeners();
-    } catch (e) {
-      debugPrint("Fetch plans error: $e");
-    }
-  }
-
-  Future<void> deletePlan(dynamic planId) async {
-    if (_myKitchen == null) return;
-    _isLoading = true;
-    notifyListeners();
-    try {
-      final kitchenId = _myKitchen!['id'];
-      await _api.delete('${AppConstants.plansEndpoint}/$kitchenId/plans/$planId/');
-      await fetchMyPlans();
-    } catch (e) {
-      debugPrint("Delete plan error: $e");
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> updatePlan(dynamic planId, Map<String, dynamic> planData) async {
-    if (_myKitchen == null) return;
-    _isLoading = true;
-    notifyListeners();
-    try {
-      final kitchenId = _myKitchen!['id'];
-      await _api.put(
-        '${AppConstants.plansEndpoint}/$kitchenId/plans/$planId/',
-        body: planData,
-      );
-      await fetchMyPlans();
-    } catch (e) {
-      debugPrint("Update plan error: $e");
     } finally {
       _isLoading = false;
       notifyListeners();

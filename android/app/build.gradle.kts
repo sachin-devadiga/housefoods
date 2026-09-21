@@ -43,6 +43,12 @@ android {
         multiDexEnabled = true
         // Supply with -PMAPS_API_KEY=... in CI or an untracked Gradle property.
         manifestPlaceholders["MAPS_API_KEY"] = project.findProperty("MAPS_API_KEY")?.toString() ?: ""
+        manifestPlaceholders["APP_LABEL"] = when (appRole) {
+            "customer" -> "MEALIN"
+            "chef" -> "MEALIN RESTO"
+            "delivery_partner" -> "MEALIN RIDER"
+            else -> "MEALIN"
+        }
     }
 
     signingConfigs {

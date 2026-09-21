@@ -290,14 +290,14 @@ class OrderCard extends StatelessWidget {
                         foregroundColor: AppTheme.secondaryColor,
                         side: const BorderSide(color: AppTheme.secondaryColor),
                       ),
-                      child: const Text("Re-Subscribe"),
+                      child: const Text("Re-Order"),
                     ),
                   ),
                 ],
               )
             else
               Text(
-                "Subscription ${order.status.substring(0, 1).toUpperCase()}${order.status.substring(1)}",
+                "Plan ${order.status.substring(0, 1).toUpperCase()}${order.status.substring(1)}",
                 style: TextStyle(color: Colors.grey[500], fontStyle: FontStyle.italic),
               ),
           ],

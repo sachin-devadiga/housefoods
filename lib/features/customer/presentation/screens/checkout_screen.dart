@@ -174,7 +174,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               _buildAddressSelector(),
               
               const SizedBox(height: 24),
-              _buildSectionTitle("Subscription Starts On"),
+              _buildSectionTitle("Plan Starts On"),
               _buildDatePicker(),
               
               const SizedBox(height: 24),
