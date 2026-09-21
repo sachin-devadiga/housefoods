@@ -128,11 +128,12 @@ def search_food(params, user_profile):
     normalized = _normalize_food_term(food)
     words = normalized.split()
 
-    # Strategy 1: Direct match on normalized terms
+    # Strategy 1: Direct match on normalized terms (search item names + kitchen names)
     if words:
         q = Q()
         for w in words:
             q |= Q(name__icontains=w)
+            q |= Q(kitchen__name__icontains=w)
         base_qs = base_qs.filter(q)
 
     if max_price is not None:
@@ -265,11 +266,15 @@ def list_restaurants(params, user_profile):
     max_price = params.get('max_price')
     is_veg = params.get('is_veg')
     sort_by = params.get('sort_by', 'rating')
+    name_filter = params.get('name', '')
 
     kitchens = Kitchen.objects.filter(
         status='approved',
         is_open=True,
     )
+
+    if name_filter:
+        kitchens = kitchens.filter(name__icontains=name_filter)
 
     user_lat = getattr(user_profile, 'current_latitude', None)
     user_lon = getattr(user_profile, 'current_longitude', None)
@@ -291,9 +296,6 @@ def list_restaurants(params, user_profile):
             menu_items = menu_items.filter(is_veg=bool(is_veg))
 
         item_count = menu_items.count()
-        if item_count == 0:
-            continue
-
         rating_val = float(kitchen.rating or 0)
         total_ratings_val = int(kitchen.total_ratings or 0)
         eta = _estimate_eta(dist, 20)
@@ -308,11 +310,43 @@ def list_restaurants(params, user_profile):
             'menu_items_count': item_count,
             'description': kitchen.description or '',
             'image_url': kitchen.image_url or '',
-            'is_veg': kitchen.is_pure_veg if hasattr(kitchen, 'is_pure_veg') else False,
+            'is_veg': kitchen.is_veg,
         })
 
     if not results:
-        return {'results': [], 'message': 'No restaurants currently available'}
+        # Broader search: try all kitchens including pending
+        all_kitchens = Kitchen.objects.all()
+        if name_filter:
+            all_kitchens = all_kitchens.filter(name__icontains=name_filter)
+        else:
+            all_kitchens = all_kitchens.exclude(status='rejected')
+
+        for kitchen in all_kitchens.iterator(chunk_size=100):
+            try:
+                k_lat = float(kitchen.latitude) if kitchen.latitude else None
+                k_lon = float(kitchen.longitude) if kitchen.longitude else None
+            except (TypeError, ValueError):
+                k_lat, k_lon = None, None
+            dist = _haversine_km(float(user_lat or 0), float(user_lon or 0), k_lat, k_lon) if (user_lat and user_lon and k_lat and k_lon) else 999.0
+            menu_count = MenuItem.objects.filter(kitchen=kitchen, is_available=True).count()
+            rating_val = float(kitchen.rating or 0)
+            results.append({
+                'restaurant_id': kitchen.pk,
+                'restaurant_name': kitchen.name,
+                'rating': rating_val,
+                'total_ratings': int(kitchen.total_ratings or 0),
+                'distance_km': round(dist, 2),
+                'estimated_minutes': _estimate_eta(dist, 20),
+                'menu_items_count': menu_count,
+                'description': kitchen.description or '',
+                'image_url': kitchen.image_url or '',
+                'is_veg': kitchen.is_veg,
+                'status': kitchen.status,
+                'is_open': kitchen.is_open,
+            })
+
+    if not results:
+        return {'results': [], 'message': 'No restaurants found in the system'}
 
     if sort_by == 'rating':
         results.sort(key=lambda r: (-r['rating'], -r['total_ratings']))

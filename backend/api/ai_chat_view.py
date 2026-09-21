@@ -67,9 +67,10 @@ _FOOD_KEYWORDS = [
 # Restaurant listing keywords — these should call list_restaurants, NOT search_food
 _RESTAURANT_KEYWORDS = [
     'restaurant.*available', 'restaurant.*open', 'which restaurant', 'what restaurant',
-    'restaurants near', 'show.*restaurant', 'list.*restaurant', 'restaurants',
+    'restaurants near', 'show.*restaurant', 'list.*restaurant',
     'kitchen.*available', 'kitchen.*open', 'which kitchen', 'what kitchen',
-    'open now', 'available now',
+    'open now', 'available now', 'named.*as', 'named',
+    'check.*restaurant', 'check.*kitchen',
 ]
 
 # Detect restaurant listing queries
@@ -119,10 +120,11 @@ _TOOL_DECLARATIONS = [
     },
     {
         'name': 'list_restaurants',
-        'description': 'List all currently open and available restaurants/kitchens. Use when user asks "which restaurants are available", "what restaurants are open", "show me restaurants", etc.',
+        'description': 'List all currently open and available restaurants/kitchens. Use when user asks "which restaurants are available", "what restaurants are open", "show me restaurants", etc. Also use when user mentions a specific restaurant name to check if it exists.',
         'parameters': {
             'type': 'OBJECT',
             'properties': {
+                'name': {'type': 'STRING', 'description': 'Filter by restaurant name (partial match)'},
                 'max_price': {'type': 'NUMBER', 'description': 'Filter by max price in ₹'},
                 'is_veg': {'type': 'BOOLEAN', 'description': 'Filter for pure veg restaurants only'},
                 'sort_by': {'type': 'STRING', 'enum': ['rating', 'distance', 'fastest'], 'description': 'Sort restaurants by'},
@@ -456,11 +458,16 @@ class MealAIChatView(APIView):
         # FORCE tool calls if Gemini didn't call them but should have
         if not tool_results:
             if _is_restaurant_query(message):
-                logger.info('[MEAL-AI] Gemini did not call tools for restaurant query — forcing list_restaurants')
-                result = execute_tool('list_restaurants', {}, user_profile)
+                # Try to extract restaurant name from message
+                name_match = re.search(r'(?:named|called|named as)\s+(\w+)', message, re.IGNORECASE)
+                params = {}
+                if name_match:
+                    params['name'] = name_match.group(1)
+                logger.info('[MEAL-AI] Gemini did not call tools for restaurant query — forcing list_restaurants params=%s', params)
+                result = execute_tool('list_restaurants', params, user_profile)
                 tool_results = [{
                     'tool_name': 'list_restaurants',
-                    'parameters': {},
+                    'parameters': params,
                     'result': result,
                 }]
             elif _is_food_query(message):
