@@ -14,7 +14,7 @@ from .ai_tools import execute_tool
 logger = logging.getLogger(__name__)
 
 GEMINI_CHAT_MODEL = 'gemini-2.5-flash-lite'
-GEMINI_CHAT_MODELS = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash']
+GEMINI_CHAT_MODELS = ['gemini-2.5-flash-lite', 'gemini-2.0-flash-001', 'gemini-1.5-flash']
 
 SYSTEM_PROMPT = """You are MEAL AI, the intelligent food-ordering assistant inside MEALIN.
 You help users discover restaurants, browse menus, manage their cart, apply offers, and place orders.
@@ -233,14 +233,15 @@ def _call_gemini(contents):
         try:
             resp = http_requests.post(
                 url,
-                headers={'x-goog-api-key': api_key},
+                params={'key': api_key},
+                headers={'Content-Type': 'application/json'},
                 json=payload,
                 timeout=60,
             )
             if resp.status_code == 200:
                 return resp.json(), None
-            last_error = f'Gemini API error ({resp.status_code}) on {model_name}'
-            logger.warning('Gemini %s returned %d: %s', model_name, resp.status_code, resp.text[:300])
+            last_error = f'Gemini API error ({resp.status_code}) on {model_name}: {resp.text[:200]}'
+            logger.warning('Gemini %s returned %d: %s', model_name, resp.status_code, resp.text[:500])
         except http_requests.exceptions.Timeout:
             last_error = f'Gemini API timed out on {model_name}'
             logger.warning('Gemini %s timed out', model_name)
