@@ -397,7 +397,7 @@ class TestGeminiKeyView(APIView):
             return Response({'error': 'GEMINI_API_KEY env var is EMPTY'}, status=200)
 
         results = {}
-        for model in ['gemini-2.5-flash-lite', 'gemini-2.0-flash-001', 'gemini-1.5-flash', 'gemini-2.5-flash']:
+        for model in ['gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-flash']:
             url = f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}'
             try:
                 resp = http_requests.post(
