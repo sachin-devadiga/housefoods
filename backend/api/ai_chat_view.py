@@ -13,8 +13,8 @@ from .ai_tools import execute_tool
 
 logger = logging.getLogger(__name__)
 
-GEMINI_CHAT_MODEL = 'gemini-2.5-flash-lite'
-GEMINI_CHAT_MODELS = ['gemini-2.5-flash-lite', 'gemini-2.0-flash-001', 'gemini-1.5-flash']
+GEMINI_CHAT_MODEL = 'gemini-3.5-flash-lite'
+GEMINI_CHAT_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.6-flash']
 
 SYSTEM_PROMPT = """You are MEAL AI, the intelligent food-ordering assistant inside MEALIN.
 You help users discover restaurants, browse menus, manage their cart, apply offers, and place orders.

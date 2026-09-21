@@ -2439,7 +2439,7 @@ SARVAM_LANGUAGE_CODES = {
     'en-IN', 'hi-IN', 'bn-IN', 'gu-IN', 'kn-IN', 'ml-IN', 'mr-IN',
     'od-IN', 'pa-IN', 'ta-IN', 'te-IN',
 }
-GEMINI_VOICE_MODELS = {'gemini-2.5-flash-lite'}
+GEMINI_VOICE_MODELS = {'gemini-3.5-flash-lite', 'gemini-2.5-flash-lite'}
 VOICE_GEMINI_SYSTEM_PROMPT = '''You are MEAL, the MEALIN food-ordering assistant.
 Reply with JSON only: {"response":"concise reply", "actions":[]}.
 Only discuss MEALIN food ordering. Never invent prices, availability, delivery

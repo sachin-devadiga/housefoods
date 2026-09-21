@@ -74,7 +74,7 @@ CONTEXT: History, search results, cart state provided in context. Use them for f
 
   /// Models approved by the server-side proxy.
   static const List<String> _models = [
-    'gemini-2.5-flash-lite',
+    'gemini-3.5-flash-lite',
   ];
 
   /// Send a conversational turn to Gemini and get response + actions.
