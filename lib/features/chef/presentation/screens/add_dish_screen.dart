@@ -18,49 +18,85 @@ class _AddDishScreenState extends State<AddDishScreen> {
   final _priceController = TextEditingController();
   bool _isVeg = true;
   String? _imageUrl;
+  bool _isSaving = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _descController.dispose();
+    _priceController.dispose();
+    super.dispose();
+  }
 
   Future<void> _pickImage() async {
     final provider = context.read<ChefProvider>();
-    final url = await provider.pickAndUploadImage('dishes');
-    if (url != null) {
-      setState(() => _imageUrl = url);
+    try {
+      final url = await provider.pickAndUploadImage('dishes');
+      if (!mounted) return;
+      if (url != null && url.isNotEmpty) {
+        setState(() {
+          _imageUrl = url;
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Photo upload failed. Please try again.")),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Photo upload failed: $e")),
+      );
     }
   }
 
   void _saveDish() async {
-    if (_formKey.currentState!.validate()) {
-      if (_imageUrl == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Please upload a photo of the dish")),
-        );
-        return;
-      }
+    if (_isSaving) return;
+    if (!_formKey.currentState!.validate()) return;
 
-      final provider = context.read<ChefProvider>();
+    final provider = context.read<ChefProvider>();
+    final kitchen = provider.myKitchen;
+    if (kitchen == null || kitchen['id'] == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Kitchen not loaded. Please go back and reopen this screen.")),
+      );
+      return;
+    }
+
+    final price = double.tryParse(_priceController.text.trim());
+    if (price == null || price <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Enter a valid price")),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
       final dish = DishModel(
         id: '',
-        kitchenId: provider.myKitchen!['id'],
+        kitchenId: kitchen['id'].toString(),
         name: _nameController.text.trim(),
         description: _descController.text.trim(),
-        imageUrl: _imageUrl!,
+        imageUrl: _imageUrl ?? '',
         isVeg: _isVeg,
-        price: double.parse(_priceController.text.trim()),
+        price: price,
       );
 
-      try {
-        await provider.addDish(dish.toMap());
-        if (mounted) {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Dish added to library!"), backgroundColor: AppTheme.secondaryColor),
-          );
-        }
-      } catch (e) {
-        if (!mounted) return;
+      await provider.addDish(dish.toMap());
+      if (mounted) {
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: $e"), backgroundColor: AppTheme.errorColor),
+          const SnackBar(content: Text("Dish added to library!"), backgroundColor: AppTheme.secondaryColor),
         );
       }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Could not save dish: $e"), backgroundColor: AppTheme.errorColor),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -138,13 +174,21 @@ class _AddDishScreenState extends State<AddDishScreen> {
                 ],
               ),
               const SizedBox(height: 48),
-              isLoading && _imageUrl == null
-                  ? const Center(child: CircularProgressIndicator())
-                  : ElevatedButton(
-                      onPressed: _saveDish,
-                      style: ElevatedButton.styleFrom(backgroundColor: AppTheme.secondaryColor),
-                      child: const Text("Save to Library"),
-                    ),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: (_isSaving || isLoading) ? null : _saveDish,
+                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.secondaryColor),
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                        )
+                      : const Text("Save to Library", style: TextStyle(fontSize: 16)),
+                ),
+              ),
             ],
           ),
         ),
@@ -164,11 +208,22 @@ class _AddDishScreenState extends State<AddDishScreen> {
           image: _imageUrl != null ? DecorationImage(image: NetworkImage(_imageUrl!), fit: BoxFit.cover) : null,
         ),
         child: _imageUrl == null
-            ? const Column(
+            ? Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.add_a_photo, size: 50, color: Colors.grey),
-                  Text("Upload Dish Photo", style: TextStyle(color: Colors.grey)),
+                  if (isLoading)
+                    const SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: CircularProgressIndicator(),
+                    )
+                  else
+                    const Icon(Icons.add_a_photo, size: 50, color: Colors.grey),
+                  const SizedBox(height: 8),
+                  Text(
+                    isLoading ? "Uploading..." : "Upload Dish Photo (optional)",
+                    style: const TextStyle(color: Colors.grey),
+                  ),
                 ],
               )
             : null,

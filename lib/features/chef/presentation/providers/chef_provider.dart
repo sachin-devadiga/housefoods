@@ -368,6 +368,7 @@ class ChefProvider extends ChangeNotifier {
           AppConstants.uploadEndpoint,
           imageFile.path,
         );
+        if (url.isEmpty) return null;
         return url;
       }
     } catch (e) {

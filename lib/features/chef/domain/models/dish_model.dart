@@ -18,12 +18,14 @@ class DishModel {
   });
 
   Map<String, dynamic> toMap() {
+    // Backend sets kitchen from the URL (perform_create), so never send
+    // kitchen/kitchenId in the body — DRF rejects unknown fields.
+    // Keys use snake_case to match MenuItemSerializer fields.
     return {
-      'kitchenId': kitchenId,
       'name': name,
       'description': description,
-      'imageUrl': imageUrl,
-      'isVeg': isVeg,
+      'image_url': imageUrl,
+      'is_veg': isVeg,
       'price': price,
     };
   }
