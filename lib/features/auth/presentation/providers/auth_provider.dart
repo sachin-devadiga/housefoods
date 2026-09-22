@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/api_service.dart';
 import '../../../../core/services/auth_service.dart';
+import '../../../../core/services/notification_service.dart';
 import '../../../chef/presentation/providers/chef_provider.dart';
 import '../../domain/repositories/auth_repository.dart';
 
@@ -66,6 +67,10 @@ class AuthProvider extends ChangeNotifier {
           role: data['user']['role'],
         );
         _userProfile = data['user'];
+        // Upload FCM token so the backend can push order alarms to this device.
+        try {
+          await NotificationService.uploadToken(data['user']['uid']?.toString() ?? '');
+        } catch (_) {}
       } else {
         await _authService.saveEmail(email);
       }
@@ -106,6 +111,10 @@ class AuthProvider extends ChangeNotifier {
         role: data['user']['role'],
       );
       _userProfile = data['user'];
+      // Upload FCM token so the backend can push order alarms to this device.
+      try {
+        await NotificationService.uploadToken(data['user']['uid']?.toString() ?? '');
+      } catch (_) {}
       _setLoading(false);
       onSuccess();
     } on ApiException catch (e) {
@@ -123,6 +132,10 @@ class AuthProvider extends ChangeNotifier {
       final profile = await _authService.tryAutoLogin();
       if (profile != null) {
         _userProfile = profile;
+        // Refresh FCM token mapping on every app start (tokens can rotate).
+        try {
+          await NotificationService.uploadToken(profile['uid']?.toString() ?? '');
+        } catch (_) {}
       }
       _setLoading(false);
       return profile;

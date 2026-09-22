@@ -56,6 +56,13 @@ class MainActivity : FlutterActivity() {
     private fun createAlarmNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channelId = "mealin_order_alarm"
+            val nm = getSystemService(NotificationManager::class.java)
+            // Delete first: channel settings (incl. sound) are immutable once
+            // created, so this forces the fixed sound URI onto existing installs.
+            try {
+                nm.deleteNotificationChannel(channelId)
+            } catch (_: Exception) {
+            }
             val channelName = "Order Alarm"
             val channelDesc = "Loud alarm for new orders and deliveries"
             val importance = NotificationManager.IMPORTANCE_HIGH
@@ -67,14 +74,14 @@ class MainActivity : FlutterActivity() {
                 lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
             }
 
-            val alarmUri = Uri.parse("android.resource://${packageName}/raw/alarm.wav")
+            // NOTE: raw resource URIs must NOT include the file extension.
+            val alarmUri = Uri.parse("android.resource://${packageName}/raw/alarm")
             val audioAttributes = AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_NOTIFICATION)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build()
             channel.setSound(alarmUri, audioAttributes)
 
-            val nm = getSystemService(NotificationManager::class.java)
             nm.createNotificationChannel(channel)
             Log.i("MEAL_Main", "Alarm notification channel created")
         }

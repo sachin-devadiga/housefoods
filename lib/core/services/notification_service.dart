@@ -11,6 +11,7 @@ import '../../features/chat/presentation/screens/chat_screen.dart';
 import '../../features/support/presentation/screens/user_tickets_screen.dart';
 import '../../features/delivery_partner/presentation/screens/delivery_partner_dashboard.dart';
 import '../../features/customer/presentation/screens/customer_dashboard.dart';
+import '../../features/chef/presentation/screens/chef_dashboard.dart';
 
 class NotificationService {
   static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
@@ -252,7 +253,7 @@ class NotificationService {
     _handleData(message.data);
   }
 
-  static void _handleData(Map<String, dynamic> data) {
+  static Future<void> _handleData(Map<String, dynamic> data) async {
     final type = data['type'];
 
     if (type == 'chat') {
@@ -274,9 +275,20 @@ class NotificationService {
         MaterialPageRoute(builder: (_) => const DeliveryPartnerDashboard()),
       );
     } else if (type == 'new_order' || type == 'order_update' || type == 'delivery_status_changed') {
-      NavigationService.navigateTo(
-        MaterialPageRoute(builder: (_) => const CustomerDashboard()),
-      );
+      // Route by role: chefs must land on the resto dashboard, not the customer app.
+      String? role;
+      try {
+        role = await TokenService().getRole();
+      } catch (_) {}
+      if (role == 'chef') {
+        NavigationService.navigateTo(
+          MaterialPageRoute(builder: (_) => const ChefDashboard()),
+        );
+      } else {
+        NavigationService.navigateTo(
+          MaterialPageRoute(builder: (_) => const CustomerDashboard()),
+        );
+      }
     }
   }
 }
