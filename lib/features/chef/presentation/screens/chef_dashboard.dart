@@ -4,7 +4,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../notifications/presentation/screens/notifications_screen.dart';
 import '../../../chat/presentation/screens/inbox_screen.dart';
-import '../../providers/chef_provider.dart';
+import '../providers/chef_provider.dart';
 import 'tabs/chef_home_tab.dart';
 import 'tabs/chef_menu_tab.dart';
 import 'tabs/chef_orders_tab.dart';

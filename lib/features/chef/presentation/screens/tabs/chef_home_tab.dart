@@ -29,6 +29,7 @@ class _ChefHomeTabState extends State<ChefHomeTab> {
     if (chefProvider.myKitchen != null) {
       final kitchenId = chefProvider.myKitchen?['id']?.toString();
       if (kitchenId == null) return;
+      if (!mounted) return;
       await context.read<OrderProvider>().fetchTodayDeliveries(kitchenId);
     }
   }
@@ -54,7 +55,7 @@ class _ChefHomeTabState extends State<ChefHomeTab> {
           return _buildPendingApproval(context, status);
         }
 
-        bool isOpen = kitchen?['isOpen'] ?? false;
+        bool isOpen = kitchen['isOpen'] ?? false;
 
         return RefreshIndicator(
           onRefresh: _loadOperationalData,
@@ -67,7 +68,7 @@ class _ChefHomeTabState extends State<ChefHomeTab> {
                 _buildStatusBanner(context, provider, isOpen),
                 const SizedBox(height: 24),
                 Text(
-                  "Hello, ${kitchen?['chefName'] ?? 'Chef'}!",
+                  "Hello, ${kitchen['chefName'] ?? 'Chef'}!",
                   style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),

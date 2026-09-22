@@ -9,6 +9,7 @@ import '../../../../core/screens/maintenance_screen.dart';
 import '../../../../core/screens/force_update_screen.dart';
 import '../../../admin/presentation/screens/admin_dashboard.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../chef/presentation/providers/chef_provider.dart';
 import '../../../chef/presentation/screens/chef_dashboard.dart';
 import '../../../customer/presentation/screens/customer_dashboard.dart';
 import '../../../delivery_partner/presentation/screens/delivery_partner_dashboard.dart';

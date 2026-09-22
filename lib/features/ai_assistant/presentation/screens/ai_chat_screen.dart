@@ -4,8 +4,6 @@ import 'package:flutter_sound/flutter_sound.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../customer/presentation/screens/kitchen_details_screen.dart';
-import '../../../customer/domain/models/kitchen_model.dart';
 import '../../domain/models/ai_chat_models.dart';
 import '../providers/ai_chat_provider.dart';
 import '../../../../meal_voice/sarvam_stt_service.dart';
