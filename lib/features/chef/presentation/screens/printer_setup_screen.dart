@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
+import 'package:usb_serial/usb_serial.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../services/bill_printer_service.dart';
 
@@ -15,6 +16,7 @@ class PrinterSetupScreen extends StatefulWidget {
 
 class _PrinterSetupScreenState extends State<PrinterSetupScreen> {
   List<BluetoothInfo> _devices = [];
+  List<UsbDevice> _usbDevices = [];
   bool _scanning = false;
   bool _working = false;
   String? _savedMac;
@@ -248,8 +250,78 @@ class _PrinterSetupScreenState extends State<PrinterSetupScreen> {
                   style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ),
+          const SizedBox(height: 28),
+          const Text('USB printer (OTG cable)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 8),
+          const Text('Plug the thermal printer into the phone with an OTG cable, then scan.',
+              style: TextStyle(color: Colors.grey, fontSize: 13)),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 48,
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _scanning ? null : _scanUsb,
+              icon: const Icon(Icons.usb),
+              label: const Text('SCAN USB DEVICES'),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (_usbDevices.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                'No USB devices found yet.',
+                style: TextStyle(color: Colors.grey),
+              ),
+            )
+          else
+            ..._usbDevices.map((d) => Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.usb, color: Colors.deepPurple),
+                    title: Text(d.productName ?? d.deviceName,
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: Text('VID:${d.vid} PID:${d.pid}',
+                        style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                    trailing: const Icon(Icons.check_circle_outline, color: Colors.green),
+                  ),
+                )),
+          const SizedBox(height: 28),
+          const Text('PDF bill', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Text(
+              'Every order card can share a Zomato-style PDF bill (WhatsApp, Drive, downloads) or print it through the Android system print dialog — no setup needed.',
+              style: TextStyle(color: Colors.grey),
+            ),
+          ),
+          const SizedBox(height: 20),
         ],
       ),
     );
+  }
+
+  Future<void> _scanUsb() async {
+    setState(() => _scanning = true);
+    final list = await BillPrinterService.usbDevices();
+    if (!mounted) return;
+    setState(() {
+      _usbDevices = list;
+      _scanning = false;
+    });
+    if (list.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('No USB devices. Plug the printer in via OTG and allow USB access.')),
+      );
+    }
   }
 }

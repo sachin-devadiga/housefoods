@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:usb_serial/usb_serial.dart';
 import '../../../../../core/theme/app_theme.dart';
 import '../../../../customer/domain/models/order_model.dart';
 import '../../../../customer/presentation/providers/order_provider.dart';
@@ -191,6 +192,90 @@ class _ChefOrdersTabState extends State<ChefOrdersTab> {
     final kitchenName = (kitchen?['name'] ?? 'Kitchen').toString();
     final kitchenAddress = (kitchen?['address'] ?? '').toString();
 
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(24, 20, 24, 8),
+              child: Text('Print bill via',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.bluetooth, color: Colors.blue),
+              title: const Text('Bluetooth printer'),
+              subtitle: const Text('Thermal printer over Bluetooth'),
+              onTap: () => Navigator.pop(ctx, 'bt'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.usb, color: Colors.deepPurple),
+              title: const Text('USB printer'),
+              subtitle: const Text('Thermal printer via OTG cable'),
+              onTap: () => Navigator.pop(ctx, 'usb'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.picture_as_pdf_outlined, color: Colors.red),
+              title: const Text('PDF bill'),
+              subtitle: const Text('Share / save as PDF (WhatsApp, Drive…)'),
+              onTap: () => Navigator.pop(ctx, 'pdf'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.print_outlined, color: Colors.teal),
+              title: const Text('System print'),
+              subtitle: const Text('Android print dialog (USB / WiFi printers)'),
+              onTap: () => Navigator.pop(ctx, 'sys'),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+
+    if (choice == 'pdf') {
+      final ok = await BillPrinterService.sharePdfBill(
+        order: order,
+        kitchenName: kitchenName,
+        kitchenAddress: kitchenAddress,
+      );
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(
+        content: Text(ok ? 'PDF bill ready to share' : 'PDF failed: ${BillPrinterService.lastError ?? 'unknown'}'),
+        backgroundColor: ok ? AppTheme.secondaryColor : AppTheme.errorColor,
+      ));
+      return;
+    }
+
+    if (choice == 'sys') {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Opening print dialog…'), duration: Duration(seconds: 2)),
+      );
+      final ok = await BillPrinterService.systemPrintBill(
+        order: order,
+        kitchenName: kitchenName,
+        kitchenAddress: kitchenAddress,
+      );
+      if (!mounted) return;
+      if (!ok) {
+        messenger.showSnackBar(SnackBar(
+          content: Text('Print cancelled or failed: ${BillPrinterService.lastError ?? ''}'),
+          backgroundColor: AppTheme.errorColor,
+        ));
+      }
+      return;
+    }
+
+    if (choice == 'usb') {
+      await _printViaUsb(order, kitchenName, kitchenAddress, messenger);
+      return;
+    }
+
+    // Bluetooth (default configured printer).
     if (!await BillPrinterService.isConfigured()) {
       if (!mounted) return;
       messenger.showSnackBar(
@@ -211,7 +296,72 @@ class _ChefOrdersTabState extends State<ChefOrdersTab> {
     if (!mounted) return;
     messenger.showSnackBar(
       SnackBar(
-        content: Text(ok ? 'Bill sent to printer' : 'Print failed: ${BillPrinterService.lastError ?? 'printer unreachable'}'),
+        content: Text(ok
+            ? 'Bill sent to printer'
+            : 'Print failed: ${BillPrinterService.lastError ?? 'printer unreachable'}'),
+        backgroundColor: ok ? AppTheme.secondaryColor : AppTheme.errorColor,
+      ),
+    );
+  }
+
+  Future<void> _printViaUsb(OrderModel order, String kitchenName, String kitchenAddress,
+      ScaffoldMessengerState messenger) async {
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Looking for USB printer…'), duration: Duration(seconds: 2)),
+    );
+    final devices = await BillPrinterService.usbDevices();
+    if (!mounted) return;
+    if (devices.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(
+            content: Text('No USB device found. Connect the printer via OTG cable.'),
+            backgroundColor: AppTheme.errorColor),
+      );
+      return;
+    }
+    UsbDevice? picked;
+    if (devices.length == 1) {
+      picked = devices.first;
+    } else {
+      picked = await showModalBottomSheet<UsbDevice>(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('Select USB printer',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+              ...devices.map((d) => ListTile(
+                    leading: const Icon(Icons.usb),
+                    title: Text(d.productName ?? d.deviceName),
+                    subtitle: Text('VID:${d.vid} PID:${d.pid}'),
+                    onTap: () => Navigator.pop(ctx, d),
+                  )),
+              const SizedBox(height: 12),
+            ],
+          ),
+        ),
+      );
+    }
+    if (picked == null || !mounted) return;
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Printing bill…'), duration: Duration(seconds: 2)),
+    );
+    final ok = await BillPrinterService.printUsbBill(
+      order: order,
+      kitchenName: kitchenName,
+      kitchenAddress: kitchenAddress,
+      device: picked,
+    );
+    if (!mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(ok
+            ? 'Bill sent to USB printer'
+            : 'USB print failed: ${BillPrinterService.lastError ?? 'check cable + permission'}'),
         backgroundColor: ok ? AppTheme.secondaryColor : AppTheme.errorColor,
       ),
     );
