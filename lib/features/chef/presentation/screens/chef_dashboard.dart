@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../notifications/presentation/screens/notifications_screen.dart';
 import '../../../chat/presentation/screens/inbox_screen.dart';
+import '../../providers/chef_provider.dart';
 import 'tabs/chef_home_tab.dart';
 import 'tabs/chef_menu_tab.dart';
 import 'tabs/chef_orders_tab.dart';
@@ -25,6 +28,23 @@ class _ChefDashboardState extends State<ChefDashboard> {
     const ChefEarningsTab(),
     const ChefProfileTab(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadKitchen();
+  }
+
+  void _loadKitchen() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final authProvider = context.read<AuthProvider>();
+      final uid = authProvider.userProfile?['uid']?.toString() ?? '';
+      if (uid.isNotEmpty) {
+        context.read<ChefProvider>().fetchMyKitchen(uid);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

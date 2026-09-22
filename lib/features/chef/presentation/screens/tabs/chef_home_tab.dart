@@ -23,10 +23,13 @@ class _ChefHomeTabState extends State<ChefHomeTab> {
 
   Future<void> _loadOperationalData() async {
     final chefProvider = context.read<ChefProvider>();
+    if (chefProvider.isLoading && chefProvider.myKitchen == null) {
+      await Future.delayed(const Duration(milliseconds: 300));
+    }
     if (chefProvider.myKitchen != null) {
       final kitchenId = chefProvider.myKitchen?['id']?.toString();
-    if (kitchenId == null) return;
-    await context.read<OrderProvider>().fetchTodayDeliveries(kitchenId);
+      if (kitchenId == null) return;
+      await context.read<OrderProvider>().fetchTodayDeliveries(kitchenId);
     }
   }
 
@@ -36,8 +39,16 @@ class _ChefHomeTabState extends State<ChefHomeTab> {
     
     return Consumer<ChefProvider>(
       builder: (context, provider, child) {
+        if (provider.isLoading && provider.myKitchen == null) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
         final kitchen = provider.myKitchen;
         final status = kitchen?['status']?.toString().toLowerCase() ?? '';
+
+        if (kitchen == null) {
+          return _buildPendingApproval(context, 'setup');
+        }
 
         if (status != 'approved') {
           return _buildPendingApproval(context, status);
@@ -221,6 +232,27 @@ class _ChefHomeTabState extends State<ChefHomeTab> {
   }
 
   Widget _buildPendingApproval(BuildContext context, String status) {
+    if (status == 'setup') {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.storefront, size: 80, color: AppTheme.secondaryColor),
+              const SizedBox(height: 24),
+              const Text("Setup Your Kitchen", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              Text(
+                "Register your kitchen to start selling meals.",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey[600], fontSize: 15),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final isRejected = status == 'rejected';
     return Center(
       child: Padding(

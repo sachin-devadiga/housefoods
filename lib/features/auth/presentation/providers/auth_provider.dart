@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/api_service.dart';
 import '../../../../core/services/auth_service.dart';
+import '../../../chef/presentation/providers/chef_provider.dart';
 import '../../domain/repositories/auth_repository.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthRepository _authRepository;
   final AuthService _authService;
+  final ChefProvider? _chefProvider;
 
-  AuthProvider(this._authRepository, {AuthService? authService})
+  AuthProvider(this._authRepository, {AuthService? authService, ChefProvider? chefProvider})
       : _authService = authService ??
             AuthService(
               apiService: ApiService(baseUrl: AppConstants.apiBaseUrl),
-            );
+            ),
+        _chefProvider = chefProvider;
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
@@ -136,6 +140,8 @@ class AuthProvider extends ChangeNotifier {
     _setLoading(true);
     try {
       await _authService.logout();
+      _userProfile = null;
+      _chefProvider?.reset();
       _setLoading(false);
       onSuccess();
     } catch (e) {
@@ -147,6 +153,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     await _authService.logout();
     _userProfile = null;
+    _chefProvider?.reset();
     notifyListeners();
   }
 

@@ -101,6 +101,11 @@ class _SplashScreenState extends State<SplashScreen> {
       }
     } else {
       final role = RoleConfig.isDedicated ? RoleConfig.roleName : (profile['role'] as String? ?? 'customer');
+      if (role == 'chef') {
+        try {
+          context.read<ChefProvider>().reset();
+        } catch (_) {}
+      }
       Widget destination;
       switch (role) {
         case 'chef':

@@ -62,23 +62,73 @@ class ChefProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
+  String? _loadedChefId;
+  String? get loadedChefId => _loadedChefId;
+
+  void reset() {
+    _myKitchen = null;
+    _myDishes = [];
+    _payoutHistory = [];
+    _totalEarnings = 0.0;
+    _monthlyEarnings = 0.0;
+    _dailyEarnings = 0.0;
+    _pendingPayout = 0.0;
+    _weeklyEarnings = [];
+    _loadedChefId = null;
+    _isLoading = false;
+    notifyListeners();
+  }
+
   Future<void> fetchMyKitchen(String chefId) async {
+    if (chefId.isNotEmpty && _loadedChefId != null && _loadedChefId != chefId) {
+      reset();
+    }
     _isLoading = true;
     notifyListeners();
     try {
       await _ensureAuthenticated();
       final data = await _api.get(AppConstants.kitchensEndpoint, queryParams: {'status': 'pending,approved,rejected'});
-      final kitchens = (data['data'] as List?) ?? [];
-      if (kitchens.isNotEmpty) {
-        _myKitchen = kitchens.first as Map<String, dynamic>;
+      final kitchens = ((data['data'] as List?) ?? []).cast<Map<String, dynamic>>();
+      Map<String, dynamic>? match;
+      for (final k in kitchens) {
+        final kid = (k['chef_id'] ?? k['chefId'] ?? k['chef'])?.toString();
+        if (kid == chefId) {
+          match = k;
+          break;
+        }
+      }
+      if (match == null && kitchens.length == 1 && chefId.isNotEmpty) {
+        final kid = (kitchens.first['chef_id'] ?? kitchens.first['chefId'] ?? kitchens.first['chef'])?.toString();
+        if (kid == chefId || kid == null) {
+          match = kitchens.first;
+        }
+      }
+      _myKitchen = match;
+      _loadedChefId = chefId;
+      if (_myKitchen != null) {
         await fetchDishes();
         await calculateEarnings();
         await fetchPayoutHistory();
       } else {
-        _myKitchen = null;
+        _myDishes = [];
+        _payoutHistory = [];
+        _totalEarnings = 0.0;
+        _monthlyEarnings = 0.0;
+        _dailyEarnings = 0.0;
+        _pendingPayout = 0.0;
+        _weeklyEarnings = [];
       }
     } catch (e) {
       debugPrint("Error fetching kitchen: $e");
+      _myKitchen = null;
+      _loadedChefId = null;
+      _myDishes = [];
+      _payoutHistory = [];
+      _totalEarnings = 0.0;
+      _monthlyEarnings = 0.0;
+      _dailyEarnings = 0.0;
+      _pendingPayout = 0.0;
+      _weeklyEarnings = [];
     } finally {
       _isLoading = false;
       notifyListeners();

@@ -90,6 +90,7 @@ class MealinApp extends StatelessWidget {
     final chatRepository = ChatRepositoryImpl(apiService: apiService);
     final aiChatRepository = AiChatRepository(apiService: apiService);
     final notificationRepository = NotificationRepositoryImpl(apiService: apiService);
+    final chefProvider = ChefProvider(apiService: apiService);
 
     return MultiProvider(
       providers: [
@@ -97,11 +98,12 @@ class MealinApp extends StatelessWidget {
           create: (_) => AuthProvider(
             AuthRepositoryImpl(),
             authService: AuthService(apiService: apiService),
+            chefProvider: chefProvider,
           ),
         ),
         ChangeNotifierProvider(create: (_) => KitchenProvider(kitchenRepository)),
         ChangeNotifierProvider(create: (_) => OrderProvider(OrderRepositoryImpl(apiService: apiService), apiService: apiService)),
-        ChangeNotifierProvider(create: (_) => ChefProvider(apiService: apiService)),
+        ChangeNotifierProvider.value(value: chefProvider),
         ChangeNotifierProvider(create: (_) => AdminProvider(apiService: apiService)),
         ChangeNotifierProvider(create: (_) => ReviewProvider(ReviewRepositoryImpl(apiService: apiService))),
         ChangeNotifierProvider(create: (_) => FavoritesProvider(userRepository)),
