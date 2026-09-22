@@ -165,33 +165,20 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
   void _handleAddToCart(String itemName, String? itemId) {
     final provider = context.read<AiChatProvider>();
-    final msg = 'Add $itemName to my cart';
+    final msg = itemId != null
+        ? 'Add item $itemId ($itemName) to my cart with quantity 1'
+        : 'Add $itemName to my cart';
     _controller.clear();
     provider.sendMessage(msg);
     _scrollToBottom();
   }
 
   void _handleViewMenu(String kitchenId, String kitchenName) {
-    final kitchen = KitchenModel(
-      id: kitchenId,
-      chefId: '',
-      name: kitchenName,
-      chefName: '',
-      address: '',
-      rating: 0,
-      totalRatings: 0,
-      imageUrl: '',
-      specialties: [],
-      categories: [],
-      isOpen: true,
-      status: 'active',
-      latitude: 0,
-      longitude: 0,
-    );
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => KitchenDetailsScreen(kitchen: kitchen)),
-    );
+    final provider = context.read<AiChatProvider>();
+    final msg = 'Show me the full menu of $kitchenName restaurant';
+    _controller.clear();
+    provider.sendMessage(msg);
+    _scrollToBottom();
   }
 
   @override

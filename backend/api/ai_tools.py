@@ -481,7 +481,7 @@ def get_restaurant_details(params, user_profile):
         return {'error': 'restaurant_id is required'}
 
     try:
-        kitchen = Kitchen.objects.get(pk=restaurant_id, status='approved')
+        kitchen = Kitchen.objects.get(pk=restaurant_id)
     except Kitchen.DoesNotExist:
         return {'error': 'Restaurant not found'}
 

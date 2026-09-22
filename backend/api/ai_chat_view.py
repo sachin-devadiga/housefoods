@@ -30,27 +30,38 @@ ABOUT MEALIN APP:
 - Prices are in Indian Rupees (₹)
 
 YOUR CAPABILITIES — YOU MUST USE TOOLS:
-1. SEARCH FOOD: When user asks about ANY food — "what to eat", "biryani", "pizza near me", "best dosa", "cheap food", "veg options", "non-veg" — call search_food IMMEDIATELY
-2. VIEW CART: When user asks "what's in my cart", "my order", "cart total" — call get_cart
-3. ADD TO CART: When user says "add X to cart", "order X", "I want X" — call add_to_cart (use item_id from search results)
-4. REMOVE FROM CART: "remove X", "cancel X" — call remove_from_cart
-5. UPDATE QUANTITY: "increase quantity", "2 of X" — call update_cart_item
-6. RESTAURANT DETAILS: "tell me about restaurant X", "menu of X" — call get_restaurant_details
-7. OFFERS: "any discounts", "coupon code", "offers" — call get_applicable_offers
-8. PLACE ORDER: "place order", "checkout", "confirm order", "pay now" — call validate_order then place_order
-9. ORDER STATUS: "where is my order", "track order", "order status" — call get_order_status
-10. PAYMENT: "pay with COD", "cash on delivery", "online payment" — call set_payment_method
+1. SEARCH FOOD: When user asks about ANY food — "what to eat", "biryani", "pizza near me", "best dosa", "cheap food", "veg options", "non-veg", "order from restaurant X" — call search_food IMMEDIATELY
+2. LIST RESTAURANTS: When user asks "which restaurants are available", "what restaurants are open", "show me restaurants" — call list_restaurants
+3. VIEW CART: When user asks "what's in my cart", "my order", "cart total" — call get_cart
+4. ADD TO CART: When user says "add X to cart", "order X", "I want X", "add item 123" — call add_to_cart
+5. REMOVE FROM CART: "remove X", "cancel X" — call remove_from_cart
+6. UPDATE QUANTITY: "increase quantity", "2 of X" — call update_cart_item
+7. RESTAURANT DETAILS: "tell me about restaurant X", "menu of X" — call get_restaurant_details
+8. OFFERS: "any discounts", "coupon code", "offers" — call get_applicable_offers
+9. PLACE ORDER: "place order", "checkout", "confirm order", "pay now" — call validate_order then place_order
+10. ORDER STATUS: "where is my order", "track order", "order status" — call get_order_status
+11. PAYMENT: "pay with COD", "cash on delivery", "online payment" — call set_payment_method
+
+ORDERING FLOW:
+When user wants to order:
+1. First search for food items (search_food) or show restaurants (list_restaurants)
+2. When user picks an item, add it to cart (add_to_cart)
+3. Show cart contents (get_cart)
+4. When user says "place order" or "checkout" — call validate_order first, then place_order
+5. Default to COD if user doesn't specify payment method
 
 RULES:
 - NEVER say you don't have access to data. You DO — use the tools.
 - NEVER make up restaurant names, prices, or menu items. Only use data from tools.
 - When user says "what should I eat" — call search_food with a broad query like "popular" or "best" to show real options.
+- When user says "order from X" or "something from this restaurant" — call search_food with the restaurant name as filter.
 - When showing results, format them nicely: item name, price, rating, restaurant, delivery time.
 - If search returns no results, say so and suggest trying different keywords.
 - Support Hindi, English, and casual language.
 - Be conversational but efficient. Help the user order food in as few steps as possible.
 - For COD orders, confirm the order details before placing.
-- Always show prices with ₹ symbol."""
+- Always show prices with ₹ symbol.
+- When user gives a number like "1" or "2" after seeing search results, assume they want to add that item to cart (by its position in the results list)."""
 
 # Food-related keywords to detect when we should force search_food
 _FOOD_KEYWORDS = [
@@ -87,9 +98,12 @@ def _is_food_query(message):
     """Detect if a message is food-related and should trigger search_food."""
     msg_lower = message.lower().strip()
 
-    # If it's a restaurant listing query, return False (handled separately)
+    # If it's a pure restaurant listing query (no order/food intent), return False
     if _RESTAURANT_QUERY_RE.search(msg_lower):
-        return False
+        # But if there's also food intent ("order from restaurant X"), treat as food query
+        has_food_intent = any(re.search(kw, msg_lower) for kw in _ORDER_KEYWORDS)
+        if not has_food_intent:
+            return False
 
     for kw in _FOOD_KEYWORDS:
         if re.search(kw, msg_lower):
@@ -391,11 +405,25 @@ def _build_results_context(tool_results):
 def _force_search_food(message, user_profile):
     """Force-call search_food when Gemini didn't call it but should have."""
     search_term = _detect_search_term(message)
-    logger.info('[MEAL-AI] Force search_food with term: %s', search_term)
-    result = execute_tool('search_food', {'food': search_term}, user_profile)
+
+    # Try to extract restaurant name from message
+    restaurant = None
+    restaurant_match = re.search(
+        r'(?:from|at|in|near)\s+(?:the\s+)?(?:restaurant\s+)?(\w+)',
+        message, re.IGNORECASE
+    )
+    if restaurant_match:
+        restaurant = restaurant_match.group(1)
+
+    params = {'food': search_term}
+    if restaurant:
+        params['restaurant'] = restaurant
+
+    logger.info('[MEAL-AI] Force search_food with params: %s', params)
+    result = execute_tool('search_food', params, user_profile)
     return [{
         'tool_name': 'search_food',
-        'parameters': {'food': search_term},
+        'parameters': params,
         'result': result,
     }]
 
