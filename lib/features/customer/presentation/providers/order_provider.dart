@@ -179,7 +179,9 @@ class OrderProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> updateStatus(String orderId, String newStatus, String kitchenId) async {
+  /// Updates an order's delivery progress. Returns true on success and
+  /// refreshes both the dashboard dispatch list and the orders-tab list.
+  Future<bool> updateStatus(String orderId, String newStatus, String kitchenId) async {
     try {
       await _orderRepository.updateOrderStatus(orderId, newStatus);
       if (newStatus == 'Delivered') {
@@ -195,8 +197,13 @@ class OrderProvider extends ChangeNotifier {
         });
       }
       await fetchTodayDeliveries(kitchenId);
+      await fetchKitchenOrders(kitchenId);
+      return true;
     } catch (e) {
-      debugPrint("Error status update: $e");
+      debugPrint('Error status update: $e');
+      _error = e.toString();
+      notifyListeners();
+      return false;
     }
   }
 

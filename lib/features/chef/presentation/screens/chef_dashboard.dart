@@ -145,7 +145,9 @@ class _ChefDashboardState extends State<ChefDashboard> {
       final kitchen = context.read<ChefProvider>().myKitchen;
       final kitchenId = kitchen?['id']?.toString() ?? '';
       if (kitchenId.isNotEmpty) {
-        context.read<OrderProvider>().fetchTodayDeliveries(kitchenId);
+        final orders = context.read<OrderProvider>();
+        orders.fetchTodayDeliveries(kitchenId);
+        orders.fetchKitchenOrders(kitchenId);
       }
     } catch (_) {}
   }

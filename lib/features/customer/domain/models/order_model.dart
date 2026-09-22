@@ -23,6 +23,7 @@ class OrderModel {
   final DateTime startDate;
   final DateTime endDate;
   final String status; // 'pending', 'active', 'completed', 'cancelled'
+  final String deliveryStatus; // 'pending', 'ready_for_delivery', 'assigned', 'picked_up', 'delivered'
   final String paymentId;
   final DateTime createdAt;
   final bool isPaused;
@@ -53,6 +54,7 @@ class OrderModel {
     required this.startDate,
     required this.endDate,
     required this.status,
+    this.deliveryStatus = 'pending',
     required this.paymentId,
     required this.createdAt,
     this.isPaused = false,
@@ -62,6 +64,21 @@ class OrderModel {
   });
 
   bool get isOneTimeOrder => true;
+
+  /// Kitchen-facing progress label derived from delivery status.
+  String get deliveryProgressLabel {
+    switch (deliveryStatus.toLowerCase()) {
+      case 'ready_for_delivery':
+        return 'Preparing';
+      case 'assigned':
+      case 'picked_up':
+        return 'Out for delivery';
+      case 'delivered':
+        return 'Delivered';
+      default:
+        return 'Received';
+    }
+  }
 
   Map<String, dynamic> toMap() {
     final map = <String, dynamic>{
@@ -130,6 +147,7 @@ class OrderModel {
       startDate: parseDate('start_date'),
       endDate: parseDate('end_date'),
       status: map['status'] ?? 'pending',
+      deliveryStatus: map['delivery_status'] ?? map['deliveryStatus'] ?? 'pending',
       paymentId: map['payment_id'] ?? map['paymentId'] ?? '',
       createdAt: parseDate('created_at'),
       isPaused: map['is_paused'] ?? map['isPaused'] ?? false,

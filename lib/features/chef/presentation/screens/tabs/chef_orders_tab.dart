@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../../../core/theme/app_theme.dart';
 import '../../../../customer/domain/models/order_model.dart';
 import '../../../../customer/presentation/providers/order_provider.dart';
 import '../../providers/chef_provider.dart';
@@ -16,17 +17,17 @@ class _ChefOrdersTabState extends State<ChefOrdersTab> {
   @override
   void initState() {
     super.initState();
-    _loadOrders();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadOrders();
+    });
   }
 
-  void _loadOrders() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final chefProvider = context.read<ChefProvider>();
-      final kitchenId = chefProvider.myKitchen?['id'];
-      if (kitchenId != null) {
-        context.read<OrderProvider>().fetchKitchenOrders(kitchenId);
-      }
-    });
+  Future<void> _loadOrders() async {
+    final chefProvider = context.read<ChefProvider>();
+    final kitchenId = chefProvider.myKitchen?['id']?.toString();
+    if (kitchenId != null && kitchenId.isNotEmpty) {
+      await context.read<OrderProvider>().fetchKitchenOrders(kitchenId);
+    }
   }
 
   @override
@@ -51,7 +52,7 @@ class _ChefOrdersTabState extends State<ChefOrdersTab> {
         }
 
         return RefreshIndicator(
-          onRefresh: () async => _loadOrders(),
+          onRefresh: _loadOrders,
           child: ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: provider.customerOrders.length,
@@ -99,10 +100,17 @@ class _ChefOrdersTabState extends State<ChefOrdersTab> {
       leading: Icon(icon, color: color),
       title: Text(status),
       onTap: () async {
-        final kitchenId = cp.myKitchen?['id'];
-        if (kitchenId == null) return;
-        await op.updateStatus(order.id, status, kitchenId);
-        if (context.mounted) Navigator.pop(context);
+        final kitchenId = cp.myKitchen?['id']?.toString();
+        if (kitchenId == null || kitchenId.isEmpty) return;
+        Navigator.pop(context);
+        final ok = await op.updateStatus(order.id, status, kitchenId);
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ok ? 'Order marked: $status' : 'Update failed: ${op.errorMessage ?? 'try again'}'),
+            backgroundColor: ok ? AppTheme.secondaryColor : AppTheme.errorColor,
+          ),
+        );
       },
     );
   }
