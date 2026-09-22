@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -19,6 +20,7 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
   static OverlayEntry? _currentOverlay;
   static final AudioPlayer _audioPlayer = AudioPlayer();
+  static Timer? _alarmStopTimer;
   static const _alarmChannel = MethodChannel('com.mealin/alarm_channel');
 
   static const _alarmTypes = {'new_order', 'new_delivery'};
@@ -99,10 +101,18 @@ class NotificationService {
     });
   }
 
+  /// Loops the order alarm for 30 seconds (new orders / deliveries).
   static Future<void> _playAlarm() async {
     try {
+      _alarmStopTimer?.cancel();
       await _audioPlayer.stop();
+      await _audioPlayer.setReleaseMode(ReleaseMode.loop);
       await _audioPlayer.play(AssetSource('sounds/alarm.wav'));
+      _alarmStopTimer = Timer(const Duration(seconds: 30), () async {
+        try {
+          await _audioPlayer.stop();
+        } catch (_) {}
+      });
     } catch (e) {
       debugPrint('Failed to play alarm: $e');
     }
