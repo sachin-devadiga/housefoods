@@ -33,3 +33,4 @@ android/app/role.properties
 android/key.properties
 android/app/mealin-release.keystore
 build/apk-output/
+android/build/

@@ -13,6 +13,8 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
 
+    private var usbPrinterBridge: UsbPrinterBridge? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createAlarmNotificationChannel()
@@ -20,6 +22,9 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        usbPrinterBridge = UsbPrinterBridge(applicationContext)
+        usbPrinterBridge?.attach(flutterEngine)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.mealin/alarm_channel")
             .setMethodCallHandler { call, result ->

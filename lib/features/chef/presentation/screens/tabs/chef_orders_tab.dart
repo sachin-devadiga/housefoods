@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:usb_serial/usb_serial.dart';
+import '../../services/usb_printer.dart';
 import '../../../../../core/theme/app_theme.dart';
 import '../../../../customer/domain/models/order_model.dart';
 import '../../../../customer/presentation/providers/order_provider.dart';
@@ -319,11 +319,11 @@ class _ChefOrdersTabState extends State<ChefOrdersTab> {
       );
       return;
     }
-    UsbDevice? picked;
+    UsbPrinterDevice? picked;
     if (devices.length == 1) {
       picked = devices.first;
     } else {
-      picked = await showModalBottomSheet<UsbDevice>(
+      picked = await showModalBottomSheet<UsbPrinterDevice>(
         context: context,
         builder: (ctx) => SafeArea(
           child: Column(
@@ -336,7 +336,7 @@ class _ChefOrdersTabState extends State<ChefOrdersTab> {
               ),
               ...devices.map((d) => ListTile(
                     leading: const Icon(Icons.usb),
-                    title: Text(d.productName ?? d.deviceName),
+                    title: Text(d.name),
                     subtitle: Text('VID:${d.vid} PID:${d.pid}'),
                     onTap: () => Navigator.pop(ctx, d),
                   )),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
-import 'package:usb_serial/usb_serial.dart';
+import '../services/usb_printer.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../services/bill_printer_service.dart';
 
@@ -16,7 +16,7 @@ class PrinterSetupScreen extends StatefulWidget {
 
 class _PrinterSetupScreenState extends State<PrinterSetupScreen> {
   List<BluetoothInfo> _devices = [];
-  List<UsbDevice> _usbDevices = [];
+  List<UsbPrinterDevice> _usbDevices = [];
   bool _scanning = false;
   bool _working = false;
   String? _savedMac;
@@ -282,7 +282,7 @@ class _PrinterSetupScreenState extends State<PrinterSetupScreen> {
             ..._usbDevices.map((d) => Card(
                   child: ListTile(
                     leading: const Icon(Icons.usb, color: Colors.deepPurple),
-                    title: Text(d.productName ?? d.deviceName,
+                    title: Text(d.name,
                         style: const TextStyle(fontWeight: FontWeight.w600)),
                     subtitle: Text('VID:${d.vid} PID:${d.pid}',
                         style: const TextStyle(fontSize: 12, color: Colors.grey)),

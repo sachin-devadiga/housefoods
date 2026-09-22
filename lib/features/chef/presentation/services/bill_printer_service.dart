@@ -6,7 +6,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:usb_serial/usb_serial.dart';
+import 'usb_printer.dart';
 import '../../../customer/domain/models/order_model.dart';
 
 /// Bluetooth thermal bill printing for the resto app.
@@ -75,9 +75,9 @@ class BillPrinterService {
 
   // ── USB thermal printers (OTG cable) ──────────────────────────────
 
-  static Future<List<UsbDevice>> usbDevices() async {
+  static Future<List<UsbPrinterDevice>> usbDevices() async {
     try {
-      return await UsbSerial.listDevices();
+      return await UsbPrinter.listDevices();
     } catch (e) {
       _lastError = e.toString();
       return [];
@@ -89,47 +89,24 @@ class BillPrinterService {
     required OrderModel order,
     required String kitchenName,
     required String kitchenAddress,
-    required UsbDevice device,
+    required UsbPrinterDevice device,
     int paperMm = 80,
   }) async {
-    UsbPort? port;
     try {
-      if (device.deviceId != null) {
-        port = await UsbSerial.createFromDeviceId(device.deviceId);
-      }
-      port ??= (device.vid != null && device.pid != null)
-          ? await UsbSerial.create(device.vid!, device.pid!)
-          : null;
-      if (port == null) {
-        _lastError = 'Could not open USB device';
-        return false;
-      }
-      final opened = await port.open();
-      if (!opened) {
-        _lastError = 'USB permission denied or device busy';
-        try {
-          await port.close();
-        } catch (_) {}
-        return false;
-      }
       final bytes = await _buildBillBytes(
         order: order,
         kitchenName: kitchenName,
         kitchenAddress: kitchenAddress,
         paperMm: paperMm,
       );
-      await port.write(Uint8List.fromList(bytes));
-      await Future.delayed(const Duration(milliseconds: 800));
-      try {
-        await port.close();
-      } catch (_) {}
-      return true;
+      final result = await UsbPrinter.printBytes(vid: device.vid, pid: device.pid, bytes: bytes);
+      if (!result.ok) {
+        _lastError = result.error ?? 'USB print failed';
+      }
+      return result.ok;
     } catch (e) {
       _lastError = e.toString();
       debugPrint('[BillPrinter] USB print failed: $e');
-      try {
-        await port?.close();
-      } catch (_) {}
       return false;
     }
   }
