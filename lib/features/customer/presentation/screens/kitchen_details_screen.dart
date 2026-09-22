@@ -28,6 +28,7 @@ class KitchenDetailsScreen extends StatefulWidget {
 
 class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
   _MenuFilter _menuFilter = _MenuFilter.all;
+  final Set<String> _addingIds = {};
 
   @override
   void initState() {
@@ -394,7 +395,36 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
     );
   }
 
+  Future<void> _addToCart(MenuItemModel item) async {
+    if (_addingIds.contains(item.id)) return;
+    setState(() => _addingIds.add(item.id));
+    try {
+      await context.read<CartProvider>().addItem(menuItemId: item.id, quantity: 1);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not add item: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _addingIds.remove(item.id));
+    }
+  }
+
+  Future<void> _changeQuantity(String cartItemId, int quantity) async {
+    try {
+      await context.read<CartProvider>().updateItemQuantity(cartItemId, quantity);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update cart: $e')),
+        );
+      }
+    }
+  }
+
   Widget _buildAddControl(MenuItemModel item) {
+    final isAdding = _addingIds.contains(item.id);
     return Consumer<CartProvider>(
       builder: (context, cartProvider, _) {
         final match = cartProvider.cart?.items
@@ -419,7 +449,7 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 InkWell(
-                  onTap: () => cartProvider.updateItemQuantity(cartItem.id, cartItem.quantity - 1),
+                  onTap: () => _changeQuantity(cartItem.id, cartItem.quantity - 1),
                   child: const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                     child: Icon(Icons.remove, size: 17, color: AppTheme.primaryColor),
@@ -428,7 +458,7 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
                 Text('${cartItem.quantity}',
                     style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryColor)),
                 InkWell(
-                  onTap: () => cartProvider.updateItemQuantity(cartItem.id, cartItem.quantity + 1),
+                  onTap: () => _changeQuantity(cartItem.id, cartItem.quantity + 1),
                   child: const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                     child: Icon(Icons.add, size: 17, color: AppTheme.primaryColor),
@@ -440,15 +470,26 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
         }
 
         return GestureDetector(
-          onTap: () => cartProvider.addItem(menuItemId: item.id, quantity: 1),
+          onTap: isAdding ? null : () => _addToCart(item),
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 7),
             decoration: deco,
-            child: const Text('ADD',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    color: AppTheme.primaryColor, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.5)),
+            child: isAdding
+                ? const SizedBox(
+                    height: 19,
+                    child: Center(
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primaryColor),
+                      ),
+                    ),
+                  )
+                : const Text('ADD',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: AppTheme.primaryColor, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.5)),
           ),
         );
       },

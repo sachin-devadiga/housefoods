@@ -458,10 +458,10 @@ class _HomeTabState extends State<HomeTab> {
               final c = zomatoCuisines[i];
               return GestureDetector(
                 onTap: () {
-                  context.read<KitchenProvider>().searchKitchens(c['label'] as String);
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const SearchPage()),
+                    MaterialPageRoute(
+                        builder: (context) => SearchPage(initialQuery: c['label'] as String)),
                   );
                 },
                 child: Column(

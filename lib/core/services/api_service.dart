@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../constants/app_constants.dart';
+import 'token_service.dart';
 
 class ApiService {
   late Dio _dio;
@@ -222,9 +223,21 @@ class ApiInterceptor extends Interceptor {
   }
 
   @override
-  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
     if (kDebugMode) {
       debugPrint('API Request: ${options.method} ${options.path}');
+    }
+    // Attach the stored access token to every request that doesn't already
+    // carry an Authorization header. This heals all authenticated buttons
+    // app-wide (cart, orders, favorites, reviews, support, ...) even when a
+    // provider forgot to call setToken().
+    if (!options.headers.containsKey('Authorization')) {
+      try {
+        final token = await TokenService().getAccessToken();
+        if (token != null && token.isNotEmpty) {
+          options.headers['Authorization'] = 'Bearer $token';
+        }
+      } catch (_) {}
     }
     handler.next(options);
   }

@@ -105,8 +105,19 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  Widget _buildCartItem(BuildContext context, dynamic item, CartProvider provider) {
-    return Card(
+  Future<void> _changeQuantity(CartProvider provider, String itemId, int quantity) async {
+    try {
+      await provider.updateItemQuantity(itemId, quantity);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update cart: $e')),
+        );
+      }
+    }
+  }
+
+  Widget _buildCartItem(BuildContext context, dynamic item, CartProvider provider) {    return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -176,7 +187,7 @@ class _CartScreenState extends State<CartScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   InkWell(
-                    onTap: () => provider.updateItemQuantity(item.id, item.quantity - 1),
+                    onTap: () => _changeQuantity(provider, item.id, item.quantity - 1),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       child: Icon(Icons.remove, size: 18, color: AppTheme.primaryColor),
@@ -187,7 +198,7 @@ class _CartScreenState extends State<CartScreen> {
                     child: Text('${item.quantity}', style: const TextStyle(fontWeight: FontWeight.bold)),
                   ),
                   InkWell(
-                    onTap: () => provider.updateItemQuantity(item.id, item.quantity + 1),
+                    onTap: () => _changeQuantity(provider, item.id, item.quantity + 1),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       child: Icon(Icons.add, size: 18, color: AppTheme.primaryColor),

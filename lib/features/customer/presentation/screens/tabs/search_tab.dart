@@ -9,7 +9,9 @@ import '../../widgets/filter_bottom_sheet.dart';
 import '../kitchen_details_screen.dart';
 
 class SearchTab extends StatefulWidget {
-  const SearchTab({super.key});
+  final String initialQuery;
+
+  const SearchTab({super.key, this.initialQuery = ''});
 
   @override
   State<SearchTab> createState() => _SearchTabState();
@@ -25,6 +27,11 @@ class _SearchTabState extends State<SearchTab> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<KitchenProvider>().loadSearchHistory();
+      if (widget.initialQuery.isNotEmpty) {
+        _searchController.text = widget.initialQuery;
+        setState(() {});
+        _onSearch(widget.initialQuery);
+      }
     });
   }
 
