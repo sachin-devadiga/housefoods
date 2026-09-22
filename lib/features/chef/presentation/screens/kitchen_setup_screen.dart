@@ -3,6 +3,9 @@ import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/location_service.dart';
+import '../../../../core/services/geocoding_service.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../../../auth/presentation/screens/map_picker_screen.dart';
 import '../../../../features/customer/domain/models/kitchen_model.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/chef_provider.dart';
@@ -23,7 +26,10 @@ class _KitchenSetupScreenState extends State<KitchenSetupScreen> {
   
   final List<String> _specialties = [];
   final LocationService _locationService = LocationService();
-  
+  final GeocodingService _geocodingService = GeocodingService();
+
+  double? _latitude;
+  double? _longitude;
   String? _imageUrl;
   String? _idProofUrl;
   String? _licenseUrl;
@@ -46,6 +52,54 @@ class _KitchenSetupScreenState extends State<KitchenSetupScreen> {
     }
   }
 
+  Future<void> _useCurrentLocation() async {
+    setState(() => _isGettingLocation = true);
+    try {
+      final position = await _locationService.getCurrentLocation();
+      if (position == null) throw 'Could not determine location. Please enable GPS.';
+      final address = await _geocodingService.getAddressFromCoords(
+        LatLng(position.latitude, position.longitude),
+      );
+      if (!mounted) return;
+      setState(() {
+        _latitude = position.latitude;
+        _longitude = position.longitude;
+        if (address.isNotEmpty && !address.startsWith('Error')) {
+          _addressController.text = address;
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Current location captured'),
+          backgroundColor: AppTheme.secondaryColor,
+        ),
+      );
+    } catch (e) {
+      _showError('Location error: $e');
+    } finally {
+      if (mounted) setState(() => _isGettingLocation = false);
+    }
+  }
+
+  Future<void> _pickOnMap() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MapPickerScreen()),
+    );
+    if (result != null && result is Map<String, dynamic>) {
+      final addr = result['address'] as String? ?? '';
+      final lat = result['lat'] as double?;
+      final lng = result['lng'] as double?;
+      if (addr.isNotEmpty && lat != null && lng != null) {
+        setState(() {
+          _addressController.text = addr;
+          _latitude = lat;
+          _longitude = lng;
+        });
+      }
+    }
+  }
+
   void _submitSetup() async {
     if (_formKey.currentState!.validate()) {
       if (_imageUrl == null) {
@@ -62,10 +116,18 @@ class _KitchenSetupScreenState extends State<KitchenSetupScreen> {
       }
 
       setState(() => _isGettingLocation = true);
-      
+
       try {
-        final position = await _locationService.getCurrentLocation();
-        if (position == null) throw "Could not determine location. Please enable GPS.";
+        // Prefer the explicitly chosen location (map pin / GPS button),
+        // otherwise fall back to the device's current location.
+        double? lat = _latitude;
+        double? lng = _longitude;
+        if (lat == null || lng == null) {
+          final position = await _locationService.getCurrentLocation();
+          if (position == null) throw 'Could not determine location. Please enable GPS.';
+          lat = position.latitude;
+          lng = position.longitude;
+        }
 
         if (!mounted) return;
         final chefProvider = Provider.of<ChefProvider>(context, listen: false);
@@ -88,8 +150,8 @@ class _KitchenSetupScreenState extends State<KitchenSetupScreen> {
             categories: [], // Can be filled based on specialties
             isOpen: true,
             status: 'pending',
-            latitude: position.latitude,
-            longitude: position.longitude,
+            latitude: lat,
+            longitude: lng,
             fssaiNumber: _fssaiController.text.trim(),
             idProofUrl: _idProofUrl,
             licenseUrl: _licenseUrl,
@@ -145,6 +207,8 @@ class _KitchenSetupScreenState extends State<KitchenSetupScreen> {
               _buildTextField(_nameController, "Kitchen Name", "e.g. Mom's Kitchen"),
               const SizedBox(height: 20),
               _buildTextField(_addressController, "Full Address", "Where is the food prepared?", maxLines: 3),
+              const SizedBox(height: 12),
+              _buildLocationButtons(),
               const SizedBox(height: 32),
               _buildSpecialtiesSection(),
               const SizedBox(height: 32),
@@ -227,6 +291,61 @@ class _KitchenSetupScreenState extends State<KitchenSetupScreen> {
       ]),
       Wrap(spacing: 8, children: _specialties.map((s) => Chip(label: Text(s), onDeleted: () => setState(() => _specialties.remove(s)))).toList()),
     ]);
+  }
+
+  Widget _buildLocationButtons() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_latitude != null && _longitude != null)
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppTheme.secondaryColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.check_circle, size: 16, color: AppTheme.secondaryColor),
+                SizedBox(width: 8),
+                Text('Location pinned on map', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _isGettingLocation ? null : _useCurrentLocation,
+                icon: _isGettingLocation
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.my_location, size: 18),
+                label: const Text('Current Location'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.secondaryColor,
+                  side: const BorderSide(color: AppTheme.secondaryColor),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _isGettingLocation ? null : _pickOnMap,
+                icon: const Icon(Icons.map_outlined, size: 18),
+                label: const Text('Pick on Map'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.secondaryColor,
+                  side: const BorderSide(color: AppTheme.secondaryColor),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 
   Widget _buildSubmitButton(ChefProvider chefProvider) {

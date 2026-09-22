@@ -3,6 +3,10 @@ import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/widgets/app_cached_image.dart';
+import '../../../../core/services/location_service.dart';
+import '../../../../core/services/geocoding_service.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../../../auth/presentation/screens/map_picker_screen.dart';
 import '../../../../features/customer/domain/models/kitchen_model.dart';
 import '../providers/chef_provider.dart';
 
@@ -21,6 +25,9 @@ class _EditKitchenScreenState extends State<EditKitchenScreen> {
   final TextEditingController _specialtyController = TextEditingController();
   late List<String> _specialties;
   String? _imageUrl;
+  double? _latitude;
+  double? _longitude;
+  bool _isLocating = false;
 
   @override
   void initState() {
@@ -29,6 +36,8 @@ class _EditKitchenScreenState extends State<EditKitchenScreen> {
     _addressController = TextEditingController(text: widget.kitchen.address);
     _specialties = List.from(widget.kitchen.specialties);
     _imageUrl = widget.kitchen.imageUrl;
+    _latitude = widget.kitchen.latitude == 0 ? null : widget.kitchen.latitude;
+    _longitude = widget.kitchen.longitude == 0 ? null : widget.kitchen.longitude;
   }
 
   void _addSpecialty() {
@@ -45,6 +54,57 @@ class _EditKitchenScreenState extends State<EditKitchenScreen> {
     final url = await provider.pickAndUploadImage(AppConstants.kitchenImagesPath);
     if (url != null) {
       setState(() => _imageUrl = url);
+    }
+  }
+
+  Future<void> _useCurrentLocation() async {
+    setState(() => _isLocating = true);
+    try {
+      final position = await LocationService().getCurrentLocation();
+      if (position == null) throw 'Could not determine location. Please enable GPS.';
+      final address = await GeocodingService().getAddressFromCoords(
+        LatLng(position.latitude, position.longitude),
+      );
+      if (!mounted) return;
+      setState(() {
+        _latitude = position.latitude;
+        _longitude = position.longitude;
+        if (address.isNotEmpty && !address.startsWith('Error')) {
+          _addressController.text = address;
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Current location captured'),
+          backgroundColor: AppTheme.secondaryColor,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Location error: $e'), backgroundColor: AppTheme.errorColor),
+      );
+    } finally {
+      if (mounted) setState(() => _isLocating = false);
+    }
+  }
+
+  Future<void> _pickOnMap() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MapPickerScreen()),
+    );
+    if (result != null && result is Map<String, dynamic>) {
+      final addr = result['address'] as String? ?? '';
+      final lat = result['lat'] as double?;
+      final lng = result['lng'] as double?;
+      if (addr.isNotEmpty && lat != null && lng != null) {
+        setState(() {
+          _addressController.text = addr;
+          _latitude = lat;
+          _longitude = lng;
+        });
+      }
     }
   }
 
@@ -73,8 +133,8 @@ class _EditKitchenScreenState extends State<EditKitchenScreen> {
         categories: widget.kitchen.categories,
         isOpen: widget.kitchen.isOpen,
         status: widget.kitchen.status,
-        latitude: widget.kitchen.latitude,
-        longitude: widget.kitchen.longitude,
+        latitude: _latitude ?? widget.kitchen.latitude,
+        longitude: _longitude ?? widget.kitchen.longitude,
         fssaiNumber: widget.kitchen.fssaiNumber,
         idProofUrl: widget.kitchen.idProofUrl,
         licenseUrl: widget.kitchen.licenseUrl,
@@ -137,6 +197,56 @@ class _EditKitchenScreenState extends State<EditKitchenScreen> {
                     maxLines: 3,
                     decoration: const InputDecoration(labelText: "Address", border: OutlineInputBorder()),
                     validator: (v) => (v == null || v.isEmpty) ? "Required" : null,
+                  ),
+                  const SizedBox(height: 12),
+                  if (_latitude != null && _longitude != null)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.secondaryColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.check_circle, size: 16, color: AppTheme.secondaryColor),
+                          SizedBox(width: 8),
+                          Text('Location pinned on map',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _isLocating ? null : _useCurrentLocation,
+                          icon: _isLocating
+                              ? const SizedBox(
+                                  width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.my_location, size: 18),
+                          label: const Text('Current Location'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.secondaryColor,
+                            side: const BorderSide(color: AppTheme.secondaryColor),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _isLocating ? null : _pickOnMap,
+                          icon: const Icon(Icons.map_outlined, size: 18),
+                          label: const Text('Pick on Map'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.secondaryColor,
+                            side: const BorderSide(color: AppTheme.secondaryColor),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 32),
                   
