@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_cached_image.dart';
 import '../../domain/models/kitchen_model.dart';
 import '../screens/kitchen_details_screen.dart';
+import 'zomato_widgets.dart';
 
 class KitchenHorizontalList extends StatelessWidget {
   final String title;
@@ -32,7 +32,7 @@ class KitchenHorizontalList extends StatelessWidget {
               ),
               TextButton(
                 onPressed: () {}, // Action for "See All"
-                child: const Text("See All", style: TextStyle(color: AppTheme.primaryColor)),
+                child: const Text('See All', style: TextStyle(color: ZomatoColors.brand)),
               ),
             ],
           ),
@@ -92,15 +92,10 @@ class _KitchenMiniCard extends StatelessWidget {
             const SizedBox(height: 4),
             Row(
               children: [
-                const Icon(Icons.star, size: 14, color: Colors.amber),
+                RatingBadge(rating: kitchen.rating, fontSize: 11),
                 const SizedBox(width: 4),
                 Text(
-                  kitchen.rating.toStringAsFixed(1),
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  "(${kitchen.totalRatings})",
+                  '(${kitchen.totalRatings})',
                   style: TextStyle(fontSize: 11, color: Colors.grey[500]),
                 ),
               ],

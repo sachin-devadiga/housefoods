@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../../core/theme/app_theme.dart';
+import '../widgets/zomato_widgets.dart';
 import '../../../ai_assistant/presentation/screens/ai_chat_screen.dart';
 import '../../../notifications/presentation/screens/notifications_screen.dart';
 import '../../../chat/presentation/screens/inbox_screen.dart';
@@ -35,7 +35,16 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("MEALIN"),
+        title: const Text(
+          'mealin',
+          style: TextStyle(
+            color: ZomatoColors.brand,
+            fontWeight: FontWeight.w900,
+            fontStyle: FontStyle.italic,
+            fontSize: 24,
+            letterSpacing: -0.5,
+          ),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.chat_outlined),
@@ -65,7 +74,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
         type: BottomNavigationBarType.fixed,
-        selectedItemColor: AppTheme.primaryColor,
+        selectedItemColor: ZomatoColors.brand,
         unselectedItemColor: Colors.grey,
         showSelectedLabels: true,
         showUnselectedLabels: true,
@@ -83,7 +92,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
             MaterialPageRoute(builder: (context) => const AiChatScreen()),
           );
         },
-        backgroundColor: AppTheme.primaryColor,
+        backgroundColor: ZomatoColors.brand,
         child: const Icon(Icons.auto_awesome, color: Colors.white),
       ),
     );
