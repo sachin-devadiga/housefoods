@@ -456,10 +456,20 @@ class OrderProvider extends ChangeNotifier {
           'order_type': 'one_time',
           'amount': _pendingOrder!.amount.toString(),
           'delivery_address': _pendingOrder!.deliveryAddress,
-          'items': _pendingOneTimeItems,
+          'delivery_latitude': _pendingOrder!.deliveryLatitude,
+          'delivery_longitude': _pendingOrder!.deliveryLongitude,
+          // Backend OrderCreateSerializer nests line items under `items_data`;
+          // the old `items` key was silently ignored (orders had no dishes).
+          'items_data': _pendingOneTimeItems.map((item) => {
+            'menu_item': int.tryParse('${item['menu_item']}') ?? item['menu_item'],
+            'quantity': item['quantity'],
+            'special_instructions': item['special_instructions'] ?? '',
+          }).toList(),
           'tip': _pendingOneTimeTip.toString(),
-          'payment_id': response.paymentId ?? 'COD',
         };
+        if (_isWalletApplied && _walletRedemptionAmount > 0) {
+          orderData['wallet_deduction'] = _walletRedemptionAmount.toString();
+        }
         await _orderRepository.placeOrder(orderData);
         final finalOrder = OrderModel(
           id: '',
@@ -497,6 +507,8 @@ class OrderProvider extends ChangeNotifier {
     required String deliveryAddress,
     required List<Map<String, dynamic>> items,
     double tip = 0,
+    double? deliveryLatitude,
+    double? deliveryLongitude,
   }) async {
     _isLoading = true;
     _error = null;
@@ -508,7 +520,13 @@ class OrderProvider extends ChangeNotifier {
         'order_type': 'one_time',
         'amount': amount.toString(),
         'delivery_address': deliveryAddress,
-        'items': items,
+        'delivery_latitude': deliveryLatitude,
+        'delivery_longitude': deliveryLongitude,
+        'items_data': items.map((item) => {
+          'menu_item': int.tryParse('${item['menu_item']}') ?? item['menu_item'],
+          'quantity': item['quantity'],
+          'special_instructions': item['special_instructions'] ?? '',
+        }).toList(),
         'tip': tip.toString(),
       };
 
@@ -531,6 +549,63 @@ class OrderProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
       return false;
+    }
+  }
+
+  /// Places a Cash-on-Delivery one-time order directly (no Razorpay) and
+  /// returns the created order for the success screen. Throws on failure.
+  Future<OrderModel> placeCashOnDeliveryOrder({
+    required String kitchenId,
+    required String kitchenName,
+    required String customerId,
+    required double amount,
+    required String deliveryAddress,
+    required List<Map<String, dynamic>> items,
+    double tip = 0,
+    double? deliveryLatitude,
+    double? deliveryLongitude,
+    double walletDeduction = 0,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final orderData = {
+        'kitchen': kitchenId,
+        'order_type': 'one_time',
+        'amount': amount.toString(),
+        'delivery_address': deliveryAddress,
+        'delivery_latitude': deliveryLatitude,
+        'delivery_longitude': deliveryLongitude,
+        'items_data': items.map((item) => {
+          'menu_item': int.tryParse('${item['menu_item']}') ?? item['menu_item'],
+          'quantity': item['quantity'],
+          'special_instructions': item['special_instructions'] ?? '',
+        }).toList(),
+        'tip': tip.toString(),
+      };
+      Map<String, dynamic> response;
+      if (walletDeduction > 0) {
+        orderData['wallet_deduction'] = walletDeduction.toString();
+        response = await _api.post(
+          AppConstants.placeOrderWithWalletEndpoint,
+          body: orderData,
+        );
+      } else {
+        response = await _orderRepository.placeOneTimeOrder(orderData);
+      }
+      final data = (response['data'] is Map<String, dynamic>)
+          ? response['data'] as Map<String, dynamic>
+          : response;
+      final created = OrderModel.fromMap(data, '${data['id'] ?? ''}');
+      removeCoupon();
+      return created;
+    } catch (e) {
+      _error = e.toString();
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 

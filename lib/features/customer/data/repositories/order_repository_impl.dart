@@ -16,6 +16,11 @@ class OrderRepositoryImpl implements OrderRepository {
   }
 
   @override
+  Future<Map<String, dynamic>> placeOneTimeOrder(Map<String, dynamic> orderData) async {
+    return await _api.post(AppConstants.placeOrderEndpoint, body: orderData);
+  }
+
+  @override
   Future<void> placeOrderWithWallet({
     required Map<String, dynamic> orderData,
     required double walletDeduction,
