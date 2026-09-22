@@ -337,26 +337,6 @@ class ChefProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> saveDailyMenu(Map<String, dynamic> menuData) async {
-    if (_myKitchen == null) return;
-    _isLoading = true;
-    notifyListeners();
-    try {
-      await _ensureAuthenticated();
-      final kitchenId = _myKitchen!['id'];
-      await _api.post(
-        '${AppConstants.kitchenDailyMenusEndpoint}/$kitchenId/daily-menus/',
-        body: menuData,
-      );
-      await fetchMyKitchen(_myKitchen!['chef']?.toString() ?? '');
-    } catch (e) {
-      rethrow;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
   Future<String?> pickAndUploadImage(String folderPath) async {
     try {
       await _ensureAuthenticated();

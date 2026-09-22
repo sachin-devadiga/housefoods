@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../../../../../core/theme/app_theme.dart';
 import '../../../../customer/presentation/providers/order_provider.dart';
 import '../../providers/chef_provider.dart';
-import '../manage_daily_menu_screen.dart';
 import '../daily_fulfillment_screen.dart';
 import '../dispatch_history_screen.dart';
 
@@ -113,15 +112,6 @@ class _ChefHomeTabState extends State<ChefHomeTab> {
                 const SizedBox(height: 16),
                 
                 // Business Control Tiles
-                _buildControlTile(
-                  context,
-                  "Daily Menu Planner",
-                  "Schedule your upcoming meals",
-                  Icons.calendar_month,
-                  Colors.deepPurple,
-                  () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ManageDailyMenuScreen())),
-                ),
-                const SizedBox(height: 12),
                 _buildControlTile(
                   context,
                   "Delivery Dispatch",
