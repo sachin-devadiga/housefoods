@@ -1496,8 +1496,18 @@ class CreateReviewView(generics.CreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
-        review = serializer.save()
-        kitchen = review.kitchen
+        # Upsert: one review per user per kitchen (model has unique_together).
+        # Re-rating updates the existing review instead of 500ing.
+        profile = self.request.user.profile
+        kitchen = serializer.validated_data.get('kitchen')
+        review, _ = Review.objects.update_or_create(
+            user=profile,
+            kitchen=kitchen,
+            defaults={
+                'rating': serializer.validated_data.get('rating'),
+                'comment': serializer.validated_data.get('comment', ''),
+            },
+        )
         stats = Review.objects.filter(kitchen=kitchen).aggregate(
             avg_rating=Avg('rating'),
             total=Count('id'),

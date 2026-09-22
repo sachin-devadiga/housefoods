@@ -99,7 +99,9 @@ class OrderCard extends StatelessWidget {
                           context,
                           MaterialPageRoute(
                             builder: (context) => ChatScreen(
-                              receiverId: order.chefId.isNotEmpty ? order.chefId : order.kitchenId,
+                              receiverId: order.chefUid.isNotEmpty
+                                  ? order.chefUid
+                                  : (order.chefId.isNotEmpty ? order.chefId : order.kitchenId),
                               receiverName: order.chefName.isNotEmpty ? order.chefName : order.kitchenName,
                             ),
                           ),
@@ -145,7 +147,9 @@ class OrderCard extends StatelessWidget {
                           context,
                           MaterialPageRoute(
                             builder: (context) => ChatScreen(
-                              receiverId: order.chefId.isNotEmpty ? order.chefId : order.kitchenId,
+                              receiverId: order.chefUid.isNotEmpty
+                                  ? order.chefUid
+                                  : (order.chefId.isNotEmpty ? order.chefId : order.kitchenId),
                               receiverName: order.chefName.isNotEmpty ? order.chefName : order.kitchenName,
                             ),
                           ),

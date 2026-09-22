@@ -8,6 +8,9 @@ class OrderModel {
   final String kitchenName;
   final String chefId;
   final String chefName;
+  final String chefUid;
+  final String customerUid;
+  final String customerPhone;
   final String orderType; // always 'one_time' (subscriptions removed)
   final String planId;
   final String planName;
@@ -40,6 +43,9 @@ class OrderModel {
     required this.kitchenName,
     this.chefId = '',
     this.chefName = '',
+    this.chefUid = '',
+    this.customerUid = '',
+    this.customerPhone = '',
     this.orderType = 'one_time',
     this.planId = '',
     this.planName = '',
@@ -136,6 +142,9 @@ class OrderModel {
       kitchenName: kitchenDetails?['name'] as String? ?? map['kitchenName'] ?? '',
       chefId: (kitchenDetails?['chef'] ?? '').toString(),
       chefName: (kitchenDetails?['chef_details']?['name'] as String?) ?? '',
+      chefUid: (kitchenDetails?['chef_id'] ?? kitchenDetails?['chefId'] ?? '').toString(),
+      customerUid: (customerDetails?['uid'] ?? '').toString(),
+      customerPhone: (customerDetails?['phone'] ?? '').toString(),
       orderType: map['order_type'] ?? map['orderType'] ?? 'one_time',
       planId: (map['plan'] ?? map['planId'] ?? '').toString(),
       planName: map['plan_name'] ?? map['planName'] ?? '',

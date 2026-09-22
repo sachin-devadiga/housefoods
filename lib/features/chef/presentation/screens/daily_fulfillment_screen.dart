@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../auth/data/repositories/user_repository_impl.dart';
-import '../../../auth/domain/models/user_model.dart';
 import '../../../customer/presentation/providers/order_provider.dart';
 import '../../../customer/domain/models/order_model.dart';
 import '../../../customer/domain/models/delivery_slot_model.dart';
@@ -142,25 +140,8 @@ class FulfillmentCard extends StatefulWidget {
 }
 
 class _FulfillmentCardState extends State<FulfillmentCard> {
-  UserModel? _customerProfile;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadCustomerProfile();
-  }
-
-  Future<void> _loadCustomerProfile() async {
-    final profile = await UserRepositoryImpl().getUser(widget.order.customerId);
-    if (mounted) {
-      setState(() {
-        _customerProfile = profile;
-      });
-    }
-  }
-
   Future<void> _callCustomer() async {
-    final phone = _customerProfile?.phoneNumber ?? '';
+    final phone = widget.order.customerPhone;
     if (phone.isEmpty) return;
     final uri = Uri(scheme: 'tel', path: phone);
     if (await canLaunchUrl(uri)) {
@@ -170,8 +151,10 @@ class _FulfillmentCardState extends State<FulfillmentCard> {
 
   @override
   Widget build(BuildContext context) {
-    bool hasRestrictions = _customerProfile != null && 
-        (_customerProfile!.dietaryPreference != 'none' || _customerProfile!.allergies.isNotEmpty);
+    final customerName = widget.order.customerName.isNotEmpty
+        ? widget.order.customerName
+        : 'Customer';
+    final hasPhone = widget.order.customerPhone.isNotEmpty;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -179,26 +162,6 @@ class _FulfillmentCardState extends State<FulfillmentCard> {
       elevation: 0,
       child: Column(
         children: [
-          if (hasRestrictions)
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
-              decoration: const BoxDecoration(
-                color: Color(0xFFFFF3E0),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 14),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      "Alert: ${_customerProfile!.dietaryPreference.toUpperCase()} | ${_customerProfile!.allergies.join(', ')}",
-                      style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 10),
-                    ),
-                  ),
-                ],
-              ),
-            ),
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
@@ -207,7 +170,7 @@ class _FulfillmentCardState extends State<FulfillmentCard> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(_customerProfile?.name ?? "Loading...", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    Text(customerName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(color: AppTheme.secondaryColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
@@ -244,7 +207,7 @@ class _FulfillmentCardState extends State<FulfillmentCard> {
                     ),
                     const SizedBox(width: 12),
                     IconButton.filledTonal(
-                      onPressed: _callCustomer,
+                      onPressed: hasPhone ? _callCustomer : null,
                       icon: const Icon(Icons.call, size: 18),
                       style: IconButton.styleFrom(backgroundColor: Colors.blue.shade50, foregroundColor: Colors.blue),
                     ),

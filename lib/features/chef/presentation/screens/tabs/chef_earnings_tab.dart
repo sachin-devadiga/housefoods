@@ -7,8 +7,26 @@ import '../../providers/chef_provider.dart';
 import '../payout_request_screen.dart';
 import '../../widgets/revenue_chart.dart';
 
-class ChefEarningsTab extends StatelessWidget {
+class ChefEarningsTab extends StatefulWidget {
   const ChefEarningsTab({super.key});
+
+  @override
+  State<ChefEarningsTab> createState() => _ChefEarningsTabState();
+}
+
+class _ChefEarningsTabState extends State<ChefEarningsTab> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final kitchenId =
+          context.read<ChefProvider>().myKitchen?['id']?.toString() ?? '';
+      if (kitchenId.isNotEmpty) {
+        context.read<OrderProvider>().fetchKitchenOrders(kitchenId);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -84,7 +102,7 @@ class ChefEarningsTab extends StatelessWidget {
                       title: Text(order.planName.isNotEmpty ? order.planName : 'Food order', style: const TextStyle(fontWeight: FontWeight.bold)),
                       subtitle: Text(DateFormat('dd MMM yyyy').format(order.createdAt)),
                       trailing: Text(
-                        "+₹${order.amount}",
+                        '+₹${order.amount.toStringAsFixed(0)}',
                         style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.secondaryColor),
                       ),
                     );

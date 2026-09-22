@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
-import '../../domain/models/ticket_model.dart';
 import '../providers/support_provider.dart';
 
 class RaiseTicketScreen extends StatefulWidget {
@@ -29,25 +28,19 @@ class _RaiseTicketScreenState extends State<RaiseTicketScreen> {
   void _submitTicket() async {
     if (_formKey.currentState!.validate()) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final profile = authProvider.userProfile;
-      if (profile == null) return;
+      if (authProvider.userProfile == null) return;
 
-      final uid = profile['uid'] ?? '';
-      final name = profile['name'] ?? 'Customer';
-
-      final ticket = SupportTicketModel(
-        id: '',
-        userId: uid,
-        userName: name,
-        orderId: widget.orderId,
-        category: _selectedCategory,
-        description: _descriptionController.text.trim(),
-        status: 'open',
-        createdAt: DateTime.now(),
-      );
+      final description = _descriptionController.text.trim();
+      // Backend SupportTicketCreateSerializer accepts only subject + message.
+      final subject = widget.orderId != null && widget.orderId!.isNotEmpty
+          ? '[$_selectedCategory] Order #${widget.orderId}'
+          : '[$_selectedCategory] App support';
 
       try {
-        await context.read<SupportProvider>().raiseTicket(ticket.toMap());
+        await context.read<SupportProvider>().raiseTicket({
+          'subject': subject,
+          'message': description,
+        });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
