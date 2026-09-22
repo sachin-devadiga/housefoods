@@ -1,7 +1,5 @@
 import '../../../customer/domain/models/kitchen_model.dart';
-import '../../../customer/domain/models/subscription_plan_model.dart';
 import '../../../customer/domain/models/menu_item_model.dart';
-import '../../../chef/domain/models/daily_menu_model.dart';
 
 abstract class KitchenRepository {
   Future<List<Map<String, dynamic>>> getKitchensPaged({
@@ -14,7 +12,5 @@ abstract class KitchenRepository {
 
   Future<List<KitchenModel>> getAllKitchens();
   Future<List<KitchenModel>> searchKitchens(String query);
-  Future<List<SubscriptionPlanModel>> getSubscriptionPlans(String kitchenId);
-  Future<List<DailyMenuModel>> getDailyMenus(String kitchenId);
   Future<List<MenuItemModel>> getMenuItems(String kitchenId);
 }

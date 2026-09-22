@@ -50,7 +50,7 @@ class ChefOrderCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            "Plan: ${order.planName}",
+            order.planName.isNotEmpty ? "Plan: ${order.planName}" : "One-time food order",
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 4),

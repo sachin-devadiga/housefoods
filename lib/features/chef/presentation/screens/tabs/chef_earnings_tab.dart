@@ -81,7 +81,7 @@ class ChefEarningsTab extends StatelessWidget {
                         backgroundColor: Colors.grey[100],
                         child: const Icon(Icons.payment, color: AppTheme.secondaryColor, size: 20),
                       ),
-                      title: Text(order.planName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      title: Text(order.planName.isNotEmpty ? order.planName : 'Food order', style: const TextStyle(fontWeight: FontWeight.bold)),
                       subtitle: Text(DateFormat('dd MMM yyyy').format(order.createdAt)),
                       trailing: Text(
                         "+₹${order.amount}",

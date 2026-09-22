@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_cached_image.dart';
 import '../../domain/models/kitchen_model.dart';
 import '../../domain/models/menu_item_model.dart';
@@ -10,7 +11,6 @@ import '../providers/cart_provider.dart';
 import '../providers/favorites_provider.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../widgets/review_card.dart';
-import '../widgets/meal_calendar_widget.dart';
 import '../widgets/zomato_widgets.dart';
 import '../../../chat/presentation/screens/chat_screen.dart';
 import 'cart_screen.dart';
@@ -34,8 +34,6 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<KitchenProvider>();
-      provider.fetchSubscriptionPlans(widget.kitchen.id);
-      provider.fetchDailyMenus(widget.kitchen.id);
       provider.fetchMenuItems(widget.kitchen.id);
       context.read<ReviewProvider>().fetchKitchenReviews(widget.kitchen.id);
       context.read<CartProvider>().loadCart();
@@ -118,14 +116,14 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
                         children: [
                           Icon(isOpen ? Icons.access_time : Icons.access_time_filled,
                               size: 16,
-                              color: isOpen ? ZomatoColors.ratingGreen : ZomatoColors.brand),
+                              color: isOpen ? ZomatoColors.ratingGreen : AppTheme.primaryColor),
                           const SizedBox(width: 4),
                           Text(
                             isOpen ? _todayTiming() : 'Currently closed • ${_todayTiming()}',
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: isOpen ? ZomatoColors.ratingGreen : ZomatoColors.brand,
+                              color: isOpen ? ZomatoColors.ratingGreen : AppTheme.primaryColor,
                             ),
                           ),
                           if (widget.kitchen.isVeg) ...[
@@ -175,8 +173,6 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
                 const SizedBox(height: 10),
                 _buildMenuItemsList(isOpen),
                 const SizedBox(height: 20),
-                MealCalendarWidget(kitchenId: widget.kitchen.id),
-                const SizedBox(height: 24),
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16),
                   child: Text('Reviews', style: ZomatoText.sectionTitle),
@@ -231,7 +227,7 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
               decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
               child: IconButton(
                 icon: Icon(isFav ? Icons.favorite : Icons.favorite_border,
-                    color: isFav ? ZomatoColors.brand : ZomatoColors.ink),
+                    color: isFav ? AppTheme.primaryColor : ZomatoColors.ink),
                 onPressed: () => favoritesProvider.toggleFavorite(uid, widget.kitchen.id),
               ),
             );
@@ -297,7 +293,7 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
         if (provider.isMenuItemsLoading) {
           return const Padding(
             padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: CircularProgressIndicator(color: ZomatoColors.brand)),
+            child: Center(child: CircularProgressIndicator(color: AppTheme.primaryColor)),
           );
         }
 
@@ -409,7 +405,7 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
         BoxDecoration deco = BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: ZomatoColors.brand.withValues(alpha: 0.4)),
+          border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.4)),
           boxShadow: [
             BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 6, offset: const Offset(0, 2)),
           ],
@@ -426,16 +422,16 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
                   onTap: () => cartProvider.updateItemQuantity(cartItem.id, cartItem.quantity - 1),
                   child: const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                    child: Icon(Icons.remove, size: 17, color: ZomatoColors.brand),
+                    child: Icon(Icons.remove, size: 17, color: AppTheme.primaryColor),
                   ),
                 ),
                 Text('${cartItem.quantity}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, color: ZomatoColors.brand)),
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryColor)),
                 InkWell(
                   onTap: () => cartProvider.updateItemQuantity(cartItem.id, cartItem.quantity + 1),
                   child: const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                    child: Icon(Icons.add, size: 17, color: ZomatoColors.brand),
+                    child: Icon(Icons.add, size: 17, color: AppTheme.primaryColor),
                   ),
                 ),
               ],
@@ -452,7 +448,7 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
             child: const Text('ADD',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                    color: ZomatoColors.brand, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.5)),
+                    color: AppTheme.primaryColor, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.5)),
           ),
         );
       },
@@ -466,7 +462,7 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
         return Container(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
           decoration: BoxDecoration(
-            color: ZomatoColors.brand,
+            color: AppTheme.primaryColor,
             boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 10)],
           ),
           child: GestureDetector(
@@ -487,7 +483,7 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
         if (provider.isLoading) {
           return const Padding(
             padding: EdgeInsets.symmetric(vertical: 20),
-            child: Center(child: CircularProgressIndicator(color: ZomatoColors.brand)),
+            child: Center(child: CircularProgressIndicator(color: AppTheme.primaryColor)),
           );
         }
 

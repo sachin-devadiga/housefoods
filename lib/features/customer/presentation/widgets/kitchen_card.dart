@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_cached_image.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../domain/models/kitchen_model.dart';
@@ -96,7 +97,7 @@ class KitchenCard extends StatelessWidget {
                               ),
                               child: Icon(
                                 isFav ? Icons.favorite : Icons.favorite_border,
-                                color: isFav ? ZomatoColors.brand : Colors.grey,
+                                color: isFav ? AppTheme.primaryColor : Colors.grey,
                                 size: 19,
                               ),
                             ),

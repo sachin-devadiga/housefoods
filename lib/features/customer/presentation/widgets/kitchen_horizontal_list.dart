@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_cached_image.dart';
 import '../../domain/models/kitchen_model.dart';
 import '../screens/kitchen_details_screen.dart';
@@ -32,7 +33,7 @@ class KitchenHorizontalList extends StatelessWidget {
               ),
               TextButton(
                 onPressed: () {}, // Action for "See All"
-                child: const Text('See All', style: TextStyle(color: ZomatoColors.brand)),
+                child: const Text('See All', style: TextStyle(color: AppTheme.primaryColor)),
               ),
             ],
           ),

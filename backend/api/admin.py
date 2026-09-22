@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.db.models import Count, Sum, Q
 from .models import (
     UserProfile, Address, Kitchen, KitchenImage, KitchenCategory,
-    MenuCategory, MenuItem, SubscriptionPlan, DailyMenu, Order,
+    MenuCategory, MenuItem, Order,
     DeliveryLog, Payment, WalletTransaction, Review, Coupon,
     SupportTicket, Banner, AdminSetting, PayoutRequest,
     DeliveryDocument, VoicePin, VoiceAuthorization,
@@ -179,30 +179,6 @@ class MenuItemAdmin(BulkActionsAdmin):
     veg_badge.short_description = 'Type'
 
 
-@admin.register(SubscriptionPlan)
-class SubscriptionPlanAdmin(BulkActionsAdmin):
-    list_display = ['name', 'kitchen', 'price', 'duration_days', 'meals_per_day', 'active_badge']
-    list_filter = ['is_active', 'kitchen']
-    search_fields = ['name', 'kitchen__name']
-    list_editable = ['price', 'duration_days', 'meals_per_day']
-
-    def active_badge(self, obj):
-        return badge(obj.is_active, 'Active' if obj.is_active else 'Inactive')
-    active_badge.short_description = 'Active'
-
-
-@admin.register(DailyMenu)
-class DailyMenuAdmin(BulkActionsAdmin):
-    list_display = ['kitchen', 'date', 'active_badge', 'created_at']
-    list_filter = ['is_active', 'date', 'kitchen']
-    search_fields = ['kitchen__name']
-    date_hierarchy = 'date'
-
-    def active_badge(self, obj):
-        return badge(obj.is_active, 'Active' if obj.is_active else 'Inactive')
-    active_badge.short_description = 'Active'
-
-
 @admin.register(Order)
 class OrderAdmin(BulkActionsAdmin):
     list_display = ['id', 'customer', 'kitchen', 'amount', 'status_badge', 'delivery_status_badge', 'delivery_partner', 'created_at']
@@ -212,7 +188,6 @@ class OrderAdmin(BulkActionsAdmin):
     date_hierarchy = 'created_at'
     fieldsets = [
         ('Order Info', {'fields': ['id', 'customer', 'kitchen', 'amount', 'delivery_fee']}),
-        ('Plan', {'fields': ['plan', 'plan_name']}),
         ('Status', {'fields': ['status', 'delivery_status']}),
         ('Delivery', {'fields': ['delivery_address', 'delivery_partner', 'delivery_slot_id', 'meal_type']}),
         ('Schedule', {'fields': ['start_date', 'end_date', 'assigned_at', 'picked_up_at', 'delivered_at']}),

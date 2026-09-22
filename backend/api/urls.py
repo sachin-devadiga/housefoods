@@ -6,7 +6,6 @@ from . import ai_chat_view
 router = DefaultRouter()
 router.register(r'kitchens/(?P<kitchen_pk>[^/.]+)/menu-categories', views.MenuCategoryViewSet, basename='menu-category')
 router.register(r'kitchens/(?P<kitchen_pk>[^/.]+)/menu-items', views.MenuItemViewSet, basename='menu-item')
-router.register(r'kitchens/(?P<kitchen_pk>[^/.]+)/plans', views.SubscriptionPlanViewSet, basename='subscription-plan')
 
 urlpatterns = [
     # App Version (public)
@@ -38,10 +37,6 @@ urlpatterns = [
     path('kitchens/<int:pk>/status/', views.KitchenStatusUpdateView.as_view(), name='kitchen-status-update'),
     path('kitchens/<int:pk>/toggle-open/', views.KitchenToggleOpenView.as_view(), name='kitchen-toggle-open'),
 
-    # Kitchen sub-resources (non-viewset)
-    path('kitchens/<int:kitchen_pk>/daily-menus/', views.DailyMenuListCreateView.as_view(), name='daily-menu-list-create'),
-    path('kitchens/<int:kitchen_pk>/daily-menus/<int:pk>/', views.DailyMenuDetailView.as_view(), name='daily-menu-detail'),
-
     # Kitchen Images
     path('kitchens/<int:kitchen_pk>/images/', views.KitchenImageUploadView.as_view(), name='kitchen-image-upload'),
     path('kitchens/<int:kitchen_pk>/images/delete/', views.KitchenImageDeleteView.as_view(), name='kitchen-image-delete'),
@@ -54,8 +49,6 @@ urlpatterns = [
     path('orders/place/', views.PlaceOrderView.as_view(), name='place-order'),
     path('orders/place-with-wallet/', views.PlaceOrderWithWalletView.as_view(), name='place-order-wallet'),
     path('orders/payment-success/', views.PaymentSuccessView.as_view(), name='payment-success'),
-    path('orders/skip-meal/', views.SkipMealView.as_view(), name='skip-meal'),
-    path('orders/cancel-subscription/', views.CancelSubscriptionView.as_view(), name='cancel-subscription'),
 
     # Cart
     path('cart/', views.CartView.as_view(), name='cart'),

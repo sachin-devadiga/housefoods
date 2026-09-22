@@ -1,7 +1,6 @@
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/api_service.dart';
 import '../../../../features/customer/domain/models/order_model.dart';
-import '../../../../features/customer/domain/models/delivery_log_model.dart';
 import '../../../../features/customer/domain/repositories/order_repository.dart';
 
 class OrderRepositoryImpl implements OrderRepository {
@@ -54,38 +53,5 @@ class OrderRepositoryImpl implements OrderRepository {
   Future<void> updateOrderStatus(String orderId, String newStatus) async {
     final endpoint = '${AppConstants.orderStatusEndpoint}/$orderId/status/';
     await _api.post(endpoint, body: {'status': newStatus});
-  }
-
-  @override
-  Future<void> togglePauseSubscription(String orderId, bool isPaused) async {
-    final status = isPaused ? 'paused' : 'active';
-    await updateOrderStatus(orderId, status);
-  }
-
-  @override
-  Future<void> skipMealTransaction({
-    required String userId,
-    required DeliveryLogModel log,
-    required double refundAmount,
-    required String kitchenName,
-  }) async {
-    await _api.post(AppConstants.skipMealEndpoint, body: {
-      'order_id': log.orderId,
-      'date': log.date.toIso8601String().split('T')[0],
-      'refund_amount': refundAmount,
-    });
-  }
-
-  @override
-  Future<void> cancelSubscriptionTransaction({
-    required String userId,
-    required String orderId,
-    required double refundAmount,
-    required String kitchenName,
-  }) async {
-    await _api.post(AppConstants.cancelSubscriptionEndpoint, body: {
-      'order_id': orderId,
-      'refund_amount': refundAmount,
-    });
   }
 }

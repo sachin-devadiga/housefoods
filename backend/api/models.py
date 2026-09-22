@@ -218,47 +218,6 @@ class MenuItem(models.Model):
         return self.name
 
 
-class SubscriptionPlan(models.Model):
-    kitchen = models.ForeignKey(Kitchen, on_delete=models.CASCADE, related_name='plans')
-    name = models.CharField(max_length=255)
-    description = models.TextField(blank=True, default='')
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-    duration_days = models.IntegerField(default=30)
-    meals_per_day = models.IntegerField(default=1)
-    inclusions = models.JSONField(default=list, blank=True)
-    is_veg = models.BooleanField(default=True)
-    image_url = models.CharField(max_length=500, blank=True, default='')
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = 'subscription_plans'
-
-    def __str__(self):
-        return f'{self.kitchen.name} - {self.name}'
-
-
-class DailyMenu(models.Model):
-    kitchen = models.ForeignKey(Kitchen, on_delete=models.CASCADE, related_name='daily_menus')
-    date = models.DateField()
-    meal_title = models.CharField(max_length=255, blank=True, default='')
-    description = models.TextField(blank=True, default='')
-    image_url = models.CharField(max_length=500, blank=True, default='')
-    is_veg = models.BooleanField(default=True)
-    items = models.JSONField(default=list, blank=True)
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = 'daily_menus'
-        unique_together = ['kitchen', 'date']
-
-    def __str__(self):
-        return f'{self.kitchen.name} - {self.date}'
-
-
 class Order(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Pending'),
@@ -277,13 +236,11 @@ class Order(models.Model):
 
     ORDER_TYPE_CHOICES = [
         ('one_time', 'One-Time Order'),
-        ('subscription', 'Subscription'),
     ]
 
     customer = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='orders')
     kitchen = models.ForeignKey(Kitchen, on_delete=models.CASCADE, related_name='orders')
-    order_type = models.CharField(max_length=20, choices=ORDER_TYPE_CHOICES, default='subscription')
-    plan = models.ForeignKey(SubscriptionPlan, on_delete=models.SET_NULL, null=True, blank=True)
+    order_type = models.CharField(max_length=20, choices=ORDER_TYPE_CHOICES, default='one_time')
     plan_name = models.CharField(max_length=255, blank=True, default='')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)

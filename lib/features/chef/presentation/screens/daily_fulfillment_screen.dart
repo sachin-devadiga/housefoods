@@ -211,7 +211,7 @@ class _FulfillmentCardState extends State<FulfillmentCard> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(color: AppTheme.secondaryColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
-                      child: Text(widget.order.planName, style: const TextStyle(color: AppTheme.secondaryColor, fontWeight: FontWeight.bold, fontSize: 10)),
+                      child: Text(widget.order.planName.isNotEmpty ? widget.order.planName : 'One-time', style: const TextStyle(color: AppTheme.secondaryColor, fontWeight: FontWeight.bold, fontSize: 10)),
                     ),
                   ],
                 ),

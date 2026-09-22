@@ -1,10 +1,8 @@
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/api_service.dart';
 import '../../../../features/customer/domain/models/kitchen_model.dart';
-import '../../../../features/customer/domain/models/subscription_plan_model.dart';
 import '../../../../features/customer/domain/models/menu_item_model.dart';
 import '../../../../features/customer/domain/repositories/kitchen_repository.dart';
-import '../../../../features/chef/domain/models/daily_menu_model.dart';
 
 class KitchenRepositoryImpl implements KitchenRepository {
   final ApiService _api;
@@ -50,30 +48,6 @@ class KitchenRepositoryImpl implements KitchenRepository {
     final list = (data['data'] as List?) ?? [];
     return list
         .map((e) => KitchenModel.fromMap(e as Map<String, dynamic>, e['id'].toString()))
-        .toList();
-  }
-
-  @override
-  Future<List<SubscriptionPlanModel>> getSubscriptionPlans(String kitchenId) async {
-    final data = await _api.get('${AppConstants.plansEndpoint}/$kitchenId/plans/');
-    final list = (data['data'] as List?) ?? [];
-    return list
-        .map((e) => SubscriptionPlanModel.fromMap(e as Map<String, dynamic>, e['id'].toString()))
-        .toList();
-  }
-
-  @override
-  Future<List<DailyMenuModel>> getDailyMenus(String kitchenId) async {
-    final now = DateTime.now();
-    final start = DateTime(now.year, now.month, now.day).toIso8601String().split('T')[0];
-    final end = now.add(const Duration(days: 14)).toIso8601String().split('T')[0];
-    final data = await _api.get(
-      '${AppConstants.kitchenDailyMenusEndpoint}/$kitchenId/daily-menus/',
-      queryParams: {'start_date': start, 'end_date': end},
-    );
-    final list = (data['data'] as List?) ?? [];
-    return list
-        .map((e) => DailyMenuModel.fromMap(e as Map<String, dynamic>, e['id'].toString()))
         .toList();
   }
 

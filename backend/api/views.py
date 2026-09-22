@@ -28,7 +28,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from .models import (
     OTP, UserProfile, Address, Kitchen, KitchenImage, KitchenCategory,
-    MenuCategory, MenuItem, SubscriptionPlan, DailyMenu, Order, OrderItem,
+    MenuCategory, MenuItem, Order, OrderItem,
     Cart, CartItem, DeliveryLog, Payment, WalletTransaction, Review, Coupon,
     Notification, SupportTicket, Banner, AdminSetting, PayoutRequest,
     ChatMessage, DeliveryDocument, VoicePin, VoiceAuthorization,
@@ -42,8 +42,8 @@ from .notification_utils import (
 from .serializers import (
     UserProfileSerializer, UserProfileMiniSerializer, AddressSerializer,
     KitchenCategorySerializer, KitchenSerializer, KitchenListSerializer,
-    MenuCategorySerializer, MenuItemSerializer, SubscriptionPlanSerializer,
-    DailyMenuSerializer, OrderSerializer, OrderCreateSerializer, OrderItemSerializer,
+    MenuCategorySerializer, MenuItemSerializer,
+    OrderSerializer, OrderCreateSerializer, OrderItemSerializer,
     CartSerializer, CartItemSerializer,
     DeliveryLogSerializer, PaymentSerializer, WalletTransactionSerializer,
     ReviewSerializer, ReviewCreateSerializer, CouponSerializer,
@@ -484,100 +484,6 @@ class MenuItemViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         self._get_kitchen()
         instance.delete()
-
-
-class SubscriptionPlanViewSet(viewsets.ModelViewSet):
-    serializer_class = SubscriptionPlanSerializer
-    permission_classes = [IsAuthenticated]
-    pagination_class = None
-
-    def get_queryset(self):
-        kitchen_id = self.kwargs.get('kitchen_pk')
-        profile = self.request.user.profile
-        if profile.role == 'chef':
-            return SubscriptionPlan.objects.filter(kitchen_id=kitchen_id, kitchen__chef=profile)
-        return SubscriptionPlan.objects.filter(kitchen_id=kitchen_id)
-
-    def _get_kitchen(self):
-        try:
-            kitchen = Kitchen.objects.get(pk=self.kwargs['kitchen_pk'])
-        except Kitchen.DoesNotExist:
-            raise NotFound('Kitchen not found')
-        profile = self.request.user.profile
-        if profile.role != 'admin' and kitchen.chef != profile:
-            raise PermissionDenied('You do not own this kitchen')
-        return kitchen
-
-    def perform_create(self, serializer):
-        serializer.save(kitchen=self._get_kitchen())
-
-    def perform_update(self, serializer):
-        self._get_kitchen()
-        serializer.save()
-
-    def perform_destroy(self, instance):
-        self._get_kitchen()
-        instance.delete()
-
-
-class DailyMenuListCreateView(generics.ListCreateAPIView):
-    serializer_class = DailyMenuSerializer
-    permission_classes = [IsAuthenticated]
-    pagination_class = None
-
-    def get_queryset(self):
-        kitchen_id = self.kwargs.get('kitchen_pk')
-        profile = self.request.user.profile
-        if profile.role == 'chef':
-            qs = DailyMenu.objects.filter(kitchen_id=kitchen_id, kitchen__chef=profile)
-        else:
-            qs = DailyMenu.objects.filter(kitchen_id=kitchen_id)
-        start = self.request.query_params.get('start_date')
-        end = self.request.query_params.get('end_date')
-        if start:
-            qs = qs.filter(date__gte=start)
-        if end:
-            qs = qs.filter(date__lte=end)
-        return qs
-
-    def perform_create(self, serializer):
-        try:
-            kitchen = Kitchen.objects.get(pk=self.kwargs['kitchen_pk'])
-        except Kitchen.DoesNotExist:
-            raise NotFound('Kitchen not found')
-        profile = self.request.user.profile
-        if profile.role != 'admin' and kitchen.chef != profile:
-            raise PermissionDenied('You do not own this kitchen')
-        serializer.save(kitchen=kitchen)
-
-
-class DailyMenuDetailView(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class = DailyMenuSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        kitchen_id = self.kwargs['kitchen_pk']
-        profile = self.request.user.profile
-        if profile.role == 'admin':
-            return DailyMenu.objects.filter(kitchen_id=kitchen_id)
-        return DailyMenu.objects.filter(kitchen_id=kitchen_id, kitchen__chef=profile)
-
-    def perform_update(self, serializer):
-        self._check_kitchen_owner()
-        serializer.save()
-
-    def perform_destroy(self, instance):
-        self._check_kitchen_owner()
-        instance.delete()
-
-    def _check_kitchen_owner(self):
-        try:
-            kitchen = Kitchen.objects.get(pk=self.kwargs['kitchen_pk'])
-        except Kitchen.DoesNotExist:
-            raise NotFound('Kitchen not found')
-        profile = self.request.user.profile
-        if profile.role != 'admin' and kitchen.chef != profile:
-            raise PermissionDenied('You do not own this kitchen')
 
 
 # ──────────────────────────────────────────────
@@ -1305,98 +1211,6 @@ class SubmitDailyFeedbackView(APIView):
 # SKIP / CANCEL TRANSACTION VIEWS
 # ──────────────────────────────────────────────
 
-class SkipMealView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        order_id = request.data.get('order_id')
-        date = request.data.get('date')
-
-        if not order_id or not date:
-            return Response({'error': 'order_id and date required'}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            order = Order.objects.get(pk=order_id, customer=request.user.profile)
-        except Order.DoesNotExist:
-            return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
-
-        skip_limit = timezone.make_aware(
-            timezone.datetime.strptime(date, '%Y-%m-%d').replace(hour=2),
-            timezone.get_current_timezone(),
-        )
-        if timezone.now() > skip_limit:
-            return Response({'error': 'Cut-off time passed (2 hours before delivery)'}, status=status.HTTP_400_BAD_REQUEST)
-
-        duration = (order.end_date - order.start_date).days or 1
-        daily_rate = Decimal(str(order.amount)) / duration
-
-        with transaction.atomic():
-            DeliveryLog.objects.create(
-                order=order,
-                date=date,
-                status='skipped',
-                refund_amount=float(daily_rate),
-            )
-            profile = request.user.profile
-            profile.wallet_balance += daily_rate
-            profile.save()
-            WalletTransaction.objects.create(
-                user=profile,
-                amount=daily_rate,
-                type='credit',
-                category='refund',
-                description=f'Refund for skipped meal ({order.kitchen.name})',
-            )
-
-        return Response({'success': True, 'refund_amount': daily_rate})
-
-
-class CancelSubscriptionView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        order_id = request.data.get('order_id')
-        if not order_id:
-            return Response({'error': 'order_id required'}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            order = Order.objects.get(pk=order_id, customer=request.user.profile)
-        except Order.DoesNotExist:
-            return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
-
-        if order.status == 'cancelled':
-            return Response({'error': 'Already cancelled'}, status=status.HTTP_400_BAD_REQUEST)
-
-        now = timezone.now().date()
-        if now > order.end_date:
-            return Response({'error': 'Subscription has ended'}, status=status.HTTP_400_BAD_REQUEST)
-
-        effective_now = max(now, order.start_date)
-        total_days = (order.end_date - order.start_date).days or 1
-        remaining_days = max(0, (order.end_date - effective_now).days)
-        daily_rate = Decimal(str(order.amount)) / Decimal(str(total_days))
-        refund_amount = daily_rate * Decimal(str(remaining_days))
-
-        with transaction.atomic():
-            order.status = 'cancelled'
-            order.save()
-            profile = request.user.profile
-            profile.wallet_balance += refund_amount
-            profile.save()
-            WalletTransaction.objects.create(
-                user=profile,
-                amount=refund_amount,
-                type='credit',
-                category='refund',
-                description=f'Refund for cancelled subscription ({order.kitchen.name})',
-            )
-
-        from .notification_utils import notify_restaurant_order_cancelled
-        notify_restaurant_order_cancelled(order.kitchen.chef, order)
-
-        return Response({'success': True, 'refund_amount': refund_amount})
-
-
 # ──────────────────────────────────────────────
 # CART VIEWS
 # ──────────────────────────────────────────────
@@ -1504,7 +1318,7 @@ class PlaceOrderView(APIView):
             return auth_check
 
         kitchen_id = request.data.get('kitchen')
-        order_type = request.data.get('order_type', 'subscription')
+        order_type = request.data.get('order_type', 'one_time')
 
         if kitchen_id:
             try:
@@ -1517,7 +1331,7 @@ class PlaceOrderView(APIView):
                 return Response({'error': 'Kitchen not found'}, status=status.HTTP_404_NOT_FOUND)
 
         if order_type == 'one_time':
-            items_data = request.data.get('items', [])
+            items_data = request.data.get('items_data') or request.data.get('items', [])
             if not items_data:
                 return Response({'error': 'items are required for one-time orders'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1536,29 +1350,7 @@ class PlaceOrderView(APIView):
             notify_customer_order_status(order, 'placed')
             return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
-        serializer = OrderCreateSerializer(data=request.data, context={'request': request})
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        plan_id = request.data.get('plan')
-        if plan_id:
-            try:
-                plan = SubscriptionPlan.objects.get(pk=plan_id)
-                if Decimal(str(serializer.validated_data.get('amount', 0))) != plan.price:
-                    return Response({'error': 'Amount does not match plan price'}, status=status.HTTP_400_BAD_REQUEST)
-                start = serializer.validated_data.get('start_date')
-                end = serializer.validated_data.get('end_date')
-                if start and end and (end - start).days != plan.duration_days:
-                    return Response({'error': f'Subscription period must be {plan.duration_days} days'}, status=status.HTTP_400_BAD_REQUEST)
-            except SubscriptionPlan.DoesNotExist:
-                return Response({'error': 'Plan not found'}, status=status.HTTP_404_NOT_FOUND)
-
-        order = serializer.save()
-
-        notify_chef_new_order(order.kitchen.chef, order)
-        notify_customer_order_status(order, 'placed')
-
-        return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
+        return Response({'error': 'Only one-time orders are supported'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class PlaceOrderWithWalletView(APIView):
@@ -1571,7 +1363,7 @@ class PlaceOrderWithWalletView(APIView):
             return auth_check
 
         kitchen_id = request.data.get('kitchen')
-        order_type = request.data.get('order_type', 'subscription')
+        order_type = request.data.get('order_type', 'one_time')
 
         if kitchen_id:
             try:
@@ -1584,7 +1376,7 @@ class PlaceOrderWithWalletView(APIView):
                 return Response({'error': 'Kitchen not found'}, status=status.HTTP_404_NOT_FOUND)
 
         if order_type == 'one_time':
-            items_data = request.data.get('items', [])
+            items_data = request.data.get('items_data') or request.data.get('items', [])
             if not items_data:
                 return Response({'error': 'items are required for one-time orders'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1620,46 +1412,7 @@ class PlaceOrderWithWalletView(APIView):
             notify_customer_order_status(order, 'placed')
             return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
-        serializer = OrderCreateSerializer(data=request.data, context={'request': request})
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        plan_id = request.data.get('plan')
-        if plan_id:
-            try:
-                plan = SubscriptionPlan.objects.get(pk=plan_id)
-                if Decimal(str(serializer.validated_data.get('amount', 0))) != plan.price:
-                    return Response({'error': 'Amount does not match plan price'}, status=status.HTTP_400_BAD_REQUEST)
-                start = serializer.validated_data.get('start_date')
-                end = serializer.validated_data.get('end_date')
-                if start and end and (end - start).days != plan.duration_days:
-                    return Response({'error': f'Subscription period must be {plan.duration_days} days'}, status=status.HTTP_400_BAD_REQUEST)
-            except SubscriptionPlan.DoesNotExist:
-                return Response({'error': 'Plan not found'}, status=status.HTTP_404_NOT_FOUND)
-
-        raw_deduction = request.data.get('wallet_deduction')
-        wallet_deduction = Decimal(str(raw_deduction)) if raw_deduction else Decimal('0')
-        profile = UserProfile.objects.select_for_update().get(pk=request.user.profile.pk)
-
-        if wallet_deduction > profile.wallet_balance:
-            return Response({'error': 'Insufficient wallet balance'}, status=status.HTTP_400_BAD_REQUEST)
-
-        order = serializer.save()
-        profile.wallet_balance -= wallet_deduction
-        profile.save()
-
-        WalletTransaction.objects.create(
-            user=profile,
-            amount=wallet_deduction,
-            type='debit',
-            category='order_payment',
-            description=f'Used credits for subscription to {order.kitchen.name}',
-        )
-
-        notify_chef_new_order(order.kitchen.chef, order)
-        notify_customer_order_status(order, 'placed')
-
-        return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
+        return Response({'error': 'Only one-time orders are supported'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class PaymentSuccessView(APIView):

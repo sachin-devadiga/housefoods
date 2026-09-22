@@ -210,7 +210,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Track Daily Meal"),
+        title: const Text('Track Order'),
       ),
       body: Column(
         children: [
@@ -375,12 +375,12 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
 
   String _getStatusDescription(String status) {
     switch (status) {
-      case 'active': return "Your subscription is confirmed.";
+      case 'active': return 'Your order is confirmed.';
       case 'preparing':
-      case 'ready_for_delivery': return "Chef is preparing your healthy meal.";
+      case 'ready_for_delivery': return 'The chef is preparing your food.';
       case 'picked_up':
-      case 'out for delivery': return "Our partner is on the way to your door.";
-      case 'delivered': return "Enjoy your meal! See you tomorrow.";
+      case 'out for delivery': return 'Our partner is on the way to your door.';
+      case 'delivered': return 'Enjoy your meal!';
       default: return "Processing your order...";
     }
   }

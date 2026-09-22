@@ -8,7 +8,7 @@ class OrderModel {
   final String kitchenName;
   final String chefId;
   final String chefName;
-  final String orderType; // 'one_time' or 'subscription'
+  final String orderType; // always 'one_time' (subscriptions removed)
   final String planId;
   final String planName;
   final double amount;
@@ -38,7 +38,7 @@ class OrderModel {
     required this.kitchenName,
     this.chefId = '',
     this.chefName = '',
-    this.orderType = 'subscription',
+    this.orderType = 'one_time',
     this.planId = '',
     this.planName = '',
     required this.amount,
@@ -61,8 +61,7 @@ class OrderModel {
     this.items = const [],
   });
 
-  bool get isOneTimeOrder => orderType == 'one_time';
-  bool get isSubscriptionOrder => orderType == 'subscription';
+  bool get isOneTimeOrder => true;
 
   Map<String, dynamic> toMap() {
     final map = <String, dynamic>{
@@ -116,7 +115,7 @@ class OrderModel {
       kitchenName: kitchenDetails?['name'] as String? ?? map['kitchenName'] ?? '',
       chefId: (kitchenDetails?['chef'] ?? '').toString(),
       chefName: (kitchenDetails?['chef_details']?['name'] as String?) ?? '',
-      orderType: map['order_type'] ?? map['orderType'] ?? 'subscription',
+      orderType: map['order_type'] ?? map['orderType'] ?? 'one_time',
       planId: (map['plan'] ?? map['planId'] ?? '').toString(),
       planName: map['plan_name'] ?? map['planName'] ?? '',
       amount: double.tryParse(map['amount']?.toString() ?? '0') ?? 0.0,

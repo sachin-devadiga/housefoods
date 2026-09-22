@@ -3,10 +3,8 @@ import 'package:geolocator/geolocator.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/services/prefs_service.dart';
 import '../../../../features/customer/domain/models/kitchen_model.dart';
-import '../../../../features/customer/domain/models/subscription_plan_model.dart';
 import '../../../../features/customer/domain/models/menu_item_model.dart';
 import '../../../../features/customer/domain/repositories/kitchen_repository.dart';
-import '../../../../features/chef/domain/models/daily_menu_model.dart';
 
 class KitchenProvider extends ChangeNotifier {
   final KitchenRepository _repository;
@@ -48,20 +46,8 @@ class KitchenProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
-  bool _isPlansLoading = false;
-  bool get isPlansLoading => _isPlansLoading;
-
-  bool _isMenusLoading = false;
-  bool get isMenusLoading => _isMenusLoading;
-
   String? _error;
   String? get error => _error;
-
-  Map<DateTime, DailyMenuModel> _dailyMenus = {};
-  Map<DateTime, DailyMenuModel> get dailyMenus => _dailyMenus;
-
-  List<SubscriptionPlanModel> _plans = [];
-  List<SubscriptionPlanModel> get plans => _plans;
 
   List<MenuItemModel> _menuItems = [];
   List<MenuItemModel> get menuItems => _menuItems;
@@ -181,21 +167,6 @@ class KitchenProvider extends ChangeNotifier {
   }
 
   double? getDistanceTo(String kitchenId) => _kitchenDistances[kitchenId];
-
-  Future<void> fetchSubscriptionPlans(String kitchenId) async {
-    _isPlansLoading = true; _plans = []; notifyListeners();
-    try {
-      _plans = await _repository.getSubscriptionPlans(kitchenId);
-    } catch (e) { debugPrint("Plans error: $e"); } finally { _isPlansLoading = false; notifyListeners(); }
-  }
-
-  Future<void> fetchDailyMenus(String kitchenId) async {
-    _isMenusLoading = true; _dailyMenus = {}; notifyListeners();
-    try {
-      final menus = await _repository.getDailyMenus(kitchenId);
-      _dailyMenus = { for (var menu in menus) DateTime(menu.date.year, menu.date.month, menu.date.day): menu };
-    } catch (e) { debugPrint("Menus error: $e"); } finally { _isMenusLoading = false; notifyListeners(); }
-  }
 
   Future<void> fetchMenuItems(String kitchenId) async {
     _isMenuItemsLoading = true; _menuItems = []; notifyListeners();

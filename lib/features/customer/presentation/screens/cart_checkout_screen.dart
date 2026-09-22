@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 // ignore_for_file: deprecated_member_use
 import '../../../../core/theme/app_theme.dart';
-import '../widgets/zomato_widgets.dart';
+
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../auth/data/repositories/user_repository_impl.dart';
 import '../../../auth/domain/models/user_model.dart';
@@ -158,7 +158,7 @@ class _CartCheckoutScreenState extends State<CartCheckoutScreen> {
         ),
         child: ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: ZomatoColors.brand,
+            backgroundColor: AppTheme.primaryColor,
             minimumSize: const Size(double.infinity, 52),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
@@ -199,10 +199,10 @@ class _CartCheckoutScreenState extends State<CartCheckoutScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: ZomatoColors.brand.withValues(alpha: 0.1),
+                    color: AppTheme.primaryColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(Icons.delivery_dining, color: ZomatoColors.brand),
+                  child: Icon(Icons.delivery_dining, color: AppTheme.primaryColor),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -221,7 +221,7 @@ class _CartCheckoutScreenState extends State<CartCheckoutScreen> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.location_on, color: ZomatoColors.brand, size: 20),
+                const Icon(Icons.location_on, color: AppTheme.primaryColor, size: 20),
                 const SizedBox(width: 8),
                 Expanded(child: _buildAddressBody()),
                 TextButton(
@@ -261,7 +261,7 @@ class _CartCheckoutScreenState extends State<CartCheckoutScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.store, color: ZomatoColors.brand, size: 20),
+                Icon(Icons.store, color: AppTheme.primaryColor, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(widget.kitchenName, style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -311,10 +311,10 @@ class _CartCheckoutScreenState extends State<CartCheckoutScreen> {
                 value: _PayMode.online,
                 groupValue: _payMode,
                 onChanged: (v) => setState(() => _payMode = v ?? _PayMode.online),
-                activeColor: ZomatoColors.brand,
+                activeColor: AppTheme.primaryColor,
                 title: const Text('UPI / Card / Netbanking', style: TextStyle(fontWeight: FontWeight.w600)),
                 subtitle: const Text('Pay securely online', style: TextStyle(fontSize: 12)),
-                secondary: const Icon(Icons.smartphone, color: ZomatoColors.brand),
+                secondary: const Icon(Icons.smartphone, color: AppTheme.primaryColor),
                 dense: true,
               ),
               const Divider(height: 1, indent: 16, endIndent: 16),
@@ -322,7 +322,7 @@ class _CartCheckoutScreenState extends State<CartCheckoutScreen> {
                 value: _PayMode.cod,
                 groupValue: _payMode,
                 onChanged: (v) => setState(() => _payMode = v ?? _PayMode.online),
-                activeColor: ZomatoColors.brand,
+                activeColor: AppTheme.primaryColor,
                 title: const Text('Cash on Delivery', style: TextStyle(fontWeight: FontWeight.w600)),
                 subtitle: const Text('Pay at your doorstep', style: TextStyle(fontSize: 12)),
                 secondary: const Icon(Icons.payments_outlined, color: Colors.green),
@@ -365,7 +365,7 @@ class _CartCheckoutScreenState extends State<CartCheckoutScreen> {
                           const SizedBox(width: 10),
                           ElevatedButton(
                             onPressed: _isCouponWorking ? null : _applyCoupon,
-                            style: ElevatedButton.styleFrom(backgroundColor: ZomatoColors.brand),
+                            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
                             child: _isCouponWorking
                                 ? const SizedBox(
                                     width: 18,
@@ -436,7 +436,7 @@ class _CartCheckoutScreenState extends State<CartCheckoutScreen> {
             onChanged: (v) {
               orderProvider.toggleWallet(v, payable, balance);
             },
-            activeThumbColor: ZomatoColors.brand,
+            activeThumbColor: AppTheme.primaryColor,
             title: Text('Use ₹${balance.toStringAsFixed(0)} available',
                 style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
             subtitle: orderProvider.isWalletApplied
@@ -467,10 +467,10 @@ class _CartCheckoutScreenState extends State<CartCheckoutScreen> {
                   label: Text(t == 0 ? 'No tip' : '₹${t.toStringAsFixed(0)}'),
                   selected: selected,
                   onSelected: (_) => setState(() => _tip = t),
-                  selectedColor: ZomatoColors.brand.withValues(alpha: 0.15),
-                  side: BorderSide(color: selected ? ZomatoColors.brand : Colors.grey.shade300),
+                  selectedColor: AppTheme.primaryColor.withValues(alpha: 0.15),
+                  side: BorderSide(color: selected ? AppTheme.primaryColor : Colors.grey.shade300),
                   labelStyle: TextStyle(
-                    color: selected ? ZomatoColors.brand : Colors.black87,
+                    color: selected ? AppTheme.primaryColor : Colors.black87,
                     fontWeight: selected ? FontWeight.bold : FontWeight.normal,
                   ),
                 );
@@ -567,7 +567,7 @@ class _CartCheckoutScreenState extends State<CartCheckoutScreen> {
                     setState(() => _selectedAddress = val);
                     Navigator.pop(ctx);
                   },
-                  activeColor: ZomatoColors.brand,
+                  activeColor: AppTheme.primaryColor,
                 ),
                 title: Text(addr.fullAddress),
                 subtitle: Text(addr.label),

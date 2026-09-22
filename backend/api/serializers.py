@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.utils import timezone
 from .models import (
     UserProfile, Address, Kitchen, KitchenImage, KitchenCategory,
-    MenuCategory, MenuItem, SubscriptionPlan, DailyMenu, Order, OrderItem,
+    MenuCategory, MenuItem, Order, OrderItem,
     Cart, CartItem, DeliveryLog, Payment, WalletTransaction, Review, Coupon,
     Notification, SupportTicket, Banner, AdminSetting, PayoutRequest,
     ChatMessage, DeliveryDocument,
@@ -144,34 +144,10 @@ class MenuItemSerializer(CamelCaseModelSerializer):
         read_only_fields = ['created_at', 'updated_at']
 
 
-class SubscriptionPlanSerializer(CamelCaseModelSerializer):
-    kitchen = serializers.PrimaryKeyRelatedField(
-        queryset=Kitchen.objects.all(), required=False, allow_null=True, default=None
-    )
-
-    class Meta:
-        model = SubscriptionPlan
-        fields = '__all__'
-        read_only_fields = ['created_at', 'updated_at']
-
-
-class DailyMenuSerializer(CamelCaseModelSerializer):
-    kitchen = serializers.PrimaryKeyRelatedField(
-        queryset=Kitchen.objects.all(), required=False, allow_null=True, default=None
-    )
-
-    class Meta:
-        model = DailyMenu
-        fields = '__all__'
-        read_only_fields = ['created_at', 'updated_at']
-
-
 class KitchenSerializer(CamelCaseModelSerializer):
     chef_details = UserProfileMiniSerializer(source='chef', read_only=True)
-    plans = SubscriptionPlanSerializer(many=True, read_only=True)
     categories_detail = KitchenCategorySerializer(source='categories', many=True, read_only=True)
     categories = KitchenCategoriesField(required=False)
-    daily_menus = serializers.SerializerMethodField()
     chef_name = serializers.CharField(source='chef.name', read_only=True)
     chef_id = serializers.CharField(source='chef.uid', read_only=True)
 
@@ -184,14 +160,10 @@ class KitchenSerializer(CamelCaseModelSerializer):
             'address', 'phone', 'image_url', 'specialties', 'fssai_number',
             'id_proof_url', 'license_url', 'business_hours',
             'categories', 'categories_list',
-            'categories_detail', 'gallery_images', 'plans', 'daily_menus',
+            'categories_detail', 'gallery_images',
             'created_at', 'updated_at',
         ]
         read_only_fields = ['chef', 'rating', 'total_ratings', 'created_at', 'updated_at']
-
-    def get_daily_menus(self, obj):
-        menus = obj.daily_menus.filter(is_active=True).order_by('date')
-        return DailyMenuSerializer(menus, many=True).data
 
 
 class KitchenListSerializer(CamelCaseModelSerializer):
@@ -244,7 +216,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = [
-            'kitchen', 'order_type', 'plan', 'plan_name', 'amount', 'subtotal',
+            'kitchen', 'order_type', 'amount', 'subtotal',
             'tax', 'platform_fee', 'tip', 'delivery_address', 'delivery_time',
             'start_date', 'end_date', 'delivery_slot_id', 'meal_type', 'items_data',
             'delivery_latitude', 'delivery_longitude',
@@ -255,16 +227,13 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         items_data = validated_data.pop('items_data', [])
         validated_data['customer'] = self.context['request'].user.profile
 
-        order_type = validated_data.get('order_type', 'subscription')
+        order_type = validated_data.get('order_type', 'one_time')
         if order_type == 'one_time':
             validated_data['status'] = 'active'
             validated_data['start_date'] = validated_data.get('delivery_time', timezone.now()).date() if not validated_data.get('start_date') else validated_data['start_date']
             validated_data['end_date'] = validated_data.get('start_date')
         else:
             validated_data['status'] = 'active'
-            plan = validated_data.get('plan')
-            if plan and not validated_data.get('plan_name'):
-                validated_data['plan_name'] = plan.name
 
         order = super().create(validated_data)
 

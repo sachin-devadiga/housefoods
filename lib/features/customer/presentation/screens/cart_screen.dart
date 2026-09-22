@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../widgets/zomato_widgets.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../providers/cart_provider.dart';
 import 'cart_checkout_screen.dart';
 
@@ -66,17 +66,17 @@ class _CartScreenState extends State<CartScreen> {
             children: [
               Container(
                 padding: const EdgeInsets.all(12),
-                color: ZomatoColors.brand.withValues(alpha: 0.1),
+                color: AppTheme.primaryColor.withValues(alpha: 0.1),
                 child: Row(
                   children: [
-                    Icon(Icons.store, color: ZomatoColors.brand, size: 20),
+                    Icon(Icons.store, color: AppTheme.primaryColor, size: 20),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         cart.kitchenName ?? 'Kitchen',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: ZomatoColors.brand,
+                          color: AppTheme.primaryColor,
                         ),
                       ),
                     ),
@@ -169,7 +169,7 @@ class _CartScreenState extends State<CartScreen> {
             ),
             Container(
               decoration: BoxDecoration(
-                border: Border.all(color: ZomatoColors.brand),
+                border: Border.all(color: AppTheme.primaryColor),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -179,7 +179,7 @@ class _CartScreenState extends State<CartScreen> {
                     onTap: () => provider.updateItemQuantity(item.id, item.quantity - 1),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      child: Icon(Icons.remove, size: 18, color: ZomatoColors.brand),
+                      child: Icon(Icons.remove, size: 18, color: AppTheme.primaryColor),
                     ),
                   ),
                   Padding(
@@ -190,7 +190,7 @@ class _CartScreenState extends State<CartScreen> {
                     onTap: () => provider.updateItemQuantity(item.id, item.quantity + 1),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      child: Icon(Icons.add, size: 18, color: ZomatoColors.brand),
+                      child: Icon(Icons.add, size: 18, color: AppTheme.primaryColor),
                     ),
                   ),
                 ],
@@ -241,7 +241,7 @@ class _CartScreenState extends State<CartScreen> {
             children: [
               const Text('Total', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               Text('₹${cart.subtotal.toStringAsFixed(0)}',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: ZomatoColors.brand)),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.primaryColor)),
             ],
           ),
           const SizedBox(height: 12),
@@ -250,7 +250,7 @@ class _CartScreenState extends State<CartScreen> {
             height: 50,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: ZomatoColors.brand,
+                backgroundColor: AppTheme.primaryColor,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               onPressed: cart.kitchenId != null ? () {

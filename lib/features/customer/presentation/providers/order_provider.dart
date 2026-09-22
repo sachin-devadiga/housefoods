@@ -200,87 +200,6 @@ class OrderProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> togglePauseSubscription(OrderModel order) async {
-    try {
-      bool newState = !order.isPaused;
-      await _orderRepository.togglePauseSubscription(order.id, newState);
-      await fetchCustomerOrders(order.customerId);
-    } catch (e) {
-      debugPrint("Error pause: $e");
-    }
-  }
-
-  Future<void> skipMeal({
-    required OrderModel order,
-    required DateTime date,
-    required Function onSuccess,
-    required Function(String) onError,
-  }) async {
-    final now = DateTime.now();
-    final skipLimit = DateTime(date.year, date.month, date.day)
-        .subtract(const Duration(hours: 2));
-    if (now.isAfter(skipLimit)) {
-      onError("Cut-off time passed.");
-      return;
-    }
-    _isLoading = true;
-    notifyListeners();
-    try {
-      final duration = order.endDate.difference(order.startDate).inDays;
-      final dailyRate = order.amount / (duration > 0 ? duration : 1);
-      final log = DeliveryLogModel(
-        id: '',
-        orderId: order.id,
-        date: date,
-        status: 'skipped',
-        refundAmount: dailyRate,
-      );
-      await _orderRepository.skipMealTransaction(
-        userId: order.customerId,
-        log: log,
-        refundAmount: dailyRate,
-        kitchenName: order.kitchenName,
-      );
-      await fetchDeliveryLogs(order.id);
-      onSuccess();
-    } catch (e) {
-      onError(e.toString());
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> cancelSubscription({
-    required OrderModel order,
-    required Function onSuccess,
-    required Function(String) onError,
-  }) async {
-    _isLoading = true;
-    notifyListeners();
-    try {
-      final now = DateTime.now();
-      if (now.isAfter(order.endDate)) throw "Plan has ended.";
-      final totalDays = order.endDate.difference(order.startDate).inDays;
-      final remainingDays = order.endDate.difference(now).inDays;
-      final refundAmount = (order.amount / (totalDays > 0 ? totalDays : 1)) *
-          (remainingDays > 0 ? remainingDays : 0);
-      await _orderRepository.cancelSubscriptionTransaction(
-        userId: order.customerId,
-        orderId: order.id,
-        refundAmount: refundAmount,
-        kitchenName: order.kitchenName,
-      );
-      await fetchCustomerOrders(order.customerId);
-      onSuccess();
-    } catch (e) {
-      onError(e.toString());
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
   Future<void> applyCoupon(String code, double orderAmount) async {
     _isLoading = true;
     _appliedCoupon = null;
@@ -321,86 +240,9 @@ class OrderProvider extends ChangeNotifier {
     return total < 0 ? 0 : total;
   }
 
-  void openCheckout({
-    required OrderModel order,
-    required String userEmail,
-    required String userPhone,
-    required Function(OrderModel) onSuccess,
-    required Function(String) onError,
-  }) {
-    double finalPayable = calculateFinalPayable(order.amount);
-    _pendingOrder = order;
-    _onSuccessCallback = onSuccess;
-    _onErrorCallback = onError;
-    if (finalPayable == 0) {
-      _handlePaymentSuccess(PaymentSuccessResponse(null, null, null, null));
-      return;
-    }
-    var options = {
-      'key': AppConstants.razorpayKey,
-      'amount': (finalPayable * 100).toInt(),
-      'name': 'Mealin',
-      'description': 'Subscription',
-      'prefill': {'contact': userPhone, 'email': userEmail}
-    };
-    try {
-      _razorpay.open(options);
-    } catch (e) {
-      debugPrint('Razorpay error: $e');
-    }
-  }
-
   void _handlePaymentSuccess(PaymentSuccessResponse response) async {
-    if (_pendingOrder != null && _pendingOrder!.orderType == 'one_time') {
-      _handleOneTimePaymentSuccess(response);
-      return;
-    }
-    if (_pendingOrder != null) {
-      _isLoading = true;
-      notifyListeners();
-      try {
-        final fullAmount = _pendingOrder!.amount;
-        if (_isWalletApplied && _walletRedemptionAmount > 0) {
-          final orderData = _pendingOrder!.toMap();
-          orderData['amount'] = fullAmount;
-          await _orderRepository.placeOrderWithWallet(
-            orderData: orderData,
-            walletDeduction: _walletRedemptionAmount,
-          );
-        } else {
-          await _orderRepository.placeOrder({
-            ..._pendingOrder!.toMap(),
-            'amount': fullAmount,
-          });
-        }
-        final finalOrder = OrderModel(
-          id: '',
-          customerId: _pendingOrder!.customerId,
-          kitchenId: _pendingOrder!.kitchenId,
-          kitchenName: _pendingOrder!.kitchenName,
-          planId: _pendingOrder!.planId,
-          planName: _pendingOrder!.planName,
-          amount: calculateFinalPayable(_pendingOrder!.amount),
-          deliveryAddress: _pendingOrder!.deliveryAddress,
-          startDate: _pendingOrder!.startDate,
-          endDate: _pendingOrder!.endDate,
-          status: 'active',
-          paymentId: response.paymentId ?? 'WALLET',
-          createdAt: DateTime.now(),
-          isPaused: false,
-          deliverySlotId: _pendingOrder!.deliverySlotId,
-          mealType: _pendingOrder!.mealType,
-        );
-        removeCoupon();
-        if (_onSuccessCallback != null) _onSuccessCallback!(finalOrder);
-      } catch (e) {
-        if (_onErrorCallback != null) _onErrorCallback!(e.toString());
-      } finally {
-        _isLoading = false;
-        _pendingOrder = null;
-        notifyListeners();
-      }
-    }
+    // All orders are one-time food orders now.
+    _handleOneTimePaymentSuccess(response);
   }
 
   void _handlePaymentError(PaymentFailureResponse response) {
@@ -497,7 +339,9 @@ class OrderProvider extends ChangeNotifier {
         notifyListeners();
       }
     } else {
-      _handlePaymentSuccess(response);
+      // No pending one-time order — nothing to place.
+      if (_onErrorCallback != null) _onErrorCallback!('No pending order found.');
+      _pendingOrder = null;
     }
   }
 

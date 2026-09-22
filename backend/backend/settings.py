@@ -66,7 +66,7 @@ JAZZMIN_SETTINGS = {
     'navigation_expanded': True,
     'hide_apps': ['auth', 'contenttypes'],
     'hide_models': ['auth.Group', 'auth.User'],
-    'order_with_respect_to': ['api.UserProfile', 'api.Address', 'api.Kitchen', 'api.KitchenCategory', 'api.MenuCategory', 'api.MenuItem', 'api.SubscriptionPlan', 'api.DailyMenu', 'api.Order', 'api.DeliveryLog', 'api.Payment', 'api.PayoutRequest', 'api.Review', 'api.Coupon', 'api.DeliveryDocument', 'api.SupportTicket', 'api.WalletTransaction', 'api.Banner', 'api.AdminSetting'],
+    'order_with_respect_to': ['api.UserProfile', 'api.Address', 'api.Kitchen', 'api.KitchenCategory', 'api.MenuCategory', 'api.MenuItem', 'api.Order', 'api.DeliveryLog', 'api.Payment', 'api.PayoutRequest', 'api.Review', 'api.Coupon', 'api.DeliveryDocument', 'api.SupportTicket', 'api.WalletTransaction', 'api.Banner', 'api.AdminSetting'],
     'changeform_format': 'horizontal_tabs',
     'changeform_format_overrides': {
         'api.UserProfile': 'single',
@@ -81,8 +81,6 @@ JAZZMIN_SETTINGS = {
         'api.KitchenCategory': 'fas fa-tags',
         'api.MenuCategory': 'fas fa-list',
         'api.MenuItem': 'fas fa-hamburger',
-        'api.SubscriptionPlan': 'fas fa-calendar-alt',
-        'api.DailyMenu': 'fas fa-calendar-day',
         'api.Order': 'fas fa-shopping-cart',
         'api.DeliveryLog': 'fas fa-truck',
         'api.Payment': 'fas fa-credit-card',

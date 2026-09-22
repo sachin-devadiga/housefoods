@@ -39,22 +39,18 @@ class AppConstants {
   static const String kitchensEndpoint = '/api/auth/kitchens/';
   static const String kitchenStatusEndpoint = '/api/auth/kitchens';
   static const String kitchenToggleOpenEndpoint = '/api/auth/kitchens';
-  static const String kitchenDailyMenusEndpoint = '/api/auth/kitchens';
   static const String kitchenImagesEndpoint = '/api/auth/kitchens';
   static const String kitchenReviewsEndpoint = '/api/auth/kitchens';
 
   // Menu & Plan Endpoints
   static const String menuCategoriesEndpoint = '/api/auth/kitchens';
   static const String menuItemsEndpoint = '/api/auth/kitchens';
-  static const String plansEndpoint = '/api/auth/kitchens';
 
   // Order Endpoints
   static const String ordersEndpoint = '/api/auth/orders/';
   static const String placeOrderEndpoint = '/api/auth/orders/place/';
   static const String placeOrderWithWalletEndpoint = '/api/auth/orders/place-with-wallet/';
   static const String paymentSuccessEndpoint = '/api/auth/orders/payment-success/';
-  static const String skipMealEndpoint = '/api/auth/orders/skip-meal/';
-  static const String cancelSubscriptionEndpoint = '/api/auth/orders/cancel-subscription/';
   static const String orderStatusEndpoint = '/api/auth/orders';
   static const String deliveryLogsEndpoint = '/api/auth/orders';
   static const String createDeliveryLogEndpoint = '/api/auth/delivery-logs/';

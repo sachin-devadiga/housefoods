@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/models/order_model.dart';
-import 'subscription_calendar_screen.dart';
 
 class OrderSuccessScreen extends StatelessWidget {
   final OrderModel order;
@@ -35,12 +33,12 @@ class OrderSuccessScreen extends StatelessWidget {
               ),
               const SizedBox(height: 32),
               const Text(
-                "Plan Active!",
+                'Order Placed!',
                 style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               Text(
-                "Your delicious journey with ${order.kitchenName} has begun.",
+                'Your food from ${order.kitchenName} is being prepared.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey[600], fontSize: 16),
               ),
@@ -56,11 +54,12 @@ class OrderSuccessScreen extends StatelessWidget {
                 ),
                 child: Column(
                   children: [
-                    _summaryRow("First Delivery", DateFormat('EEEE, dd MMM').format(order.startDate)),
+                    _summaryRow('Amount', '₹${order.amount.toStringAsFixed(0)}'),
                     const Divider(height: 24),
-                    _summaryRow("Plan", order.planName),
+                    _summaryRow('Payment',
+                        order.paymentId.isEmpty ? 'Cash on Delivery' : 'Paid Online'),
                     const Divider(height: 24),
-                    _summaryRow("Order ID", "#${order.id.length >= 8 ? order.id.substring(0, 8).toUpperCase() : order.id.toUpperCase()}"),
+                    _summaryRow('Order ID', '#${order.id.length >= 8 ? order.id.substring(0, 8).toUpperCase() : order.id.toUpperCase()}'),
                   ],
                 ),
               ),
@@ -69,22 +68,7 @@ class OrderSuccessScreen extends StatelessWidget {
               // Actions
               ElevatedButton(
                 onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
-                child: const Text("Go to Dashboard"),
-              ),
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: () {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => SubscriptionCalendarScreen(order: order),
-                    ),
-                  );
-                },
-                child: const Text(
-                  "View Delivery Calendar",
-                  style: TextStyle(color: AppTheme.primaryColor, fontWeight: FontWeight.bold),
-                ),
+                child: const Text('Go to Dashboard'),
               ),
             ],
           ),

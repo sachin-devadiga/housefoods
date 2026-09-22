@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../../../core/theme/app_theme.dart';
 import '../../../../auth/presentation/providers/auth_provider.dart';
 import '../../providers/kitchen_provider.dart';
 import '../../providers/favorites_provider.dart';
@@ -78,7 +79,7 @@ class _HomeTabState extends State<HomeTab> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: RefreshIndicator(
-        color: ZomatoColors.brand,
+        color: AppTheme.primaryColor,
         onRefresh: _refresh,
         child: Consumer<KitchenProvider>(
           builder: (context, provider, child) {
@@ -133,12 +134,12 @@ class _HomeTabState extends State<HomeTab> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.error_outline, size: 48, color: ZomatoColors.brand),
+                            const Icon(Icons.error_outline, size: 48, color: AppTheme.primaryColor),
                             const SizedBox(height: 16),
                             Text('Error: ${provider.error}'),
                             const SizedBox(height: 12),
                             ElevatedButton(
-                              style: ElevatedButton.styleFrom(backgroundColor: ZomatoColors.brand),
+                              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
                               onPressed: () => provider.fetchKitchens(),
                               child: const Text('Retry', style: TextStyle(color: Colors.white)),
                             ),
@@ -192,7 +193,7 @@ class _HomeTabState extends State<HomeTab> {
                       child: Padding(
                         padding: EdgeInsets.symmetric(vertical: 24),
                         child: Center(
-                            child: CircularProgressIndicator(color: ZomatoColors.brand)),
+                            child: CircularProgressIndicator(color: AppTheme.primaryColor)),
                       ),
                     ),
                   const SliverToBoxAdapter(child: SizedBox(height: 90)),
@@ -231,7 +232,7 @@ class _HomeTabState extends State<HomeTab> {
                 MaterialPageRoute(builder: (context) => const KitchenMapScreen()),
               );
             },
-            backgroundColor: ZomatoColors.brand,
+            backgroundColor: AppTheme.primaryColor,
             icon: const Icon(Icons.map_outlined, color: Colors.white),
             label: const Text('View on Map', style: TextStyle(color: Colors.white)),
           ),
@@ -246,7 +247,7 @@ class _HomeTabState extends State<HomeTab> {
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 2),
       child: Row(
         children: [
-          const Icon(Icons.location_on, color: ZomatoColors.brand, size: 24),
+          const Icon(Icons.location_on, color: AppTheme.primaryColor, size: 24),
           const SizedBox(width: 6),
           const Expanded(
             child: Column(
@@ -266,7 +267,7 @@ class _HomeTabState extends State<HomeTab> {
               context,
               MaterialPageRoute(builder: (context) => const AiChatScreen()),
             ),
-            icon: const Icon(Icons.auto_awesome, color: ZomatoColors.brand),
+            icon: const Icon(Icons.auto_awesome, color: AppTheme.primaryColor),
             tooltip: 'Ask MEAL AI',
           ),
         ],
@@ -291,7 +292,7 @@ class _HomeTabState extends State<HomeTab> {
           ),
           child: const Row(
             children: [
-              Icon(Icons.search, color: ZomatoColors.brand, size: 22),
+              Icon(Icons.search, color: AppTheme.primaryColor, size: 22),
               SizedBox(width: 10),
               Expanded(
                 child: Text('Search restaurants, dishes...',
@@ -314,24 +315,24 @@ class _HomeTabState extends State<HomeTab> {
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(
-              color: selected ? ZomatoColors.brand.withValues(alpha: 0.08) : Colors.transparent,
+              color: selected ? AppTheme.primaryColor.withValues(alpha: 0.08) : Colors.transparent,
               borderRadius: BorderRadius.circular(12),
               border: Border(
                 bottom: BorderSide(
-                    color: selected ? ZomatoColors.brand : Colors.transparent, width: 2.5),
+                    color: selected ? AppTheme.primaryColor : Colors.transparent, width: 2.5),
               ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, size: 19, color: selected ? ZomatoColors.brand : ZomatoColors.grey),
+                Icon(icon, size: 19, color: selected ? AppTheme.primaryColor : ZomatoColors.grey),
                 const SizedBox(width: 6),
                 Text(
                   label,
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: selected ? FontWeight.bold : FontWeight.w500,
-                    color: selected ? ZomatoColors.brand : ZomatoColors.grey,
+                    color: selected ? AppTheme.primaryColor : ZomatoColors.grey,
                   ),
                 ),
               ],
@@ -368,7 +369,7 @@ class _HomeTabState extends State<HomeTab> {
           const Text('Launching soon in your city', style: ZomatoText.bodyGrey),
           const SizedBox(height: 16),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: ZomatoColors.brand),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
             onPressed: () => setState(() => _mode = _HomeMode.delivery),
             child: const Text('Order Delivery Instead', style: TextStyle(color: Colors.white)),
           ),
@@ -498,7 +499,7 @@ class _HomeTabState extends State<HomeTab> {
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.grey.shade200),
                       ),
-                      child: Icon(c['icon'] as IconData, size: 30, color: ZomatoColors.brand),
+                      child: Icon(c['icon'] as IconData, size: 30, color: AppTheme.primaryColor),
                     ),
                     const SizedBox(height: 6),
                     SizedBox(
