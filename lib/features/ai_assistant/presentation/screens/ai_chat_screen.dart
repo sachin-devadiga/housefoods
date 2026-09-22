@@ -429,34 +429,34 @@ class _AiChatScreenState extends State<AiChatScreen> {
   Widget _buildToolResultCard(AiToolResult result) {
     final data = result.result;
 
-    if (result.toolName == 'search_restaurants' ||
-        result.toolName == 'get_restaurants') {
-      final restaurants = data['restaurants'] as List<dynamic>? ?? [];
-      if (restaurants.isEmpty) return const SizedBox.shrink();
+    // list_restaurants tool → show restaurant cards
+    if (result.toolName == 'list_restaurants') {
+      final results = data['results'] as List<dynamic>? ?? [];
+      if (results.isEmpty) return const SizedBox.shrink();
 
       return SizedBox(
         width: double.infinity,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: restaurants
-              .take(3)
+          children: results
+              .take(5)
               .map((r) => _buildRestaurantCard(r as Map<String, dynamic>))
               .toList(),
         ),
       );
     }
 
-    if (result.toolName == 'search_menu_items' ||
-        result.toolName == 'get_menu_items') {
-      final items = data['items'] as List<dynamic>? ?? [];
-      if (items.isEmpty) return const SizedBox.shrink();
+    // search_food tool → show food item cards
+    if (result.toolName == 'search_food') {
+      final results = data['results'] as List<dynamic>? ?? [];
+      if (results.isEmpty) return const SizedBox.shrink();
 
       return SizedBox(
         width: double.infinity,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: items
-              .take(4)
+          children: results
+              .take(5)
               .map((i) => _buildItemCard(i as Map<String, dynamic>))
               .toList(),
         ),
@@ -471,7 +471,8 @@ class _AiChatScreenState extends State<AiChatScreen> {
       );
     }
 
-    if (result.toolName == 'place_order') {
+    if (result.toolName == 'place_order' ||
+        result.toolName == 'validate_order') {
       final needsConfirmation = data['needs_confirmation'] == true ||
           data['confirmed'] != true;
       if (needsConfirmation) {
@@ -486,12 +487,45 @@ class _AiChatScreenState extends State<AiChatScreen> {
       );
     }
 
+    if (result.toolName == 'get_restaurant_details') {
+      final menuItems = data['menu_items'] as List<dynamic>? ?? [];
+      if (menuItems.isEmpty) return const SizedBox.shrink();
+
+      return SizedBox(
+        width: double.infinity,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (data['name'] != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  data['name'],
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ),
+            ...menuItems
+                .take(5)
+                .map((i) => _buildItemCard(i as Map<String, dynamic>))
+                .toList(),
+          ],
+        ),
+      );
+    }
+
     return const SizedBox.shrink();
   }
 
   Widget _buildRestaurantCard(Map<String, dynamic> restaurant) {
-    final kitchenId = restaurant['id']?.toString();
-    final kitchenName = restaurant['name'] ?? 'Restaurant';
+    final kitchenId = restaurant['restaurant_id']?.toString() ?? restaurant['id']?.toString();
+    final kitchenName = restaurant['restaurant_name'] ?? restaurant['name'] ?? 'Restaurant';
+    final rating = restaurant['rating'] ?? 0;
+    final totalRatings = restaurant['total_ratings'] ?? 0;
+    final distance = restaurant['distance_km'];
+    final eta = restaurant['estimated_minutes'];
+    final menuCount = restaurant['menu_items_count'] ?? 0;
+    final imageUrl = restaurant['image_url'] ?? restaurant['image'];
+    final isVeg = restaurant['is_veg'] == true;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -508,11 +542,11 @@ class _AiChatScreenState extends State<AiChatScreen> {
                     color: AppTheme.primaryColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: restaurant['image'] != null
+                  child: imageUrl != null && imageUrl.toString().isNotEmpty
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(12),
                           child: Image.network(
-                            restaurant['image'],
+                            imageUrl.toString(),
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => Icon(
                               Icons.restaurant,
@@ -530,50 +564,69 @@ class _AiChatScreenState extends State<AiChatScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        kitchenName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              kitchenName,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                          if (isVeg)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: Colors.green,
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                              child: const Text('VEG', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                            ),
+                        ],
                       ),
                       const SizedBox(height: 2),
                       Row(
                         children: [
-                          if (restaurant['rating'] != null) ...[
+                          if (rating > 0) ...[
                             Icon(Icons.star, size: 14, color: Colors.amber[600]),
                             const SizedBox(width: 2),
                             Text(
-                              '${restaurant['rating']}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
+                              '$rating',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                             ),
+                            if (totalRatings > 0)
+                              Text(
+                                ' ($totalRatings)',
+                                style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                              ),
                             const SizedBox(width: 8),
                           ],
-                          if (restaurant['delivery_time'] != null)
+                          if (distance != null)
                             Text(
-                              '${restaurant['delivery_time']} min',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                              ),
+                              '${distance} km',
+                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                             ),
+                          if (eta != null) ...[
+                            const SizedBox(width: 8),
+                            Icon(Icons.access_time, size: 12, color: Colors.grey[500]),
+                            const SizedBox(width: 2),
+                            Text(
+                              '$eta min',
+                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                            ),
+                          ],
                         ],
                       ),
+                      if (menuCount > 0)
+                        Text(
+                          '$menuCount items on menu',
+                          style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                        ),
                     ],
                   ),
                 ),
-                if (restaurant['price_range'] != null)
-                  Text(
-                    restaurant['price_range'],
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppTheme.secondaryColor,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
               ],
             ),
             if (kitchenId != null && kitchenId.isNotEmpty)
@@ -600,8 +653,11 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
   Widget _buildItemCard(Map<String, dynamic> item) {
     final isVeg = item['is_veg'] == true;
-    final itemName = item['name'] ?? 'Item';
-    final itemId = item['id']?.toString();
+    final itemName = item['item_name'] ?? item['name'] ?? 'Item';
+    final itemId = (item['item_id'] ?? item['id'])?.toString();
+    final restaurantName = item['restaurant_name'] ?? item['restaurant'];
+    final rating = item['rating'];
+    final eta = item['estimated_minutes'];
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -613,7 +669,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
               width: 8,
               height: 8,
               decoration: BoxDecoration(
-                color: isVeg ? AppTheme.secondaryColor : AppTheme.errorColor,
+                color: isVeg ? Colors.green : Colors.red,
                 shape: BoxShape.circle,
               ),
             ),
@@ -629,14 +685,25 @@ class _AiChatScreenState extends State<AiChatScreen> {
                       fontSize: 14,
                     ),
                   ),
-                  if (item['restaurant'] != null)
-                    Text(
-                      item['restaurant'],
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
-                    ),
+                  Row(
+                    children: [
+                      if (restaurantName != null)
+                        Text(
+                          restaurantName.toString(),
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        ),
+                      if (rating != null && rating > 0) ...[
+                        const SizedBox(width: 8),
+                        Icon(Icons.star, size: 12, color: Colors.amber[600]),
+                        const SizedBox(width: 2),
+                        Text('$rating', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                      ],
+                      if (eta != null) ...[
+                        const SizedBox(width: 8),
+                        Text('${eta} min', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                      ],
+                    ],
+                  ),
                 ],
               ),
             ),

@@ -253,15 +253,6 @@ _TOOL_DECLARATIONS = [
 ]
 
 
-def _is_food_query(message):
-    """Detect if a message is food-related and should trigger search_food."""
-    msg_lower = message.lower().strip()
-    for kw in _FOOD_KEYWORDS:
-        if re.search(kw, msg_lower):
-            return True
-    return False
-
-
 def _detect_search_term(message):
     """Extract a food search term from a natural language message."""
     msg = message.lower().strip()
