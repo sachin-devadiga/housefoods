@@ -136,18 +136,8 @@ urlpatterns = [
     # Map
     path('map/route/', views.MapRouteView.as_view(), name='map-route'),
 
-    # Voice PIN Security
-    path('voice-pin/setup/', views.SetupVoicePinView.as_view(), name='voice-pin-setup'),
-    path('voice-pin/verify/', views.VerifyVoicePinView.as_view(), name='voice-pin-verify'),
-    path('voice-pin/reset/', views.ResetVoicePinView.as_view(), name='voice-pin-reset'),
-    path('voice-pin/status/', views.VoicePinStatusView.as_view(), name='voice-pin-status'),
-    path('voice-pin/consume/', views.ConsumeAuthorizationView.as_view(), name='voice-pin-consume'),
-
-    # Voice STT/TTS Proxy (Sarvam API key stays on backend)
+    # Voice STT Proxy for MEAL AI chat voice input (Sarvam API key stays on backend)
     path('voice/stt/', views.VoiceSTTView.as_view(), name='voice-stt'),
-    path('voice/tts/', views.VoiceTTSView.as_view(), name='voice-tts'),
-    path('voice/gemini/', views.VoiceGeminiView.as_view(), name='voice-gemini'),
-    path('voice/gemini-live-session/', views.VoiceGeminiLiveSessionView.as_view(), name='voice-gemini-live-session'),
 
     # AI Assistant
     path('ai/chat/', ai_chat_view.MealAIChatView.as_view(), name='ai-chat'),

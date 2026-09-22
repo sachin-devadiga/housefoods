@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/models/ai_chat_models.dart';
 import '../providers/ai_chat_provider.dart';
-import '../../../../meal_voice/sarvam_stt_service.dart';
+import '../../../../core/services/sarvam_stt_service.dart';
 
 class AiChatScreen extends StatefulWidget {
   const AiChatScreen({super.key});

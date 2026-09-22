@@ -3,13 +3,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import '../core/constants/app_constants.dart';
-import '../core/services/token_service.dart';
+import '../constants/app_constants.dart';
+import 'token_service.dart';
 
 /// Speech-to-Text service via MEALIN backend proxy.
 ///
 /// Sends audio to MEALIN backend which proxies to Sarvam AI.
 /// The Sarvam API key never leaves the server.
+/// Used by MEAL AI chat for voice input.
 class SarvamSTTResult {
   final String transcript;
   final String? languageCode;

@@ -12,8 +12,6 @@ import '../../widgets/zomato_widgets.dart';
 import '../kitchen_details_screen.dart';
 import '../kitchen_map_screen.dart';
 import '../search_page.dart';
-import '../../../../../meal_voice/meal_voice_controller.dart';
-import '../../../../../meal_voice/meal_voice_screen.dart';
 import '../../../../ai_assistant/presentation/screens/ai_chat_screen.dart';
 
 enum _HomeMode { delivery, dining, nightlife }
@@ -203,40 +201,17 @@ class _HomeTabState extends State<HomeTab> {
           },
         ),
       ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          FloatingActionButton.small(
-            heroTag: 'voice',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const MealVoiceScreen()),
-              );
-            },
-            backgroundColor: Colors.deepPurple,
-            child: Consumer<MealVoiceController>(
-              builder: (context, vc, _) => Icon(
-                vc.isListening ? Icons.mic : Icons.mic_none,
-                color: Colors.white,
-                size: 20,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          FloatingActionButton.extended(
-            heroTag: 'map',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const KitchenMapScreen()),
-              );
-            },
-            backgroundColor: AppTheme.primaryColor,
-            icon: const Icon(Icons.map_outlined, color: Colors.white),
-            label: const Text('View on Map', style: TextStyle(color: Colors.white)),
-          ),
-        ],
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'map',
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const KitchenMapScreen()),
+          );
+        },
+        backgroundColor: AppTheme.primaryColor,
+        icon: const Icon(Icons.map_outlined, color: Colors.white),
+        label: const Text('View on Map', style: TextStyle(color: Colors.white)),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
