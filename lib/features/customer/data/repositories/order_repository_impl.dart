@@ -50,8 +50,12 @@ class OrderRepositoryImpl implements OrderRepository {
   }
 
   @override
-  Future<void> updateOrderStatus(String orderId, String newStatus) async {
+  Future<void> updateOrderStatus(String orderId, String newStatus, {int? preparationTime}) async {
     final endpoint = '${AppConstants.orderStatusEndpoint}/$orderId/status/';
-    await _api.post(endpoint, body: {'status': newStatus});
+    final body = <String, dynamic>{'status': newStatus};
+    if (preparationTime != null && preparationTime > 0) {
+      body['preparation_time'] = preparationTime;
+    }
+    await _api.post(endpoint, body: body);
   }
 }

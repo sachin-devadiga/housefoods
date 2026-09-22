@@ -228,6 +228,7 @@ class Order(models.Model):
     ]
     DELIVERY_STATUS_CHOICES = [
         ('pending', 'Pending'),
+        ('accepted', 'Accepted'),
         ('ready_for_delivery', 'Ready for Delivery'),
         ('assigned', 'Assigned'),
         ('picked_up', 'Picked Up'),
@@ -260,6 +261,7 @@ class Order(models.Model):
     )
     delivery_slot_id = models.CharField(max_length=100, blank=True, default='')
     meal_type = models.CharField(max_length=100, blank=True, default='')
+    preparation_time = models.IntegerField(default=0)
     is_paused = models.BooleanField(default=False)
     delivery_fee = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
     assigned_at = models.DateTimeField(null=True, blank=True)

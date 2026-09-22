@@ -308,6 +308,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     final normalizedStatus = status.toLowerCase();
     final List<Map<String, dynamic>> steps = [
       {"title": "Order Active", "keys": ["active"], "icon": Icons.check_circle},
+      {"title": "Accepted by restaurant", "keys": ["accepted"], "icon": Icons.thumb_up},
       {"title": "Preparing your meal", "keys": ["preparing", "ready_for_delivery"], "icon": Icons.soup_kitchen},
       {"title": "Out for delivery", "keys": ["picked_up", "out for delivery"], "icon": Icons.delivery_dining},
       {"title": "Delivered", "keys": ["delivered"], "icon": Icons.home},
@@ -376,12 +377,14 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   String _getStatusDescription(String status) {
     switch (status) {
       case 'active': return 'Your order is confirmed.';
+      case 'accepted': return 'Restaurant accepted your order and started preparing.';
+      case 'cancelled': return 'This order was cancelled.';
       case 'preparing':
       case 'ready_for_delivery': return 'The chef is preparing your food.';
       case 'picked_up':
       case 'out for delivery': return 'Our partner is on the way to your door.';
       case 'delivered': return 'Enjoy your meal!';
-      default: return "Processing your order...";
+      default: return 'Processing your order...';
     }
   }
 }

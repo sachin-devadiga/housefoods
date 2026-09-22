@@ -181,9 +181,12 @@ class OrderProvider extends ChangeNotifier {
 
   /// Updates an order's delivery progress. Returns true on success and
   /// refreshes both the dashboard dispatch list and the orders-tab list.
-  Future<bool> updateStatus(String orderId, String newStatus, String kitchenId) async {
+  /// Pass [preparationTime] (minutes) when accepting an order.
+  Future<bool> updateStatus(String orderId, String newStatus, String kitchenId,
+      {int? preparationTime}) async {
     try {
-      await _orderRepository.updateOrderStatus(orderId, newStatus);
+      await _orderRepository.updateOrderStatus(orderId, newStatus,
+          preparationTime: preparationTime);
       if (newStatus == 'Delivered') {
         final now = DateTime.now();
         final normalizedDate = DateTime(now.year, now.month, now.day)

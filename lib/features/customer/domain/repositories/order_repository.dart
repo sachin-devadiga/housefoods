@@ -9,5 +9,5 @@ abstract class OrderRepository {
   });
   Future<List<OrderModel>> getCustomerOrders(String customerId);
   Future<List<OrderModel>> getKitchenOrders(String kitchenId);
-  Future<void> updateOrderStatus(String orderId, String newStatus);
+  Future<void> updateOrderStatus(String orderId, String newStatus, {int? preparationTime});
 }

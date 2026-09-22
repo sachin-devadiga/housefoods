@@ -543,6 +543,8 @@ class OrderStatusUpdateView(APIView):
     permission_classes = [IsAuthenticated]
 
     DELIVERY_STATUS_MAP = {
+        'Accept': 'accepted',
+        'accept': 'accepted',
         'Preparing': 'ready_for_delivery',
         'preparing': 'ready_for_delivery',
         'Out for Delivery': 'picked_up',
@@ -561,15 +563,33 @@ class OrderStatusUpdateView(APIView):
         if profile.role != 'admin' and order.customer != profile and order.kitchen.chef != profile:
             return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
 
+        if new_status in ('Reject', 'reject'):
+            order.status = 'cancelled'
+            order.save()
+            notify_customer_order_status(order, 'cancelled by restaurant')
+            return Response(OrderSerializer(order).data)
+
         if new_status in self.DELIVERY_STATUS_MAP:
             order.delivery_status = self.DELIVERY_STATUS_MAP[new_status]
+            try:
+                prep = int(request.data.get('preparation_time', 0) or 0)
+            except (TypeError, ValueError):
+                prep = 0
+            if order.delivery_status == 'accepted' and prep > 0:
+                order.preparation_time = prep
             if order.delivery_status == 'delivered':
                 order.delivered_at = timezone.now()
             elif order.delivery_status == 'picked_up':
                 order.picked_up_at = order.picked_up_at or timezone.now()
             order.save()
 
-            if order.delivery_status == 'ready_for_delivery':
+            if order.delivery_status == 'accepted':
+                if order.preparation_time:
+                    notify_customer_order_status(
+                        order, f'accepted (ready in ~{order.preparation_time} mins)')
+                else:
+                    notify_customer_order_status(order, 'accepted')
+            elif order.delivery_status == 'ready_for_delivery':
                 delivery_partners = UserProfile.objects.filter(
                     role='delivery_partner', is_verified=True, is_available=True
                 ).exclude(fcm_token='')

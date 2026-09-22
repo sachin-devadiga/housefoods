@@ -23,7 +23,8 @@ class OrderModel {
   final DateTime startDate;
   final DateTime endDate;
   final String status; // 'pending', 'active', 'completed', 'cancelled'
-  final String deliveryStatus; // 'pending', 'ready_for_delivery', 'assigned', 'picked_up', 'delivered'
+  final String deliveryStatus; // 'pending', 'accepted', 'ready_for_delivery', 'assigned', 'picked_up', 'delivered'
+  final int preparationTime; // minutes, set by restaurant on accept
   final String paymentId;
   final DateTime createdAt;
   final bool isPaused;
@@ -55,6 +56,7 @@ class OrderModel {
     required this.endDate,
     required this.status,
     this.deliveryStatus = 'pending',
+    this.preparationTime = 0,
     required this.paymentId,
     required this.createdAt,
     this.isPaused = false,
@@ -68,11 +70,13 @@ class OrderModel {
   /// Kitchen-facing progress label derived from delivery status.
   String get deliveryProgressLabel {
     switch (deliveryStatus.toLowerCase()) {
+      case 'accepted':
+        return preparationTime > 0 ? 'Accepted • $preparationTime min' : 'Accepted';
       case 'ready_for_delivery':
-        return 'Preparing';
+        return 'Ready for pickup';
       case 'assigned':
       case 'picked_up':
-        return 'Out for delivery';
+        return 'Dispatched';
       case 'delivered':
         return 'Delivered';
       default:
@@ -148,6 +152,9 @@ class OrderModel {
       endDate: parseDate('end_date'),
       status: map['status'] ?? 'pending',
       deliveryStatus: map['delivery_status'] ?? map['deliveryStatus'] ?? 'pending',
+      preparationTime: (map['preparation_time'] ?? map['preparationTime'] ?? 0) is int
+          ? (map['preparation_time'] ?? map['preparationTime'] ?? 0) as int
+          : int.tryParse('${map['preparation_time'] ?? map['preparationTime'] ?? 0}') ?? 0,
       paymentId: map['payment_id'] ?? map['paymentId'] ?? '',
       createdAt: parseDate('created_at'),
       isPaused: map['is_paused'] ?? map['isPaused'] ?? false,

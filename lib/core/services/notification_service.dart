@@ -284,7 +284,11 @@ class NotificationService {
       NavigationService.navigateTo(
         MaterialPageRoute(builder: (_) => const DeliveryPartnerDashboard()),
       );
-    } else if (type == 'new_order' || type == 'order_update' || type == 'delivery_status_changed') {
+    } else if (type == 'new_order' ||
+        type == 'order_update' ||
+        type == 'order_status' ||
+        type == 'order_cancelled' ||
+        type == 'delivery_status_changed') {
       // Route by role: chefs must land on the resto dashboard, not the customer app.
       String? role;
       try {

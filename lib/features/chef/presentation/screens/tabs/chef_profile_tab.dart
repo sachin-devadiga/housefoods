@@ -13,6 +13,7 @@ import '../../providers/chef_provider.dart';
 import '../edit_kitchen_screen.dart';
 import '../manage_hours_screen.dart';
 import '../payout_history_screen.dart';
+import '../printer_setup_screen.dart';
 
 class ChefProfileTab extends StatelessWidget {
   const ChefProfileTab({super.key});
@@ -72,6 +73,18 @@ class ChefProfileTab extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const PayoutHistoryScreen()),
+              );
+            },
+          ),
+          _buildOption(
+            context,
+            Icons.print_outlined,
+            "Bill Printer",
+            "Connect Bluetooth thermal printer for receipts",
+            () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PrinterSetupScreen()),
               );
             },
           ),

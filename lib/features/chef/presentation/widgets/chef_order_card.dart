@@ -6,16 +6,24 @@ import '../../../chat/presentation/screens/chat_screen.dart';
 
 class ChefOrderCard extends StatelessWidget {
   final OrderModel order;
-  final VoidCallback onUpdateStatus;
+  final VoidCallback onAccept;
+  final VoidCallback onReject;
+  final VoidCallback onMarkReady;
+  final VoidCallback onPrintBill;
 
   const ChefOrderCard({
     super.key,
     required this.order,
-    required this.onUpdateStatus,
+    required this.onAccept,
+    required this.onReject,
+    required this.onMarkReady,
+    required this.onPrintBill,
   });
 
   Color _progressColor() {
     switch (order.deliveryStatus.toLowerCase()) {
+      case 'accepted':
+        return Colors.deepPurple;
       case 'ready_for_delivery':
         return Colors.orange;
       case 'assigned':
@@ -31,6 +39,14 @@ class ChefOrderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final progressColor = _progressColor();
+    final ds = order.deliveryStatus.toLowerCase();
+    final isCancelled = order.status.toLowerCase() == 'cancelled';
+    final isNew = !isCancelled && ds == 'pending';
+    final isAccepted = !isCancelled && ds == 'accepted';
+    final isReady = !isCancelled && ds == 'ready_for_delivery';
+    final isDispatched = !isCancelled && (ds == 'assigned' || ds == 'picked_up');
+    final isDelivered = !isCancelled && ds == 'delivered';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
@@ -58,12 +74,15 @@ class ChefOrderCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: progressColor.withValues(alpha: 0.12),
+                  color: (isCancelled ? Colors.grey : progressColor).withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  order.deliveryProgressLabel.toUpperCase(),
-                  style: TextStyle(color: progressColor, fontSize: 11, fontWeight: FontWeight.bold),
+                  isCancelled ? 'REJECTED' : order.deliveryProgressLabel.toUpperCase(),
+                  style: TextStyle(
+                      color: isCancelled ? Colors.grey : progressColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -126,6 +145,13 @@ class ChefOrderCard extends StatelessWidget {
                 '₹${order.amount.toStringAsFixed(0)} • ${DateFormat('dd MMM, hh:mm a').format(order.createdAt)}',
                 style: TextStyle(color: Colors.grey[700], fontSize: 13, fontWeight: FontWeight.w600),
               ),
+              if (order.preparationTime > 0) ...[
+                const SizedBox(width: 8),
+                const Icon(Icons.timer_outlined, size: 14, color: Colors.grey),
+                const SizedBox(width: 2),
+                Text('${order.preparationTime} min',
+                    style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+              ],
             ],
           ),
           const SizedBox(height: 4),
@@ -145,44 +171,138 @@ class ChefOrderCard extends StatelessWidget {
             ],
           ),
           const Divider(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ChatScreen(
-                          receiverId: order.customerId,
-                          receiverName: order.customerName.isNotEmpty
-                              ? order.customerName
-                              : 'Customer',
+          if (isNew) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: onAccept,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.secondaryColor,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: const Text('ACCEPT', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: onReject,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.errorColor,
+                      side: const BorderSide(color: AppTheme.errorColor),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: const Text('REJECT', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ] else if (isAccepted) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onPrintBill,
+                    icon: const Icon(Icons.print_outlined, size: 18),
+                    label: const Text('Print Bill'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.blueGrey,
+                      side: BorderSide(color: Colors.blueGrey.shade300),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: onMarkReady,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: const Text('MARK READY', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ] else if (!isCancelled) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onPrintBill,
+                    icon: const Icon(Icons.print_outlined, size: 18),
+                    label: const Text('Print Bill'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.blueGrey,
+                      side: BorderSide(color: Colors.blueGrey.shade300),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ChatScreen(
+                            receiverId: order.customerId,
+                            receiverName: order.customerName.isNotEmpty
+                                ? order.customerName
+                                : 'Customer',
+                          ),
                         ),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.chat_bubble_outline, size: 16),
-                  label: const Text('Message', style: TextStyle(fontSize: 12)),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppTheme.secondaryColor,
-                    side: const BorderSide(color: AppTheme.secondaryColor),
+                      );
+                    },
+                    icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                    label: const Text('Message'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.secondaryColor,
+                      side: const BorderSide(color: AppTheme.secondaryColor),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: onUpdateStatus,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.secondaryColor,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                  ),
-                  child: const Text('Update Status', style: TextStyle(fontSize: 12)),
-                ),
+              ],
+            ),
+            if (isReady) ...[
+              const SizedBox(height: 8),
+              const Row(
+                children: [
+                  Icon(Icons.hourglass_top, size: 15, color: Colors.orange),
+                  SizedBox(width: 6),
+                  Text('Ready — waiting for delivery partner…',
+                      style: TextStyle(color: Colors.orange, fontSize: 13, fontWeight: FontWeight.w600)),
+                ],
               ),
             ],
-          ),
+            if (isDispatched) ...[
+              const SizedBox(height: 8),
+              const Row(
+                children: [
+                  Icon(Icons.delivery_dining, size: 16, color: Colors.blue),
+                  SizedBox(width: 6),
+                  Text('Dispatched — rider picked up the order',
+                      style: TextStyle(color: Colors.blue, fontSize: 13, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ],
+            if (isDelivered) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.check_circle, size: 15, color: AppTheme.secondaryColor),
+                  const SizedBox(width: 6),
+                  Text('Delivered successfully',
+                      style: TextStyle(
+                          color: AppTheme.secondaryColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ],
+          ],
         ],
       ),
     );
