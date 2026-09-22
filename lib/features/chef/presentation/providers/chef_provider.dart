@@ -66,6 +66,7 @@ class ChefProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
+      await _ensureAuthenticated();
       final data = await _api.get(AppConstants.kitchensEndpoint, queryParams: {'status': 'pending,approved,rejected'});
       final kitchens = (data['data'] as List?) ?? [];
       if (kitchens.isNotEmpty) {
@@ -86,6 +87,7 @@ class ChefProvider extends ChangeNotifier {
 
   Future<void> fetchPayoutHistory() async {
     try {
+      await _ensureAuthenticated();
       final data = await _api.get(AppConstants.payoutsEndpoint);
       _payoutHistory = ((data['data'] as List?) ?? []).cast<Map<String, dynamic>>();
       _pendingPayout = _payoutHistory
@@ -105,6 +107,7 @@ class ChefProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
+      await _ensureAuthenticated();
       await _api.post(AppConstants.payoutsEndpoint, body: requestData);
       await fetchPayoutHistory();
     } catch (e) {
@@ -118,6 +121,7 @@ class ChefProvider extends ChangeNotifier {
   Future<void> calculateEarnings() async {
     if (_myKitchen == null) return;
     try {
+      await _ensureAuthenticated();
       final kitchenId = _myKitchen!['id'];
       final data = await _api.get(AppConstants.ordersEndpoint, queryParams: {'status': 'active'});
       final orders = (data['data'] as List?) ?? [];
@@ -177,6 +181,7 @@ class ChefProvider extends ChangeNotifier {
     final url = await pickAndUploadImage('kitchen_gallery');
     if (url != null && _myKitchen != null) {
       try {
+        await _ensureAuthenticated();
         final kitchenId = _myKitchen!['id'];
         await _api.post(
           '${AppConstants.kitchenImagesEndpoint}/$kitchenId/images/',
@@ -192,6 +197,7 @@ class ChefProvider extends ChangeNotifier {
   Future<void> removeGalleryImage(String imageUrl) async {
     if (_myKitchen == null) return;
     try {
+      await _ensureAuthenticated();
       final kitchenId = _myKitchen!['id'];
       await _api.post(
         '${AppConstants.kitchenImagesEndpoint}/$kitchenId/images/delete/',
@@ -206,6 +212,7 @@ class ChefProvider extends ChangeNotifier {
   Future<void> fetchDishes() async {
     if (_myKitchen == null) return;
     try {
+      await _ensureAuthenticated();
       final kitchenId = _myKitchen!['id'];
       final data = await _api.get('${AppConstants.menuItemsEndpoint}/$kitchenId/menu-items/');
       _myDishes = ((data['data'] as List?) ?? []).cast<Map<String, dynamic>>();
@@ -220,6 +227,7 @@ class ChefProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
+      await _ensureAuthenticated();
       final kitchenId = _myKitchen!['id'];
       await _api.post(
         '${AppConstants.menuItemsEndpoint}/$kitchenId/menu-items/',
@@ -237,6 +245,7 @@ class ChefProvider extends ChangeNotifier {
   Future<void> deleteDish(dynamic dishId) async {
     if (_myKitchen == null) return;
     try {
+      await _ensureAuthenticated();
       final kitchenId = _myKitchen!['id'];
       await _api.delete('${AppConstants.menuItemsEndpoint}/$kitchenId/menu-items/$dishId/');
       await fetchDishes();
@@ -249,6 +258,7 @@ class ChefProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
+      await _ensureAuthenticated();
       final kitchenId = _myKitchen!['id'];
       await _api.put(
         '${AppConstants.kitchensEndpoint}$kitchenId/',
@@ -266,6 +276,7 @@ class ChefProvider extends ChangeNotifier {
   Future<void> toggleKitchenAvailability() async {
     if (_myKitchen == null) return;
     try {
+      await _ensureAuthenticated();
       final kitchenId = _myKitchen!['id'];
       await _api.post(
         '${AppConstants.kitchenToggleOpenEndpoint}/$kitchenId/toggle-open/',
@@ -281,6 +292,7 @@ class ChefProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
+      await _ensureAuthenticated();
       final kitchenId = _myKitchen!['id'];
       await _api.post(
         '${AppConstants.kitchenDailyMenusEndpoint}/$kitchenId/daily-menus/',
@@ -321,6 +333,7 @@ class ChefProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
+      await _ensureAuthenticated();
       kitchenData['status'] = 'pending';
       final data = await _api.post(AppConstants.kitchensEndpoint, body: kitchenData);
       final kitchen = data['data'] ?? data;
@@ -340,6 +353,7 @@ class ChefProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
+      await _ensureAuthenticated();
       final kitchenId = _myKitchen!['id'];
       await _api.put(
         '${AppConstants.menuItemsEndpoint}/$kitchenId/menu-items/$dishId/',
