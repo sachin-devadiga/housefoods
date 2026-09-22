@@ -81,7 +81,7 @@ class UsbPrinterBridge(private val context: Context) {
     }
 
     private fun printBytes(vid: Int, pid: Int, bytes: ByteArray): Map<String, Any?> {
-        if (bytes.isEmpty) return mapOf("ok" to false, "error" to "empty bill")
+        if (bytes.isEmpty()) return mapOf("ok" to false, "error" to "empty bill")
         val manager = context.getSystemService(Context.USB_SERVICE) as UsbManager
         val device: UsbDevice = manager.deviceList.values.firstOrNull {
             it.vendorId == vid && it.productId == pid
