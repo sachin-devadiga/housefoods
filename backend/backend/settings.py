@@ -17,16 +17,12 @@ ALLOWED_HOSTS = [
     for host in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
     if host.strip()
 ]
-if render_hostname := os.getenv('RENDER_EXTERNAL_HOSTNAME'):
-    ALLOWED_HOSTS.append(render_hostname)
 
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
     for origin in os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',')
     if origin.strip()
 ]
-if render_hostname:
-    CSRF_TRUSTED_ORIGINS.append(f'https://{render_hostname}')
 
 INSTALLED_APPS = [
     'jazzmin',
@@ -160,19 +156,19 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'backend.wsgi.application'
 
-# PostgreSQL database. Render supplies DATABASE_URL; the individual variables
-# keep local development with an existing PostgreSQL instance working.
+# MySQL database. Accepts DATABASE_URL (mysql://...) or the individual
+# DB_* variables below. Uses PyMySQL via the MySQLdb shim in backend/__init__.py.
 DATABASE_URL = os.getenv('DATABASE_URL')
 if DATABASE_URL:
     DATABASES = {'default': dj_database_url.config(conn_max_age=600)}
 else:
     DATABASES = {'default': {
-        'ENGINE': 'django.db.backends.postgresql',
+        'ENGINE': 'django.db.backends.mysql',
         'NAME': os.getenv('DB_NAME', 'mealin'),
-        'USER': os.getenv('DB_USER', 'postgres'),
-        'PASSWORD': os.getenv('DB_PASSWORD', 'postgres'),
+        'USER': os.getenv('DB_USER', 'mealin'),
+        'PASSWORD': os.getenv('DB_PASSWORD', ''),
         'HOST': os.getenv('DB_HOST', 'localhost'),
-        'PORT': os.getenv('DB_PORT', '5432'),
+        'PORT': os.getenv('DB_PORT', '3306'),
     }}
 
 AUTH_PASSWORD_VALIDATORS = []
