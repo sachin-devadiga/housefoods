@@ -2,6 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
 from . import ai_chat_view
+from . import health_views
 
 router = DefaultRouter()
 router.register(r'kitchens/(?P<kitchen_pk>[^/.]+)/menu-categories', views.MenuCategoryViewSet, basename='menu-category')
@@ -141,6 +142,9 @@ urlpatterns = [
 
     # AI Assistant
     path('ai/chat/', ai_chat_view.MealAIChatView.as_view(), name='ai-chat'),
+
+    # Safe deployment diagnostics (booleans only, no secrets/tracebacks)
+    path('admin-health/', health_views.AdminHealthView.as_view(), name='admin-health'),
 
     # Include router URLs
     path('', include(router.urls)),
