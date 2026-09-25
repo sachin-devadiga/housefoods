@@ -1,0 +1,10 @@
+---
+# MEALIN backend — GoDaddy cPanel Git deployment (api.mealin.in).
+# Copies the contents of /backend/ (Django project) into the existing
+# Python application root. Dotfiles (e.g. backend/.env) are NOT copied, so
+# server environment variables are never overwritten. Nothing is deleted,
+# so the existing GoDaddy backup is preserved. Migrations are run manually.
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/xvgmve7rzl9z/mealin-api/
+    - /bin/cp -R backend/* $DEPLOYPATH

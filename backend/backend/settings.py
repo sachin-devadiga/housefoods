@@ -206,7 +206,7 @@ SIMPLE_JWT = {
 }
 
 # CORS is not required by the APK, but is needed for any browser client.
-# Keep it open only in local development; set CORS_ALLOWED_ORIGINS in Render
+# Keep it open only in local development; set CORS_ALLOWED_ORIGINS on GoDaddy
 # if you later host a web frontend.
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 CORS_ALLOWED_ORIGINS = [
@@ -242,7 +242,7 @@ STORAGES = {
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# Render terminates HTTPS at its proxy before forwarding to Gunicorn.
+# Passenger/cPanel terminates HTTPS at the proxy before forwarding to Django.
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SECURE_SSL_REDIRECT = True
