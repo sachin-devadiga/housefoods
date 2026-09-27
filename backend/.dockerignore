@@ -1,0 +1,14 @@
+# Keep secrets, junk and local-only files out of the Docker image.
+.env
+*.sqlite3
+__pycache__/
+*.py[cod]
+.git/
+media/
+staticfiles/
+*.log
+*_output.txt
+firebase-service-account.json
+.venv/
+venv/
+.pytest_cache/

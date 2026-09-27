@@ -2,8 +2,9 @@ class AppConstants {
   static const String appName = 'MEALIN';
 
   // API Configuration
-  // Production builds use the Render HTTPS service. A different value is
-  // permitted only for an explicitly configured development build.
+  // Production builds use the Hostinger backend at api.mealin.in. A different
+  // value is permitted only for an explicitly configured development build
+  // via --dart-define=API_BASE_URL=...
   static List<String> apiBaseUrlCandidates = _resolveApiBaseUrlCandidates();
 
   static String apiBaseUrl = apiBaseUrlCandidates.first;
@@ -12,7 +13,7 @@ class AppConstants {
     const fromEnv = String.fromEnvironment('API_BASE_URL');
     if (fromEnv.isNotEmpty) return [fromEnv];
 
-    return ['https://housefoods.onrender.com'];
+    return ['https://api.mealin.in'];
   }
 
   // Auth Endpoints

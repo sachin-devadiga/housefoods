@@ -1,0 +1,5 @@
+# MEALIN backend — api.mealin.in reverse proxy (Hostinger VPS).
+# Caddy auto-provisions and renews the Let's Encrypt certificate.
+api.mealin.in {
+	reverse_proxy web:8000
+}

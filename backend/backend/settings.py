@@ -156,8 +156,9 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'backend.wsgi.application'
 
-# MySQL database. Accepts DATABASE_URL (mysql://...) or the individual
-# DB_* variables below. Uses PyMySQL via the MySQLdb shim in backend/__init__.py.
+# Production database is PostgreSQL (Hostinger VPS). Accepts DATABASE_URL
+# (postgres://...) or the individual DB_* variables below. The PyMySQL
+# MySQLdb shim in backend/__init__.py is kept for MySQL-based setups.
 DATABASE_URL = os.getenv('DATABASE_URL')
 if DATABASE_URL:
     DATABASES = {'default': dj_database_url.config(conn_max_age=600)}
