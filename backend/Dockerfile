@@ -22,7 +22,12 @@ COPY . .
 
 # Collect static at build time so the image serves admin/API static files
 # even before first boot (re-collected on every container start too).
+# Build-time only: collectstatic must not require the production database
+# (compose env_file applies at run time, not build time), so point it at a
+# throwaway SQLite file. Runtime DATABASE_URL is unaffected.
+ENV DATABASE_URL=sqlite:///tmp/docker-build.db
 RUN python manage.py collectstatic --noinput
+ENV DATABASE_URL=
 
 RUN useradd -m appuser && chown -R appuser:appuser /app
 USER appuser
