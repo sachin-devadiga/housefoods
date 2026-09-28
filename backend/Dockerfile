@@ -34,4 +34,9 @@ USER appuser
 
 EXPOSE 8000
 
+# Ensure the entrypoint is executable (git on Windows does not preserve +x).
+USER root
+RUN chmod +x /app/docker-entrypoint.sh
+USER appuser
+
 ENTRYPOINT ["./docker-entrypoint.sh"]
