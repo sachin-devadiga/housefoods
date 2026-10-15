@@ -6,8 +6,11 @@ import '../../../chat/presentation/screens/inbox_screen.dart';
 import 'tabs/home_tab.dart';
 import 'tabs/search_tab.dart';
 import 'tabs/orders_tab.dart';
+import 'tabs/subscriptions_tab.dart';
 import 'tabs/profile_tab.dart';
 
+/// Customer shell with a 5-tab bottom navigation bar:
+/// Home / Search / Orders / Subscriptions / Profile.
 class CustomerDashboard extends StatefulWidget {
   const CustomerDashboard({super.key});
 
@@ -22,6 +25,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     const HomeTab(),
     const SearchTab(),
     const OrdersTab(),
+    const SubscriptionsTab(),
     const ProfileTab(),
   ];
 
@@ -73,6 +77,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
           BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.search), activeIcon: Icon(Icons.search_rounded), label: 'Search'),
           BottomNavigationBarItem(icon: Icon(Icons.receipt_long_outlined), activeIcon: Icon(Icons.receipt_long), label: 'Orders'),
+          BottomNavigationBarItem(icon: Icon(Icons.autorenew_outlined), activeIcon: Icon(Icons.autorenew), label: 'Plans'),
           BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: 'Profile'),
         ],
       ),

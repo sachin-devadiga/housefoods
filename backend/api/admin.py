@@ -11,6 +11,7 @@ from .models import (
     DeliveryLog, Payment, WalletTransaction, Review, Coupon,
     SupportTicket, Banner, AdminSetting, PayoutRequest,
     DeliveryDocument, VoicePin, VoiceAuthorization,
+    MealPlan, PlanPrice, PlanSlot, Subscription, SubscriptionMeal,
 )
 
 
@@ -404,3 +405,63 @@ class VoiceAuthorizationAdmin(BulkActionsAdmin):
     def has_add_permission(self, request):
         return False
 
+
+# ──────────────────────────────────────────────
+# SUBSCRIPTIONS
+
+
+class PlanPriceInline(admin.TabularInline):
+    model = PlanPrice
+    extra = 1
+
+
+class PlanSlotInline(admin.TabularInline):
+    model = PlanSlot
+    extra = 1
+    fields = ['day_of_week', 'meal_type', 'title', 'items', 'is_active']
+
+
+@admin.register(MealPlan)
+class MealPlanAdmin(admin.ModelAdmin):
+    list_display = ['name', 'kitchen', 'is_veg', 'is_active', 'created_at']
+    list_filter = ['is_active', 'is_veg', 'kitchen']
+    search_fields = ['name', 'kitchen__name']
+    inlines = [PlanPriceInline, PlanSlotInline]
+
+
+@admin.register(PlanPrice)
+class PlanPriceAdmin(admin.ModelAdmin):
+    list_display = ['plan', 'cadence', 'price', 'is_active']
+    list_filter = ['cadence', 'is_active']
+
+
+@admin.register(PlanSlot)
+class PlanSlotAdmin(admin.ModelAdmin):
+    list_display = ['plan', 'day_of_week', 'meal_type', 'title', 'is_active']
+    list_filter = ['day_of_week', 'meal_type', 'is_active']
+
+
+class SubscriptionMealInline(admin.TabularInline):
+    model = SubscriptionMeal
+    extra = 0
+    fields = ['date', 'meal_type', 'title', 'status', 'order']
+    readonly_fields = ['order']
+    ordering = ['date']
+
+
+@admin.register(Subscription)
+class SubscriptionAdmin(admin.ModelAdmin):
+    list_display = ['id', 'customer', 'kitchen', 'plan', 'cadence', 'status',
+                    'start_date', 'end_date', 'price_paid']
+    list_filter = ['status', 'cadence', 'kitchen']
+    search_fields = ['customer__email', 'customer__name', 'kitchen__name']
+    date_hierarchy = 'start_date'
+    inlines = [SubscriptionMealInline]
+    readonly_fields = ['payment_id', 'created_at', 'updated_at']
+
+
+@admin.register(SubscriptionMeal)
+class SubscriptionMealAdmin(admin.ModelAdmin):
+    list_display = ['subscription', 'date', 'meal_type', 'title', 'status', 'order']
+    list_filter = ['status', 'meal_type', 'date']
+    date_hierarchy = 'date'

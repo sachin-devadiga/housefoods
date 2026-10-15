@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 import '../../../../../core/theme/app_theme.dart';
 import '../../../../customer/presentation/providers/order_provider.dart';
 import '../../providers/chef_provider.dart';
+import '../../providers/meal_plan_provider.dart';
 import '../daily_fulfillment_screen.dart';
 import '../dispatch_history_screen.dart';
+import '../plan_subscribers_screen.dart';
 
 class ChefHomeTab extends StatefulWidget {
   const ChefHomeTab({super.key});
@@ -94,7 +96,25 @@ class _ChefHomeTabState extends State<ChefHomeTab> {
                 ),
                 const SizedBox(height: 12),
                 _buildStatCard("Today's Revenue", "₹${provider.dailyEarnings.toStringAsFixed(0)}", Icons.payments, AppTheme.secondaryColor, fullWidth: true),
-                
+
+                // Subscription revenue is not separable yet: the orders feed
+                // that backs provider.dailyEarnings carries no subscription
+                // marker, and no subscription-revenue endpoint exists. So this
+                // tile shows the honest number it does have — published plans —
+                // instead of a fabricated revenue figure.
+                _buildStatCard(
+                  "Subscription Plans",
+                  "${context.watch<MealPlanProvider>().plans.length}",
+                  Icons.calendar_month,
+                  Colors.deepPurple,
+                  fullWidth: true,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PlanSubscribersScreen()),
+                  ),
+                ),
+                const SizedBox(height: 6),
+
                 const SizedBox(height: 32),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,

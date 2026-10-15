@@ -14,6 +14,13 @@
 .cxx
 local.properties
 .env
+# Bare `env` (no dot) is a common accident when shell redirection omits the
+# dot. These files hold DB passwords, SMTP keys and the Firebase service
+# account private key - they must never be committed.
+/env
+*.env
+/env.*
+
 backend/firebase-service-account.json
 backend/media/
 backend/staticfiles/
@@ -32,5 +39,7 @@ __pycache__/
 android/app/role.properties
 android/key.properties
 android/app/mealin-release.keystore
+# iOS secrets (MAPS_API_KEY). Copy from Secrets.xcconfig.example; never commit.
+ios/Flutter/Secrets.xcconfig
 build/apk-output/
 android/build/

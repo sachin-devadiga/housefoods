@@ -11,7 +11,9 @@ class OrderModel {
   final String chefUid;
   final String customerUid;
   final String customerPhone;
-  final String orderType; // always 'one_time' (subscriptions removed)
+  /// 'one_time' for a regular food order, 'subscription' for a meal that
+  /// belongs to a recurring plan (see SubscriptionModel).
+  final String orderType;
   final String planId;
   final String planName;
   final double amount;
@@ -71,7 +73,9 @@ class OrderModel {
     this.items = const [],
   });
 
-  bool get isOneTimeOrder => true;
+  bool get isOneTimeOrder => orderType == 'one_time';
+
+  bool get isSubscriptionOrder => orderType == 'subscription';
 
   /// Kitchen-facing progress label derived from delivery status.
   String get deliveryProgressLabel {

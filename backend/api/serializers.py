@@ -6,6 +6,7 @@ from .models import (
     Cart, CartItem, DeliveryLog, Payment, WalletTransaction, Review, Coupon,
     Notification, SupportTicket, Banner, AdminSetting, PayoutRequest,
     ChatMessage, DeliveryDocument,
+    MealPlan, PlanPrice, PlanSlot, Subscription, SubscriptionMeal,
 )
 
 
@@ -513,3 +514,157 @@ class ProfileSetupSerializer(serializers.Serializer):
     allergies = serializers.ListField(
         child=serializers.CharField(), required=False, allow_empty=True
     )
+
+
+# ──────────────────────────────────────────────
+# SUBSCRIPTION SERIALIZERS
+#
+# All read serializers inherit CamelCaseModelSerializer so the Flutter models
+# get camelCase keys without any extra work on their side. Write serializers
+# for chef-authored content use plain ModelSerializer + explicit fields.
+#
+# Decimals are emitted as strings. The Flutter side does double.tryParse,
+# and round-tripping money through a JSON float loses paise.
+
+
+class PlanPriceSerializer(CamelCaseModelSerializer):
+    duration_days = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = PlanPrice
+        fields = ['id', 'cadence', 'price', 'duration_days', 'is_active']
+
+
+class PlanSlotSerializer(CamelCaseModelSerializer):
+    day_name = serializers.CharField(source='get_day_of_week_display', read_only=True)
+    slot_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = PlanSlot
+        fields = [
+            'id', 'day_of_week', 'day_name', 'meal_type', 'title',
+            'items', 'slot_total', 'is_active',
+        ]
+
+
+class MealPlanSerializer(CamelCaseModelSerializer):
+    kitchen_name = serializers.CharField(source='kitchen.name', read_only=True)
+    kitchen_latitude = serializers.FloatField(source='kitchen.latitude', read_only=True)
+    kitchen_longitude = serializers.FloatField(source='kitchen.longitude', read_only=True)
+    kitchen_address = serializers.CharField(source='kitchen.address', read_only=True)
+    prices = PlanPriceSerializer(many=True, read_only=True)
+    slots = PlanSlotSerializer(many=True, read_only=True)
+    starting_price = serializers.DecimalField(
+        max_digits=10, decimal_places=2, read_only=True,
+    )
+    # Populated by the caller for the "nearest kitchens" query.
+    distance_km = serializers.FloatField(read_only=True, required=False)
+
+    class Meta:
+        model = MealPlan
+        fields = [
+            'id', 'kitchen', 'kitchen_name', 'kitchen_latitude',
+            'kitchen_longitude', 'kitchen_address', 'name', 'description',
+            'inclusions', 'is_veg', 'image_url', 'is_active',
+            'prices', 'slots', 'starting_price', 'distance_km',
+        ]
+
+
+class MealPlanWriteSerializer(serializers.ModelSerializer):
+    prices = PlanPriceSerializer(many=True, required=False)
+    slots = PlanSlotSerializer(many=True, required=False)
+
+    class Meta:
+        model = MealPlan
+        fields = [
+            'id', 'name', 'description', 'inclusions', 'is_veg',
+            'image_url', 'is_active', 'prices', 'slots',
+        ]
+
+    def create(self, validated_data):
+        prices = validated_data.pop('prices', [])
+        slots = validated_data.pop('slots', [])
+        plan = MealPlan.objects.create(**validated_data)
+        self._replace_prices(plan, prices)
+        self._replace_slots(plan, slots)
+        return plan
+
+    def update(self, instance, validated_data):
+        prices = validated_data.pop('prices', None)
+        slots = validated_data.pop('slots', None)
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+        instance.save()
+        if prices is not None:
+            self._replace_prices(instance, prices)
+        if slots is not None:
+            self._replace_slots(instance, slots)
+        return instance
+
+    def _replace_prices(self, plan, prices):
+        """Upsert by cadence; unknown cadences are ignored rather than raising,
+        so one bad row in the chef's payload cannot wipe the whole plan."""
+        for p in prices:
+            cadence = p.get('cadence')
+            if cadence not in PlanPrice.CADENCE_DICT:
+                continue
+            PlanPrice.objects.update_or_create(
+                plan=plan,
+                cadence=cadence,
+                defaults={
+                    'price': p.get('price', 0),
+                    'is_active': p.get('is_active', True),
+                },
+            )
+
+    def _replace_slots(self, plan, slots):
+        for s in slots:
+            day = s.get('day_of_week')
+            meal_type = s.get('meal_type')
+            if day is None or meal_type not in PlanSlot.MEAL_TYPE_DICT:
+                continue
+            PlanSlot.objects.update_or_create(
+                plan=plan,
+                day_of_week=int(day),
+                meal_type=meal_type,
+                defaults={
+                    'title': s.get('title', ''),
+                    'items': s.get('items', []),
+                    'is_active': s.get('is_active', True),
+                },
+            )
+
+
+class SubscriptionMealSerializer(CamelCaseModelSerializer):
+    class Meta:
+        model = SubscriptionMeal
+        fields = [
+            'id', 'subscription', 'slot', 'date', 'meal_type', 'title',
+            'items', 'order', 'status', 'skip_reason', 'item_total',
+        ]
+        read_only_fields = ['subscription', 'slot', 'items', 'item_total']
+
+
+class SubscriptionSerializer(CamelCaseModelSerializer):
+    kitchen_name = serializers.CharField(source='kitchen.name', read_only=True)
+    plan_name = serializers.CharField(source='plan.name', read_only=True)
+    plan_description = serializers.CharField(source='plan.description', read_only=True)
+    plan_image_url = serializers.CharField(source='plan.image_url', read_only=True)
+    address_text = serializers.SerializerMethodField()
+    meals = SubscriptionMealSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Subscription
+        fields = [
+            'id', 'customer', 'kitchen', 'kitchen_name', 'plan', 'plan_name',
+            'plan_description', 'plan_image_url', 'cadence', 'address',
+            'address_text', 'start_date', 'end_date', 'status', 'price_paid',
+            'payment_id', 'period_start', 'last_charged_at', 'meals',
+            'created_at',
+        ]
+        read_only_fields = ['customer', 'status', 'price_paid', 'payment_id']
+
+    def get_address_text(self, obj):
+        if not obj.address:
+            return ''
+        return f'{obj.address.address_line1}, {obj.address.city}'

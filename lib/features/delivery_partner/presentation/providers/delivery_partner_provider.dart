@@ -35,6 +35,13 @@ class DeliveryPartnerProvider extends ChangeNotifier {
   int _totalDeliveries = 0;
   int get totalDeliveries => _totalDeliveries;
 
+  // Pay-model split. Added server-side after this client shipped, so both stay
+  // 0 until the new response lands rather than breaking the tab.
+  double _subscriptionEarnings = 0;
+  double get subscriptionEarnings => _subscriptionEarnings;
+  double _normalEarnings = 0;
+  double get normalEarnings => _normalEarnings;
+
   List<Map<String, dynamic>> _payoutHistory = [];
   List<Map<String, dynamic>> get payoutHistory => _payoutHistory;
 
@@ -154,13 +161,66 @@ class DeliveryPartnerProvider extends ChangeNotifier {
       _todayEarnings = _safeDouble(data['today_earnings']);
       _weeklyEarnings = _safeDouble(data['weekly_earnings']);
       _totalDeliveries = _safeInt(data['total_deliveries']);
+      _subscriptionEarnings = _safeDouble(data['subscription_earnings']);
+      _normalEarnings = _safeDouble(data['normal_earnings']);
     } catch (e) {
       _totalEarnings = 0;
       _todayEarnings = 0;
       _weeklyEarnings = 0;
       _totalDeliveries = 0;
+      _subscriptionEarnings = 0;
+      _normalEarnings = 0;
       debugPrint("fetchEarnings error: $e");
     }
+  }
+
+  Future<void> fetchDeliveryHistory() async {
+    await _ensureAuthenticated();
+    await _fetchDeliveryHistoryInternal();
+    notifyListeners();
+  }
+
+  /// 7-day payout trend, oldest first, summed from real delivered orders.
+  ///
+  /// The earnings endpoint only returns lifetime/week totals, so the series is
+  /// bucketed from [deliveryHistory] (`rider_payout` by `delivered_at` day)
+  /// rather than interpolated. Days with no delivery contribute 0.
+  ///
+  /// ponytail: capped by the history page size (20). A rider doing >20
+  /// deliveries a week sees a truncated series; replace with a per-day
+  /// endpoint from DeliveryEarningsView when that ceiling matters.
+  List<Map<String, dynamic>> get weeklyEarningsSeries =>
+      weeklySeriesFrom(_deliveryHistory, DateTime.now());
+
+  /// Calendar week (Mon-first), always padded to 7 so the chart reads
+  /// "this week so far" against a full week, the way the chef chart does.
+  @visibleForTesting
+  static List<Map<String, dynamic>> weeklySeriesFrom(
+    List<Map<String, dynamic>> history,
+    DateTime now,
+  ) {
+    final today = DateTime(now.year, now.month, now.day);
+    const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final startOfWeek = today.subtract(Duration(days: today.weekday - 1));
+    final totals = List<double>.filled(7, 0);
+
+    for (final order in history) {
+      final deliveredAt =
+          order['delivered_at'] is DateTime
+              ? order['delivered_at'] as DateTime
+              : DateTime.tryParse(order['delivered_at']?.toString() ?? '');
+      if (deliveredAt == null) continue;
+      final day = DateTime(deliveredAt.year, deliveredAt.month, deliveredAt.day);
+      final offset = day.difference(startOfWeek).inDays;
+      if (offset < 0 || offset > 6) continue;
+      final payout = order['rider_payout'];
+      totals[offset] += payout is num ? payout.toDouble() : double.tryParse('$payout') ?? 0.0;
+    }
+
+    return [
+      for (var i = 0; i < 7; i++)
+        {'day': labels[i], 'amount': totals[i]},
+    ];
   }
 
   void _setLoading(bool v) {

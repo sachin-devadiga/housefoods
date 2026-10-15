@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../providers/delivery_partner_provider.dart';
+import '../widgets/earnings_chart.dart';
 import 'delivery_payout_screen.dart';
 
 String _shortId(dynamic id, {int length = 8}) {
@@ -32,6 +33,7 @@ class DeliveryPartnerEarningsTab extends StatelessWidget {
           return RefreshIndicator(
             onRefresh: () async {
               await provider.fetchMyDeliveries();
+              await provider.fetchDeliveryHistory();
               await provider.fetchEarnings();
             },
             child: SingleChildScrollView(
@@ -61,6 +63,25 @@ class DeliveryPartnerEarningsTab extends StatelessWidget {
                           ),
                         ],
                       ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Text('Earnings Trend (This Week)',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey[800])),
+                  const SizedBox(height: 12),
+                  EarningsChart(weeklyData: provider.weeklyEarningsSeries),
+                  const SizedBox(height: 24),
+                  Text('Pay Model Split',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey[800])),
+                  const SizedBox(height: 12),
+                  Card(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    child: Column(
+                      children: [
+                        _earningsRow('Subscription deliveries', provider.subscriptionEarnings, Colors.blue),
+                        Divider(height: 1, color: Colors.grey[200]),
+                        _earningsRow('One-time deliveries', provider.normalEarnings, AppTheme.secondaryColor),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -106,6 +127,15 @@ class DeliveryPartnerEarningsTab extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+
+  Widget _earningsRow(String label, double amount, Color color) {
+    return ListTile(
+      leading: Icon(Icons.account_balance_wallet_outlined, color: color),
+      title: Text(label),
+      trailing: Text('₹${amount.toStringAsFixed(0)}',
+          style: TextStyle(fontWeight: FontWeight.bold, color: color)),
     );
   }
 

@@ -147,6 +147,37 @@ class AppConstants {
   // Delivery Partner Payouts
   static const String deliveryPayoutsEndpoint = '/api/auth/delivery/payouts/';
 
+  // Subscriptions (customer-facing; backend/api/subscription_views.py)
+  static const String subscriptionPlansEndpoint = '/api/auth/subscriptions/plans/';
+  static const String subscriptionQuoteEndpoint = '/api/auth/subscriptions/quote/';
+  static const String subscriptionSubscribeEndpoint = '/api/auth/subscriptions/subscribe/';
+  static const String mySubscriptionsEndpoint = '/api/auth/subscriptions/mine/';
+  static String subscriptionPauseEndpoint(dynamic id) =>
+      '/api/auth/subscriptions/$id/pause/';
+  static String subscriptionResumeEndpoint(dynamic id) =>
+      '/api/auth/subscriptions/$id/resume/';
+  static String subscriptionCancelEndpoint(dynamic id) =>
+      '/api/auth/subscriptions/$id/cancel/';
+  static String subscriptionSkipMealEndpoint(dynamic id) =>
+      '/api/auth/subscriptions/$id/skip-meal/';
+
+  /// The backend refuses a start date closer than this
+  /// (AdminSetting `subscription_min_lead_days`, default 7). Mirrored here so
+  /// the picker cannot offer a date the server will reject.
+  static const int subscriptionMinLeadDays = 7;
+
+  // Chef subscriptions
+  // Only the customer-scoped subscription API exists today
+  // (backend/api/subscription_views.py). The chef plan write/manage endpoints
+  // below are NOT implemented yet — they are declared here so the chef-side
+  // provider has a single, honest place to wire them up when they land.
+  // Reads reuse the customer endpoints above; `subscriptionPlansEndpoint` is
+  // the one genuinely available plan read.
+  // TODO(backend): chef plan CRUD + subscriber list.
+  static const String chefMealPlansEndpoint = '/api/auth/subscriptions/chef-plans/';
+  static const String chefPlanSubscribersEndpoint =
+      '/api/auth/subscriptions/chef-subscribers/';
+
   // Shared Preferences Keys
   static const String isFirstRun = 'is_first_run';
   static const String userRole = 'user_role';

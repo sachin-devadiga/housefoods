@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 from . import views
 from . import ai_chat_view
 from . import health_views
+from . import subscription_views
 
 router = DefaultRouter()
 router.register(r'kitchens/(?P<kitchen_pk>[^/.]+)/menu-categories', views.MenuCategoryViewSet, basename='menu-category')
@@ -136,6 +137,16 @@ urlpatterns = [
 
     # Map
     path('map/route/', views.MapRouteView.as_view(), name='map-route'),
+
+    # Subscriptions (customer-facing; own module, see api/subscription_views.py)
+    path('subscriptions/plans/', subscription_views.SubscriptionPlanListView.as_view(), name='subscription-plans'),
+    path('subscriptions/quote/', subscription_views.SubscriptionQuoteView.as_view(), name='subscription-quote'),
+    path('subscriptions/subscribe/', subscription_views.SubscribeView.as_view(), name='subscription-subscribe'),
+    path('subscriptions/mine/', subscription_views.MySubscriptionsView.as_view(), name='subscription-mine'),
+    path('subscriptions/<int:pk>/pause/', subscription_views.SubscriptionPauseView.as_view(), name='subscription-pause'),
+    path('subscriptions/<int:pk>/resume/', subscription_views.SubscriptionResumeView.as_view(), name='subscription-resume'),
+    path('subscriptions/<int:pk>/cancel/', subscription_views.SubscriptionCancelView.as_view(), name='subscription-cancel'),
+    path('subscriptions/<int:pk>/skip-meal/', subscription_views.SubscriptionSkipMealView.as_view(), name='subscription-skip-meal'),
 
     # Voice STT Proxy for MEAL AI chat voice input (Sarvam API key stays on backend)
     path('voice/stt/', views.VoiceSTTView.as_view(), name='voice-stt'),

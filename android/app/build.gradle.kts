@@ -41,8 +41,11 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true
-        // Supply with -PMAPS_API_KEY=... in CI or an untracked Gradle property.
-        manifestPlaceholders["MAPS_API_KEY"] = project.findProperty("MAPS_API_KEY")?.toString() ?: ""
+        // Supply via the MAPS_API_KEY environment variable, or -PMAPS_API_KEY=... in CI.
+        val mapsApiKey = System.getenv("MAPS_API_KEY")
+            ?: project.findProperty("MAPS_API_KEY")?.toString()
+            ?: ""
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
         manifestPlaceholders["APP_LABEL"] = when (appRole) {
             "customer" -> "MEALIN"
             "chef" -> "MEALIN RESTO"
@@ -64,7 +67,12 @@ android {
         release {
             // Never ship an APK/AAB signed with the debug certificate. Release
             // credentials must be supplied through the ignored key.properties.
-            if (!keyPropertiesFile.exists()) {
+            // buildTypes is evaluated for every variant, so only enforce this
+            // when a release variant is actually being assembled.
+            val buildingRelease = gradle.startParameter.taskNames.any {
+                it.contains("release", ignoreCase = true)
+            }
+            if (buildingRelease && !keyPropertiesFile.exists()) {
                 throw GradleException("Missing android/key.properties: release signing is required")
             }
             signingConfig = signingConfigs.getByName("release")

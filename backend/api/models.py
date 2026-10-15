@@ -1,6 +1,7 @@
 import uuid
 import random
 from datetime import timedelta
+from decimal import Decimal
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
@@ -237,6 +238,7 @@ class Order(models.Model):
 
     ORDER_TYPE_CHOICES = [
         ('one_time', 'One-Time Order'),
+        ('subscription', 'Subscription Meal'),
     ]
 
     customer = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='orders')
@@ -264,6 +266,12 @@ class Order(models.Model):
     preparation_time = models.IntegerField(default=0)
     is_paused = models.BooleanField(default=False)
     delivery_fee = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
+    # What the rider earns for this order. Deliberately separate from
+    # delivery_fee (what the customer was charged): for subscription meals the
+    # two are equal, for one-time orders the customer pays nothing and the
+    # rider earns the admin-set wage. Conflating them would make one column
+    # mean two different things the moment checkout starts displaying it.
+    rider_payout = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
     assigned_at = models.DateTimeField(null=True, blank=True)
     picked_up_at = models.DateTimeField(null=True, blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
@@ -625,3 +633,243 @@ class VoiceAuthorization(models.Model):
 
     def __str__(self):
         return f'VoiceAuth {self.token[:8]}... for {self.user.email}'
+
+
+# ──────────────────────────────────────────────
+# SUBSCRIPTIONS
+#
+# A subscription is a recurring meal plan a customer buys from a Kitchen.
+#
+# The kitchen publishes a weekly template (PlanSlot): for each day_of_week x
+# meal_type it says what it will cook. A subscription picks one template plus a
+# billing cadence (week / month / year). The recurring work is materialised as
+# SubscriptionMeal rows, which are created at most 7 days ahead and each
+# become exactly one real Order when due. Keeping the two steps separate is
+# what makes skip / pause / edit-the-week possible without rewriting history.
+#
+# Money is Decimal throughout. Never float.
+
+class MealPlan(models.Model):
+    """A meal plan a kitchen offers. Pricing and weekly contents hang off it."""
+
+    kitchen = models.ForeignKey(Kitchen, on_delete=models.CASCADE, related_name='meal_plans')
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default='')
+    inclusions = models.JSONField(default=list, blank=True)
+    is_veg = models.BooleanField(default=True)
+    image_url = models.CharField(max_length=500, blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'meal_plans'
+        indexes = [
+            models.Index(fields=['kitchen', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f'{self.kitchen.name} - {self.name}'
+
+    @property
+    def starting_price(self):
+        """Cheapest active price, for sorting cards without an extra query."""
+        active = [p.price for p in self.prices.filter(is_active=True)]
+        return min(active) if active else None
+
+
+class PlanPrice(models.Model):
+    """One billable cadence for a plan. Cadence is data, not code."""
+
+    CADENCE_CHOICES = [
+        ('week', 'Weekly'),
+        ('month', 'Monthly'),
+        ('year', 'Yearly'),
+    ]
+    DURATION_DAYS = {
+        'week': 7,
+        'month': 30,
+        'year': 365,
+    }
+    # Membership-testable form of CADENCE_CHOICES (which is a list of tuples).
+    CADENCE_DICT = dict(CADENCE_CHOICES)
+
+    plan = models.ForeignKey(MealPlan, on_delete=models.CASCADE, related_name='prices')
+    cadence = models.CharField(max_length=10, choices=CADENCE_CHOICES)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'plan_prices'
+        constraints = [
+            models.UniqueConstraint(fields=['plan', 'cadence'], name='uniq_plan_cadence'),
+        ]
+        indexes = [
+            models.Index(fields=['plan', 'is_active']),
+        ]
+
+    @property
+    def duration_days(self):
+        return self.DURATION_DAYS.get(self.cadence, 30)
+
+    def __str__(self):
+        return f'{self.plan.name} ({self.cadence}) - {self.price}'
+
+
+class PlanSlot(models.Model):
+    """One cell of the kitchen's weekly template: e.g. Monday dinner.
+
+    ``items`` is a list of dicts ``{menu_item, name, qty, price}`` captured at
+    publish time. Snapshotting name/price means editing a menu item later does
+    not retroactively change what an existing subscriber signed up for.
+    """
+
+    MEAL_TYPE_CHOICES = [
+        ('breakfast', 'Breakfast'),
+        ('lunch', 'Lunch'),
+        ('dinner', 'Dinner'),
+    ]
+    DAY_CHOICES = [
+        (0, 'Monday'),
+        (1, 'Tuesday'),
+        (2, 'Wednesday'),
+        (3, 'Thursday'),
+        (4, 'Friday'),
+        (5, 'Saturday'),
+        (6, 'Sunday'),
+    ]
+    MEAL_TYPE_DICT = dict(MEAL_TYPE_CHOICES)
+    DAY_DICT = dict(DAY_CHOICES)
+
+    plan = models.ForeignKey(MealPlan, on_delete=models.CASCADE, related_name='slots')
+    day_of_week = models.IntegerField(choices=DAY_CHOICES)
+    meal_type = models.CharField(max_length=20, choices=MEAL_TYPE_CHOICES)
+    title = models.CharField(max_length=255, blank=True, default='')
+    items = models.JSONField(default=list, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'plan_slots'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['plan', 'day_of_week', 'meal_type'], name='uniq_plan_slot',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['plan', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f'{self.plan.name} - {self.get_day_of_week_display()} {self.meal_type}'
+
+    @property
+    def slot_total(self):
+        return sum((Decimal(str(i.get('price', 0))) * int(i.get('qty', 1))
+                    for i in self.items if isinstance(i, dict)), Decimal('0'))
+
+
+class Subscription(models.Model):
+    """A customer subscribing to a kitchen's plan on a billing cadence."""
+
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('paused', 'Paused'),
+        ('cancelled', 'Cancelled'),
+        ('expired', 'Expired'),
+    ]
+
+    customer = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='subscriptions')
+    kitchen = models.ForeignKey(Kitchen, on_delete=models.CASCADE, related_name='subscriptions')
+    plan = models.ForeignKey(MealPlan, on_delete=models.PROTECT, related_name='subscriptions')
+    cadence = models.CharField(max_length=10, choices=PlanPrice.CADENCE_CHOICES)
+    address = models.ForeignKey(Address, on_delete=models.PROTECT, related_name='subscriptions')
+
+    start_date = models.DateField()
+    end_date = models.DateField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+
+    # Charged up-front per period. Renewals overwrite price_paid/payment_id.
+    price_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    payment_id = models.CharField(max_length=255, blank=True, default='')
+    period_start = models.DateField(null=True, blank=True)
+    last_charged_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'subscriptions'
+        indexes = [
+            models.Index(fields=['customer', 'status']),
+            models.Index(fields=['kitchen', 'status']),
+            models.Index(fields=['status', 'start_date', 'end_date']),
+        ]
+
+    def __str__(self):
+        return f'{self.customer.email} -> {self.plan.name} ({self.cadence})'
+
+    @property
+    def is_current(self):
+        today = timezone.now().date()
+        return self.status == 'active' and self.start_date <= today <= self.end_date
+
+    def extend(self, days):
+        """Roll the window forward one period from wherever it currently ends."""
+        self.end_date = self.end_date + timedelta(days=days)
+        self.start_date = min(self.start_date, self.end_date)
+        self.save(update_fields=['end_date', 'start_date', 'updated_at'])
+
+
+class SubscriptionMeal(models.Model):
+    """A single scheduled delivery. Created <=7 days ahead, becomes one Order.
+
+    ``status``:
+      scheduled - materialised, no Order yet
+      ordered   - converted, ``order`` is set
+      skipped   - customer skipped this meal; nothing is delivered
+      delivered - its Order reached delivery_status=delivered (mirror, for
+                  reporting without joining across orders)
+    """
+
+    STATUS_CHOICES = [
+        ('scheduled', 'Scheduled'),
+        ('ordered', 'Ordered'),
+        ('skipped', 'Skipped'),
+        ('delivered', 'Delivered'),
+    ]
+
+    subscription = models.ForeignKey(Subscription, on_delete=models.CASCADE, related_name='meals')
+    slot = models.ForeignKey(PlanSlot, on_delete=models.SET_NULL, null=True, blank=True, related_name='meals')
+    date = models.DateField()
+    meal_type = models.CharField(max_length=20, choices=PlanSlot.MEAL_TYPE_CHOICES)
+    title = models.CharField(max_length=255, blank=True, default='')
+    items = models.JSONField(default=list, blank=True)
+    order = models.ForeignKey(Order, on_delete=models.SET_NULL, null=True, blank=True, related_name='subscription_meals')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='scheduled')
+    skip_reason = models.CharField(max_length=255, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'subscription_meals'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['subscription', 'date', 'meal_type'], name='uniq_sub_meal',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['status', 'date']),
+            models.Index(fields=['subscription', 'date']),
+        ]
+
+    def __str__(self):
+        return f'{self.subscription_id} - {self.date} {self.meal_type} ({self.status})'
+
+    @property
+    def item_total(self):
+        return sum((Decimal(str(i.get('price', 0))) * int(i.get('qty', 1))
+                    for i in self.items if isinstance(i, dict)), Decimal('0'))

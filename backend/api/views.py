@@ -55,8 +55,19 @@ from .serializers import (
     AdminDeliveryDocumentSerializer, AdminDeliveryPartnerSerializer,
 )
 from .permissions import IsAdmin, IsChef, IsCustomer, IsDeliveryPartner
+from .subscription_views import admin_setting
 
 logger = logging.getLogger(__name__)
+
+# What a rider earns on a one-time order. Checkout charges the customer nothing
+# for delivery there, so delivery_fee is not the rider's money — this is.
+RIDER_NORMAL_ORDER_PAYOUT = Decimal('30')
+
+# Money leaves the API as a fixed 2dp string ("42.50", never "42.5").
+# Decimal, not float: float() on money is a wart. The Flutter client reads these
+# with double.tryParse, which handles the string form fine.
+def _money(value):
+    return str(Decimal(value).quantize(Decimal('0.01')))
 
 
 # ──────────────────────────────────────────────
@@ -650,7 +661,12 @@ class AcceptDeliveryView(APIView):
                 order.delivery_partner = request.user.profile
                 order.delivery_status = 'assigned'
                 order.assigned_at = timezone.now()
-                order.delivery_fee = order.delivery_fee or Decimal('30.00')
+                # Subscription orders already carry a rider_payout computed from
+                # the distance-based fee by generate_subscriptions — never
+                # overwrite it. One-time orders pay the admin-set wage.
+                if order.order_type == 'one_time':
+                    order.rider_payout = admin_setting(
+                        'rider_normal_order_payout', RIDER_NORMAL_ORDER_PAYOUT)
                 order.save()
             notify_delivery_partner_accepted(order)
             return Response(OrderSerializer(order).data)
@@ -789,25 +805,34 @@ class DeliveryEarningsView(APIView):
             delivery_partner=profile,
             delivery_status='delivered',
         )
-        total = delivered.aggregate(total=Sum('delivery_fee'))['total'] or 0
+        # rider_payout, not delivery_fee: on a one-time order the customer is
+        # charged nothing for delivery, so summing delivery_fee would report
+        # the rider's earnings as zero.
+        sub_total = delivered.filter(order_type='subscription') \
+            .aggregate(t=Sum('rider_payout'))['t'] or Decimal('0.00')
+        normal_total = delivered.filter(order_type='one_time') \
+            .aggregate(t=Sum('rider_payout'))['t'] or Decimal('0.00')
+        total = sub_total + normal_total
         now = timezone.now()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_start = today_start - timedelta(days=today_start.weekday())
         today = delivered.filter(
             delivered_at__isnull=False,
             delivered_at__gte=today_start,
-        ).aggregate(t=Sum('delivery_fee'))['t'] or 0
+        ).aggregate(t=Sum('rider_payout'))['t'] or Decimal('0.00')
         week = delivered.filter(
             delivered_at__isnull=False,
             delivered_at__gte=week_start,
-        ).aggregate(t=Sum('delivery_fee'))['t'] or 0
+        ).aggregate(t=Sum('rider_payout'))['t'] or Decimal('0.00')
         total_deliveries = delivered.count()
 
         return Response({
-            'total_earnings': float(total),
-            'today_earnings': float(today),
-            'weekly_earnings': float(week),
+            'total_earnings': _money(total),
+            'today_earnings': _money(today),
+            'weekly_earnings': _money(week),
             'total_deliveries': total_deliveries,
+            'subscription_earnings': _money(sub_total),
+            'normal_earnings': _money(normal_total),
         })
 
 
@@ -833,16 +858,17 @@ class DeliveryPartnerPayoutView(APIView):
         profile = request.user.profile
         amount = request.data.get('amount')
         bank_details = request.data.get('bank_details', {})
-        if not amount or float(amount) < 100:
+        if not amount or Decimal(str(amount)) < 100:
             return Response({'error': 'Minimum payout is ₹100'}, status=400)
         delivered = Order.objects.filter(delivery_partner=profile, delivery_status='delivered')
-        total = delivered.aggregate(total=Sum('delivery_fee'))['total'] or 0
+        total = delivered.aggregate(total=Sum('rider_payout'))['total'] or Decimal('0.00')
         paid_out = PayoutRequest.objects.filter(
             delivery_partner=profile, status__in=['approved', 'paid']
-        ).aggregate(total=Sum('amount'))['total'] or 0
-        available = float(total) - float(paid_out)
-        if float(amount) > available:
-            return Response({'error': f'Insufficient balance. Available: ₹{available}'}, status=400)
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        available = total - paid_out
+        if Decimal(str(amount)) > available:
+            return Response(
+                {'error': f'Insufficient balance. Available: ₹{_money(available)}'}, status=400)
         payout = PayoutRequest.objects.create(
             delivery_partner=profile,
             amount=amount,

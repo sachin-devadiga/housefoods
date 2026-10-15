@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../providers/meal_plan_provider.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../notifications/presentation/screens/notifications_screen.dart';
 import '../../../chat/presentation/screens/inbox_screen.dart';
@@ -12,6 +13,7 @@ import 'tabs/chef_menu_tab.dart';
 import 'tabs/chef_orders_tab.dart';
 import 'tabs/chef_earnings_tab.dart';
 import 'tabs/chef_profile_tab.dart';
+import 'tabs/chef_subscriptions_tab.dart';
 
 class ChefDashboard extends StatefulWidget {
   const ChefDashboard({super.key});
@@ -31,6 +33,7 @@ class _ChefDashboardState extends State<ChefDashboard> {
     const ChefOrdersTab(),
     const ChefEarningsTab(),
     const ChefProfileTab(),
+    const ChefSubscriptionsTab(),
   ];
 
   @override
@@ -165,6 +168,15 @@ class _ChefDashboardState extends State<ChefDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    // Provided here rather than in main.dart so the subscription feature stays
+    // self-contained inside lib/features/chef.
+    return ChangeNotifierProvider(
+      create: (_) => MealPlanProvider(),
+      child: _buildScaffold(context),
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text("MEALIN RESTO"),
@@ -209,6 +221,7 @@ class _ChefDashboardState extends State<ChefDashboard> {
           BottomNavigationBarItem(icon: Icon(Icons.list_alt), label: 'Orders'),
           BottomNavigationBarItem(icon: Icon(Icons.account_balance_wallet_outlined), activeIcon: Icon(Icons.account_balance_wallet), label: 'Earnings'),
           BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: 'Profile'),
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_month_outlined), activeIcon: Icon(Icons.calendar_month), label: 'Plans'),
         ],
       ),
     );

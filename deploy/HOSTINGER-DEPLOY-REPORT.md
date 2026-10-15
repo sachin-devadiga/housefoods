@@ -82,8 +82,9 @@ Ready:
 
 Build (one AAB per role, from repo root):
 ```bash
+export MAPS_API_KEY=your_key
 flutter build appbundle --release --dart-define=APP_ROLE=customer \
-  --dart-define=RAZORPAY_KEY=rzp_live_XXXX --dart-define=MAPS_API_KEY=XXXX
+  --dart-define=RAZORPAY_KEY=rzp_live_XXXX -PMAPS_API_KEY=$MAPS_API_KEY
 # repeat with APP_ROLE=chef and APP_ROLE=delivery_partner
 ```
 Still needed from you: Razorpay **live** key, Maps API key, and the keystore
@@ -101,3 +102,17 @@ separate Play Store app entry.
   health endpoint `ok:true`.
 - Docker image build not run here (no Docker on this machine) — first
   `docker compose up --build` on the VPS is the build test.
+
+## 7. Google Maps API key
+
+The key is never committed. `android/gradle.properties` is tracked, so it holds
+only a comment. Supply the key per environment:
+
+- **Android / CI** — set the `MAPS_API_KEY` environment variable. The Gradle
+  placeholder prefers it, falling back to `-PMAPS_API_KEY=...`. Both
+  `build_all_apks.bat` and `build-apks.ps1` abort early if it is unset.
+- **iOS** — `ios/Flutter/Debug.xcconfig` and `Release.xcconfig` include
+  `Secrets.xcconfig` (gitignored). Copy `ios/Flutter/Secrets.xcconfig.example`
+  to `ios/Flutter/Secrets.xcconfig`, set `MAPS_API_KEY = your_key`, then build
+  in Xcode. `Info.plist` reads `$(MAPS_API_KEY)`.
+- **Local** — the environment variable covers Flutter debug runs too.

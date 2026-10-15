@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../chat/presentation/screens/chat_screen.dart';
+import '../../../chat/presentation/screens/inbox_screen.dart';
 import '../providers/delivery_partner_provider.dart';
 import 'delivery_otp_screen.dart';
 import 'delivery_tracking_map_screen.dart';
@@ -16,7 +18,19 @@ class DeliveryPartnerDeliveriesTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('My Deliveries')),
+      appBar: AppBar(
+        title: const Text('My Deliveries'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.chat_outlined),
+            tooltip: 'Messages',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const InboxScreen()),
+            ),
+          ),
+        ],
+      ),
       body: Consumer<DeliveryPartnerProvider>(
         builder: (context, provider, child) {
           if (provider.isLoading && provider.myDeliveries.isEmpty) {
@@ -47,6 +61,7 @@ class DeliveryPartnerDeliveriesTab extends StatelessWidget {
                 final status = delivery['delivery_status'] ?? 'assigned';
                 final customerDetails = delivery['customer_details'] as Map<String, dynamic>?;
                 final customerName = customerDetails?['name'] as String? ?? delivery['customer_name'] ?? 'Customer';
+                final customerUid = customerDetails?['uid'] as String? ?? '';
                 final deliveryAddress = delivery['delivery_address'] ?? '';
                 final kitchenName = delivery['kitchen_name'] ?? delivery['kitchen_details']?['name'] ?? 'Kitchen';
                 final deliveryFee = delivery['delivery_fee'] ?? 0;
@@ -128,6 +143,30 @@ class DeliveryPartnerDeliveriesTab extends StatelessWidget {
                                   style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
                           ],
                         ),
+                        if (customerUid.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ChatScreen(
+                                    receiverId: customerUid,
+                                    receiverName: customerName,
+                                  ),
+                                ),
+                              ),
+                              icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                              label: Text('Message $customerName'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppTheme.secondaryColor,
+                                side: const BorderSide(color: AppTheme.secondaryColor),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                            ),
+                          ),
+                        ],
                         if (status == 'assigned') ...[
                           const SizedBox(height: 12),
                           Row(

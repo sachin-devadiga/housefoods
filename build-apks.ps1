@@ -2,6 +2,14 @@ param(
     [string]$Role = "all"
 )
 
+# Google Maps key comes from the environment; never hardcode it here.
+if ([string]::IsNullOrWhiteSpace($env:MAPS_API_KEY)) {
+    Write-Host "ERROR: MAPS_API_KEY is not set. Google Maps will be blank in release builds." -ForegroundColor Red
+    Write-Host "  Set it for this session with:  `$env:MAPS_API_KEY = 'your_key'" -ForegroundColor Red
+    Write-Host "  Or set it permanently in System Environment Variables." -ForegroundColor Red
+    exit 1
+}
+
 $roles = @{
     "customer"         = @{ appName = "MEALIN";           dartDefine = "customer";         gradleProp = "customer";         file = "mealin-customer.apk" }
     "chef"             = @{ appName = "MEALIN RESTO";     dartDefine = "chef";             gradleProp = "chef";             file = "mealin-kitchen.apk" }
@@ -28,7 +36,7 @@ function Build-Role($roleKey) {
     (Get-Content android\gradle.properties) -replace 'APP_ROLE=.*', "APP_ROLE=$($r.gradleProp)" | Set-Content android\gradle.properties
 
     # 3. Build
-    flutter build apk --release --dart-define=APP_ROLE=$($r.dartDefine)
+    flutter build apk --release --dart-define=APP_ROLE=$($r.dartDefine) -PMAPS_API_KEY=$env:MAPS_API_KEY
 
     if ($LASTEXITCODE -eq 0) {
         Copy-Item "build\app\outputs\flutter-apk\app-release.apk" "$buildDir\$($r.file)" -Force
