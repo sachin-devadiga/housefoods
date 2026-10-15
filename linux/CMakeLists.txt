@@ -42,6 +42,10 @@ endif()
 function(APPLY_STANDARD_SETTINGS TARGET)
   target_compile_features(${TARGET} PUBLIC cxx_std_14)
   target_compile_options(${TARGET} PRIVATE -Wall -Werror)
+  # ponytail: gcc (used when clang is absent) flags the `printing` plugin's
+  # int-vs-size_t comparisons, which clang accepts. Keep the warning, drop the
+  # fatal exit. Remove once real clang is installed via `sudo apt install clang`.
+  target_compile_options(${TARGET} PRIVATE -Wno-error=sign-compare)
   target_compile_options(${TARGET} PRIVATE "$<$<NOT:$<CONFIG:Debug>>:-O3>")
   target_compile_definitions(${TARGET} PRIVATE "$<$<NOT:$<CONFIG:Debug>>:NDEBUG>")
 endfunction()
