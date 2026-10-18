@@ -12,6 +12,12 @@
 # no --dart-define is passed. To use a local Django instead:
 #   API_BASE_URL=http://localhost:8000 ./scripts/run_dev.sh     (see scripts/start_backend.sh)
 #
+# Known limitation: push notifications do not work here. firebase_messaging has
+# no Linux desktop implementation and DefaultFirebaseOptions deliberately throws
+# for TargetPlatform.linux. main.dart catches that, so startup continues -- you
+# just get no FCM tokens and no push. Everything else (auth, orders, SDUI) is
+# unaffected. Test notifications on a real Android device.
+#
 # This exists because this machine has no `clang` (flutter hardcodes CC/CXX at
 # packages/flutter_tools/lib/src/linux/build_linux.dart:197 and sudo is not
 # available non-interactively). It points the build at gcc and at dev headers

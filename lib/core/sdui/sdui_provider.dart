@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../config/role_config.dart';
@@ -116,7 +118,15 @@ class SduiProvider extends ChangeNotifier {
     if (_fetching) return;
     _fetching = true;
     _errors.clear();
-    notifyListeners();
+    // Deferred, not immediate. bootstrap() is reached from
+    // SplashScreen.initState via RemoteConfigService.initialize, so the first
+    // await has not happened yet and notifyListeners() here would fire *during*
+    // build -- provider throws "setState() or markNeedsBuild() called during
+    // build" and startup dies. scheduleMicrotask runs after the current
+    // synchronous frame (the whole build phase) unwinds, which is what we want.
+    //
+    // Every later notify in this method sits after an await and is already safe.
+    scheduleMicrotask(notifyListeners);
 
     try {
       // 2. Cache — never fails, never blocks.

@@ -40,7 +40,11 @@ class _SplashScreenState extends State<SplashScreen> {
     // `initialize()` here only refreshes cache + remote in the background.
     final sdui = context.read<SduiProvider>();
     _remoteConfigService.bind(sdui);
-    unawaited(_remoteConfigService.initialize());
+    // Deferred to the first frame for the same reason: anything that notifies
+    // listeners must not run synchronously inside initState, which is mid-build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_remoteConfigService.initialize());
+    });
 
     await Future.delayed(const Duration(seconds: 2));
 
