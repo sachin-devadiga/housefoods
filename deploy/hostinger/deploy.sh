@@ -59,6 +59,15 @@ echo "    restore: docker compose exec -T db psql -U $pg_user -d $pg_db < $backu
 say "Building images"
 docker compose build --pull
 
+# docker-compose bind-mounts ./media into the container, which masks the
+# image's `chown appuser:appuser /app`. A host-owned root ./media therefore
+# leaves the running appuser unable to write, and every image upload (kitchen
+# cover photo, KYC docs, gallery) fails with a 500 "Permission denied".
+# uid 1000 is appuser's uid in the Dockerfile.
+mkdir -p "$ROOT/backend/media"
+chown -R 1000:1000 "$ROOT/backend/media"
+echo "    media owned by uid 1000 (appuser)"
+
 say "Starting the stack"
 docker compose up -d
 
