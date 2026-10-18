@@ -62,20 +62,43 @@ scripts\windows\build_all_apks.bat
 
 PowerShell equivalent: `scripts\windows\build-apks.ps1`
 
+On Linux/macOS use `scripts/build-apks.sh`. It builds the same three roles
+(`customer`, `chef`, `delivery_partner`) and writes the APKs into `apks/` -
+newest build per role in `apks/latest/`, previous builds kept in
+`apks/archive/`.
+
+```bash
+export MAPS_API_KEY=your_key
+export RAZORPAY_KEY=rzp_live_xxxx     # without this the app ships a placeholder payment key
+./scripts/build-apks.sh               # all three roles
+./scripts/build-apks.sh --role customer --split-per-abi
+```
+
+See `apks/README.md` for the full flag list and file naming.
+
 ## Secrets
 
-Copy `backend/.env.example` to `backend/.env` (there are also `.godaddy` and
-`.hostinger` variants); never commit real values. Android release signing uses
-`android/key.properties`, iOS uses `ios/Flutter/Secrets.xcconfig`. Both are
-gitignored.
+Copy `backend/.env.example.hostinger` to `backend/.env` on the VPS and fill in
+every value; never commit real values. `deploy/hostinger/vps.env.template` is
+the annotated version and must stay placeholder-free of secrets. Android
+release signing uses `android/key.properties`, iOS uses
+`ios/Flutter/Secrets.xcconfig`. All are gitignored.
 
 ## Deploy
 
-Production runs on a Hostinger VPS via Passenger + WSGI:
+Production API runs on a **Hostinger VPS** as a Docker Compose stack
+(PostgreSQL + Gunicorn + Caddy). `mealin.in` is a separate **shared hPanel**
+host serving the marketing site and legal pages.
 
 ```bash
 deploy/hostinger/bootstrap.sh    # first-time setup
-deploy/hostinger/deploy.sh       # deploy
+deploy/hostinger/deploy.sh       # pull, rebuild, migrate, verify
 ```
 
-`render.yaml` is the alternative Render.com target.
+**Read [`deploy/HOSTINGER-DEPLOY.md`](deploy/HOSTINGER-DEPLOY.md)** before any
+production change. It documents the two-server topology, the `/api/auth/`
+routing prefix, and the known gaps. `deploy/archive/` holds historical GoDaddy /
+cPanel / Render reports — those describe a stack that no longer runs.
+
+Automated deploys: `.github/workflows/deploy-backend.yml` (manual trigger,
+requires typing `DEPLOY`).

@@ -1,0 +1,166 @@
+name: Android AAB Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_role:
+        description: 'Product role to build'
+        type: choice
+        options: [customer, chef, delivery_partner]
+        default: customer
+  push:
+    tags: ['v*']
+  push:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'android/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/build-android.yml'
+
+concurrency:
+  group: aab-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: .
+
+jobs:
+  build:
+    name: Build ${{ inputs.app_role || 'customer' }} AAB
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.7'
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Cache pub
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            .dart_tool
+          key: pub-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
+          restore-keys: pub-${{ runner.os }}-
+
+      - name: Restore upload keystore
+        # The keystore is NEVER committed. It is stored as a base64 repo
+        # secret named ANDROID_KEYSTORE_B64 (the file bytes) with the password
+        # in ANDROID_KEYSTORE_PASSWORD. Losing this upload key means asking
+        # Google Support to reset it — see deploy notes.
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_B64" ]; then
+            echo "ERROR: ANDROID_KEYSTORE_B64 secret is not set."
+            echo "Set it with:"
+            echo "  base64 -w0 android/mealin-release.keystore | pbcopy"
+            echo "then add it as an Actions secret." >&2
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_B64" | base64 -d > android/mealin-release.keystore
+          test -s android/mealin-release.keystore || { echo "keystore decode failed" >&2; exit 1; }
+
+      - name: Write android/key.properties
+        env:
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "ERROR: ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_PASSWORD not set." >&2
+            exit 1
+          fi
+          cat > android/key.properties <<EOF
+          storePassword=$STORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=mealin
+          storeFile=../mealin-release.keystore
+          EOF
+          chmod 600 android/key.properties
+
+      - name: pub get
+        run: flutter pub get
+
+      - name: Generate localizations
+        run: flutter gen-l10n
+
+      - name: Analyze
+        run: flutter analyze --fatal-infos=false
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Build release AAB
+        env:
+          MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
+          RAZORPAY_KEY: ${{ secrets.RAZORPAY_LIVE_KEY }}
+        run: |
+          # fail the build rather than shipping an APK with a placeholder key
+          if [ -z "$MAPS_API_KEY" ]; then
+            echo "ERROR: MAPS_API_KEY secret not set." >&2
+            exit 1
+          fi
+          if [ -z "$RAZORPAY_KEY" ]; then
+            echo "ERROR: RAZORPAY_LIVE_KEY secret not set." >&2
+            echo "A test key in a production build is a Play Store violation." >&2
+            exit 1
+          fi
+          ROLE="${{ inputs.app_role || 'customer' }}"
+          echo "Building role: $ROLE"
+          flutter build appbundle --release \
+            --dart-define=APP_ROLE="$ROLE" \
+            --dart-define=RAZORPAY_KEY="$RAZORPAY_KEY"
+
+      - name: Locate AAB
+        id: aab
+        run: |
+          AAB=$(find build/app/outputs/bundle/release -name '*.aab' | head -1)
+          test -n "$AAB" || { echo "no AAB produced" >&2; exit 1; }
+          SIZE=$(du -h "$AAB" | cut -f1)
+          echo "path=$AAB" >> "$GITHUB_OUTPUT"
+          echo "AAB: $AAB ($SIZE)"
+          echo "size=$SIZE" >> "$GITHUB_OUTPUT"
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mealin-${{ inputs.app_role || 'customer' }}-aab
+          path: ${{ steps.aab.outputs.path }}
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Summarise
+        run: |
+          {
+            echo "### AAB build: ${{ inputs.app_role || 'customer' }}"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Artifact | mealin-${{ inputs.app_role || 'customer' }}-aab |"
+            echo "| Size | ${{ steps.aab.outputs.size }} |"
+            echo "| Signed with | upload key (alias \`mealin\`) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Belt and braces: the keystore must not survive the job.
+      - name: Remove keystore
+        if: always()
+        run: rm -f android/mealin-release.keystore android/key.properties

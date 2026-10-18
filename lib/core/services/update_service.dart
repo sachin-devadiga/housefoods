@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../config/role_config.dart';
 import '../constants/app_constants.dart';
 
@@ -89,6 +90,51 @@ class UpdateService {
   /// Returns true if [remote] is higher than [current] AND meets force threshold.
   static bool isForceRequired(String remoteMinVersion, String currentVersion) {
     return isNewer(remoteMinVersion, currentVersion);
+  }
+
+  /// A force update is required when the server explicitly asks for one
+  /// (`forceUpdate`) OR when [currentVersion] has fallen below `minVersion`.
+  ///
+  /// The explicit flag is honoured on its own: an admin can force a single
+  /// release without raising the permanent [UpdateInfo.minVersion] floor.
+  static bool requiresForceUpdate(UpdateInfo info, String currentVersion) {
+    if (info.forceUpdate) return true;
+    return isForceRequired(info.minVersion, currentVersion);
+  }
+
+  /// Play applicationIds. Must match `android/app/build.gradle.kts`.
+  static const Map<String, String> _playPackageIds = {
+    'customer': 'app.mealin.customer',
+    'chef': 'app.mealin.kitchen',
+    'delivery_partner': 'app.mealin.delivery',
+  };
+
+  static const String _fallbackPlayPackageId = 'app.mealin';
+
+  /// Google Play package id for this build's role.
+  static String get playStorePackageId =>
+      _playPackageIds[RoleConfig.roleName] ?? _fallbackPlayPackageId;
+
+  /// Google Play listing for this build's role.
+  ///
+  /// Play-distributed builds cannot sideload an APK — a forced update has to
+  /// route here instead of through [downloadApk]/[installApk].
+  static String get playStoreListingUrl =>
+      'https://play.google.com/store/apps/details?id=$playStorePackageId';
+
+  /// Open this build's Google Play listing. Returns false if the store could
+  /// not be launched (no browser / Play not installed), so callers can show
+  /// the URL instead of silently doing nothing.
+  static Future<bool> openPlayStoreListing() async {
+    final uri = Uri.parse(playStoreListingUrl);
+    try {
+      if (await canLaunchUrl(uri)) {
+        return await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      debugPrint('[UpdateService] Could not open Play listing: $e');
+    }
+    return false;
   }
 
   /// Download APK and return the file path. Calls onProgress with 0.0-1.0.

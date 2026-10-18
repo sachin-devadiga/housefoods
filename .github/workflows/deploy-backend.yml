@@ -1,0 +1,124 @@
+name: Deploy Backend to VPS
+
+# Manual only. Production deploys are never automatic from a push — a broken
+# migration or a bad env var should never reach the live stack unattended.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref to deploy'
+        type: string
+        default: main
+      confirm:
+        description: 'Type DEPLOY to confirm deploying to production'
+        type: string
+        required: true
+
+concurrency:
+  group: backend-deploy
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: .
+
+jobs:
+  deploy:
+    name: Deploy backend
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+
+    steps:
+      - name: Confirm
+        run: |
+          if [ "${{ inputs.confirm }}" != "DEPLOY" ]; then
+            echo "ERROR: confirmation string did not match 'DEPLOY'." >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # The test suite runs before the VPS is touched, so a regression never
+      # reaches the live stack.
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Pre-deploy gate
+        env:
+          DATABASE_URL: sqlite:///gate.sqlite3
+          DEBUG: 'False'
+          DJANGO_SECRET_KEY: ci-only-not-a-real-secret
+          ALLOWED_HOSTS: localhost,testserver
+        run: |
+          cd backend
+          python manage.py check
+          python manage.py makemigrations --check --dry-run
+          python manage.py test api -v 1
+
+      - name: Deploy over SSH
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          GIT_REF: ${{ inputs.ref }}
+        run: |
+          if [ -z "$VPS_HOST" ] || [ -z "$VPS_USER" ] || [ -z "$VPS_SSH_KEY" ]; then
+            echo "ERROR: VPS_HOST / VPS_USER / VPS_SSH_KEY secrets not set." >&2
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          echo "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          # deploy.sh on the VPS pulls, rebuilds, migrates and verifies itself,
+          # including the admin_models count that proves migrations ran.
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
+            "$VPS_USER@$VPS_HOST" \
+            "set -euo pipefail; \
+             cd ~/mealin-api; \
+             git fetch --all --prune; \
+             git checkout '$GIT_REF'; \
+             git pull --ff-only origin '$GIT_REF'; \
+             bash deploy/hostinger/deploy.sh"
+
+      - name: Verify public health
+        run: |
+          # The VPS script verified from inside the container. This checks the
+          # public path: Caddy TLS, DNS, Django, and the database together.
+          # NOTE the /api/auth/ prefix — api.urls is included at 'api/auth/',
+          # so /api/admin-health/ is a 404 and would look like a broken deploy.
+          URL="https://api.mealin.in/api/auth/admin-health/"
+          for i in $(seq 1 10); do
+            body=$(curl -s --max-time 15 "$URL" || true)
+            if echo "$body" | grep -q '"ok":true'; then
+              echo "healthy: $body"
+              exit 0
+            fi
+            echo "attempt $i: not ready yet"
+            sleep 10
+          done
+          echo "ERROR: $URL did not return ok:true after 100s." >&2
+          curl -sI --max-time 15 "$URL" || true
+          exit 1
+
+      - name: Summarise
+        run: |
+          {
+            echo "### Backend deployed"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Ref | \`${{ inputs.ref }}\` |"
+            echo "| Health | https://api.mealin.in/api/auth/admin-health/ |"
+          } >> "$GITHUB_STEP_SUMMARY"

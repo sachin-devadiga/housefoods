@@ -1,0 +1,6 @@
+# Ignore every build artifact in this folder, but keep the folder itself and
+# its documentation tracked. A .gitignore in a directory applies to that
+# directory and everything below it, so `*` is safe here.
+*
+!.gitignore
+!README.md

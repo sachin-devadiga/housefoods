@@ -31,6 +31,31 @@ grep -qE '^DATABASE_URL=postgres://[^@]+@db:5432/' .env || {
 }
 echo "    .env looks complete"
 
+say "Backing up Postgres"
+# The container entrypoint runs `manage.py migrate` before the healthcheck, so
+# the dump has to happen before `up -d`. Without this there is no way back if
+# the SDUI (0001-0004) or subscription migrations fail partway.
+#
+# Only `db` is started here, deliberately: starting `web` would trigger the very
+# migrations we are backing up before the backup exists.
+mkdir -p "$ROOT/backups"
+stamp=$(date -u +%Y%m%dT%H%M%SZ)
+backup="$ROOT/backups/mealin-$stamp.sql"
+
+pg_user=$(grep -E '^POSTGRES_USER=' .env | tail -1 | cut -d= -f2- | tr -d "\"'")
+pg_db=$(grep -E '^POSTGRES_DB=' .env | tail -1 | cut -d= -f2- | tr -d "\"'")
+pg_user=${pg_user:-mealin}
+pg_db=${pg_db:-mealin}
+
+docker compose up -d db
+docker compose exec -T db pg_dump -U "$pg_user" "$pg_db" > "$backup"
+
+# An empty dump is worse than no dump: it looks like a safety net until the
+# moment you need it. Abort rather than migrate on a false sense of security.
+[ -s "$backup" ] || die "pg_dump produced an empty file at $backup — refusing to migrate"
+echo "    backup: $backup ($(du -h "$backup" | cut -f1))"
+echo "    restore: docker compose exec -T db psql -U $pg_user -d $pg_db < $backup"
+
 say "Building images"
 docker compose build --pull
 
@@ -66,7 +91,7 @@ echo
 if [ "$models" -lt 31 ] 2>/dev/null; then
   die "admin_models is $models, expected 31. Migrations 0017/0018 did not run — the subscription tables are missing."
 fi
-echo "  admin_models: $models  (expected 31 — proves the new build is live)"
+echo "  admin_models: $models  (expected 34 — proves the new build is live)"
 
 echo
 echo "  Checking the subscription tables exist:"
@@ -74,8 +99,10 @@ docker compose exec -T web python manage.py shell -c "
 from django.db import connection
 with connection.cursor() as c:
     names = connection.introspection.table_names(c)
-for t in ('meal_plans','plan_slots','subscriptions','subscription_meals'):
-    print(f'    {t:20} {\"present\" if t in names else \"MISSING\"}')
+for t in ('meal_plans','plan_slots','subscriptions','subscription_meals',
+          'sdui_screen_definitions','sdui_spec_revisions','sdui_feature_flags',
+          'sdui_navigation_configs','sdui_app_configs'):
+    print(f'    {t:26} {\"present\" if t in names else \"MISSING\"}')
 "
 
 say "Done — the stack is running on this VPS"

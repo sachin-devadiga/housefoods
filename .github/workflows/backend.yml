@@ -1,0 +1,129 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  check:
+    name: Django checks + migrations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # SQLite for CI. The Postgres/MySQL engines are never exercised here —
+      # production runs Postgres (backend/docker-compose.yml, service `db`).
+      - name: Collect static
+        env:
+          DATABASE_URL: sqlite:///ci.sqlite3
+          DEBUG: 'False'
+          DJANGO_SECRET_KEY: ci-only-not-a-real-secret
+          ALLOWED_HOSTS: localhost
+        run: python manage.py collectstatic --noinput
+
+      - name: Django system check
+        env:
+          DATABASE_URL: sqlite:///ci.sqlite3
+          DEBUG: 'False'
+          DJANGO_SECRET_KEY: ci-only-not-a-real-secret
+          ALLOWED_HOSTS: localhost
+        run: python manage.py check
+
+      # Catches a model edited without its migration — the failure mode that
+      # otherwise only appears on the VPS at deploy time.
+      - name: Verify migrations are in sync
+        env:
+          DATABASE_URL: sqlite:///ci.sqlite3
+          DEBUG: 'False'
+          DJANGO_SECRET_KEY: ci-only-not-a-real-secret
+          ALLOWED_HOSTS: localhost
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Apply migrations
+        env:
+          DATABASE_URL: sqlite:///ci.sqlite3
+          DEBUG: 'False'
+          DJANGO_SECRET_KEY: ci-only-not-a-real-secret
+          ALLOWED_HOSTS: localhost
+        run: python manage.py migrate --noinput
+
+      - name: Reject REPLACE_ placeholders in committed env files
+        # .env.example.hostinger and vps.env.template must stay secret-free and
+        # placeholder-only. A real secret committed here would leak to git.
+        run: |
+          if grep -rlE '^[^#]*=[A-Za-z0-9_-]{24,}' \
+               backend/.env.example.hostinger \
+               deploy/hostinger/vps.env.template 2>/dev/null; then
+            echo "ERROR: a high-entropy value looks like a real secret in a committed env template." >&2
+            exit 1
+          fi
+          echo "env templates look clean"
+
+  test:
+    name: Django tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run test suite
+        env:
+          DATABASE_URL: sqlite:///test_ci.sqlite3
+          DEBUG: 'False'
+          DJANGO_SECRET_KEY: ci-only-not-a-real-secret
+          ALLOWED_HOSTS: localhost,testserver
+          # Disable outbound third-party calls so tests never hit Brevo/Gemini/
+          # Sarvam/Firebase from CI.
+          BREVO_API_KEY: ''
+          GEMINI_API_KEY: ''
+          SARVAM_API_KEY: ''
+          FIREBASE_SERVICE_ACCOUNT: ''
+        run: python manage.py test api -v 2
+
+      - name: Upload test database on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-db
+          path: backend/test_ci.sqlite3
+          retention-days: 3
+          if-no-files-found: ignore

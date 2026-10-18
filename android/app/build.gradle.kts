@@ -36,11 +36,18 @@ android {
             "delivery_partner" -> "app.mealin.delivery"
             else -> "app.mealin"
         }
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        minSdk = 24
+        // Pinned explicitly rather than via flutter.minSdkVersion /
+        // flutter.targetSdkVersion. Flutter 3.47.7 resolves both to 24/36
+        // anyway (see FlutterExtension.kt), so this changes no behaviour — it
+        // makes the Google Play policy floor explicit and stops a Flutter
+        // upgrade from silently moving it. Play's Aug 2026 policy requires a
+        // recent targetSdk; 36 satisfies that.
+        targetSdk = 36
+        compileSdk = 36
+        multiDexEnabled = true
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        multiDexEnabled = true
         // Supply via the MAPS_API_KEY environment variable, or -PMAPS_API_KEY=... in CI.
         val mapsApiKey = System.getenv("MAPS_API_KEY")
             ?: project.findProperty("MAPS_API_KEY")?.toString()

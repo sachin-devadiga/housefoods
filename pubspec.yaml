@@ -87,7 +87,10 @@ flutter:
   generate: true # Required for l10n
   uses-material-design: true
   assets:
+    # assets/images/ and assets/icons/ were declared here but contained only
+    # .gitkeep — the onboarding slides referenced three onboarding*.png files
+    # that have never existed. Those slides now render Material icons instead
+    # (see lib/features/onboarding/). Re-add either directory when real assets
+    # land in it.
     - assets/logo.jpeg
-    - assets/images/
-    - assets/icons/
     - assets/sounds/

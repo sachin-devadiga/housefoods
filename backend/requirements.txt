@@ -14,3 +14,7 @@ whitenoise[brotli]==6.12.0
 python-dotenv==1.2.3
 requests==2.34.2
 firebase-admin==7.7.0
+# Validates Server-Driven UI screen specs server-side so an unrenderable layout
+# is rejected in the Django admin rather than on a user's phone.
+# See backend/api/sdui/schema.py.
+jsonschema==4.23.0

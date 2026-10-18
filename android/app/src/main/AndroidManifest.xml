@@ -3,24 +3,64 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-    <!-- Microphone for MEAL AI voice input -->
+    <!-- Voice input/output for MEAL AI. flutter_sound also injects
+         CAPTURE_AUDIO_OUTPUT through its own manifest. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
-    <!-- Bluetooth thermal bill printer (resto app) -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+    <!-- Bluetooth thermal bill printer (resto app). The legacy pair is capped
+         at API 30; BLUETOOTH_SCAN/CONNECT are the Android 12+ replacements. -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN"/>
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
-    <!-- USB thermal bill printer via OTG cable -->
-    <uses-feature android:name="android.hardware.usb.host"/>
-    <uses-permission android:name="android.permission.VIBRATE"/>
-    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
+    <!-- USB thermal bill printer via OTG cable. required="false" so the app
+         still installs on devices with no USB host port — printing is one
+         feature among many, not a device requirement. -->
+    <uses-feature android:name="android.hardware.usb.host" android:required="false"/>
+
+    <!-- Biometrics: REMOVED on purpose.
+         local_auth is declared in pubspec.yaml but is referenced nowhere in
+         lib/ (only in the generated plugin registrant), and
+         local_auth_android injects these two permissions by manifest merge.
+         Requesting a biometric permission with zero call sites is exactly the
+         kind of unnecessary permission Play review flags. Drop the dependency
+         from pubspec.yaml to match. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" tools:node="remove"/>
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" tools:node="remove"/>
+
+    <!-- PER-ROLE PERMISSION SCOPING IS NOT YET DONE.
+
+         The three Play listings share this one manifest, so every app requests
+         the union above: Bluetooth and USB-host for the rider and customer apps,
+         RECORD_AUDIO for the rider. That is the pre-existing behaviour, unchanged.
+
+         Role-specific manifests under src/customer, src/chef and src/delivery
+         exist, but they are NOT wired in. They were written against a
+         `sourceSets { getByName("main") { manifest.srcFile(...) } }` approach
+         that turns out to REPLACE the main manifest instead of merging with it:
+         every build silently lost its location permissions, <application> block
+         and launcher activity while `processDebugMainManifest` still exited 0.
+         The correct mechanism is productFlavors (a real `role` dimension with
+         applicationIdSuffix and per-flavour manifests), which changes artifact
+         names and so needs build_all_apks.bat, build-apks.ps1 and the CI
+         workflow updated together. That is deliberately left for a dedicated
+         pass rather than half-wired here.
+
+         Verify the current true state with scripts/verify_manifest_permissions.sh. -->
+
+    <!-- Cleartext is disabled: every backend call in production is HTTPS to
+         api.mealin.in, and Play Store review flags apps that permit plaintext.
+         A debug-only override in src/debug/AndroidManifest.xml re-enables it so
+         start_backend.sh can serve the app from http://localhost:8000. -->
     <application
         android:label="${APP_LABEL}"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="false">
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="${MAPS_API_KEY}"/>
