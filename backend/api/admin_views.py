@@ -21,17 +21,21 @@ class DashboardView(View):
 
         all_orders = Order.objects.all()
         delivered_orders = all_orders.filter(delivery_status='delivered')
+        # Cash on delivery is not revenue until the rider has collected it.
+        # Summing every order counted uncollected cash as income.
+        settled_orders = all_orders.filter(is_paid=True)
+        cod_outstanding = all_orders.filter(is_paid=False).aggregate(s=Sum('amount'))['s'] or 0
 
         total_orders = all_orders.count()
-        total_revenue = all_orders.aggregate(s=Sum('amount'))['s'] or 0
+        total_revenue = settled_orders.aggregate(s=Sum('amount'))['s'] or 0
         total_delivery_fees = all_orders.aggregate(s=Sum('delivery_fee'))['s'] or 0
         today_orders = all_orders.filter(created_at__date=today).count()
 
-        month_orders = all_orders.filter(created_at__date__gte=month_start)
+        month_orders = settled_orders.filter(created_at__date__gte=month_start)
         month_revenue = month_orders.aggregate(s=Sum('amount'))['s'] or 0
         month_delivery_fees = month_orders.aggregate(s=Sum('delivery_fee'))['s'] or 0
 
-        year_orders = all_orders.filter(created_at__date__gte=year_start)
+        year_orders = settled_orders.filter(created_at__date__gte=year_start)
         year_revenue = year_orders.aggregate(s=Sum('amount'))['s'] or 0
 
         approved_payouts = PayoutRequest.objects.filter(status='approved')
@@ -91,6 +95,7 @@ class DashboardView(View):
             'year_revenue': year_revenue,
             'total_kitchen_payouts': total_kitchen_payouts,
             'pending_kitchen_payouts': pending_kitchen_payouts,
+            'cod_outstanding': cod_outstanding,
             'payout_count': approved_payouts.count(),
             'total_dps': total_dps,
             'active_dps': active_dps,

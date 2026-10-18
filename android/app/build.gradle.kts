@@ -29,6 +29,22 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // The three roles ship from one codebase, so the launcher icon used to be
+    // the customer app's orange mark on every device. Each role now owns its
+    // own launcher assets under src/<role>/res and exactly one of them is
+    // added to the build. `res.srcDir` appends rather than overrides, which is
+    // why the shared copies were removed from src/main/res — leaving them there
+    // would make every pair a "Duplicate resources" error.
+    sourceSets {
+        val roleRes = when (appRole) {
+            "customer" -> "src/customer/res"
+            "chef" -> "src/chef/res"
+            "delivery_partner" -> "src/delivery/res"
+            else -> "src/customer/res"
+        }
+        getByName("main").res.srcDir(roleRes)
+    }
+
     defaultConfig {
         applicationId = when (appRole) {
             "customer" -> "app.mealin.customer"
@@ -48,11 +64,6 @@ android {
         multiDexEnabled = true
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        // Supply via the MAPS_API_KEY environment variable, or -PMAPS_API_KEY=... in CI.
-        val mapsApiKey = System.getenv("MAPS_API_KEY")
-            ?: project.findProperty("MAPS_API_KEY")?.toString()
-            ?: ""
-        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
         manifestPlaceholders["APP_LABEL"] = when (appRole) {
             "customer" -> "MEALIN"
             "chef" -> "MEALIN RESTO"

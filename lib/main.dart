@@ -25,6 +25,8 @@ import 'features/auth/data/repositories/auth_repository_impl.dart';
 import 'features/auth/data/repositories/user_repository_impl.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
 import 'features/chef/presentation/providers/chef_provider.dart';
+import 'features/chef/presentation/providers/meal_plan_provider.dart';
+import 'features/customer/presentation/providers/subscription_provider.dart';
 import 'features/chat/data/repositories/chat_repository_impl.dart';
 import 'features/chat/presentation/providers/chat_provider.dart';
 import 'features/customer/data/repositories/kitchen_repository_impl.dart';
@@ -121,6 +123,17 @@ class MealinApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => LanguageProvider()),
         ChangeNotifierProvider(create: (_) => CartProvider()),
         ChangeNotifierProvider(create: (_) => AiChatProvider(aiChatRepository)),
+        // Meal-plan state is app-scoped, not dashboard-scoped. The weekly plan
+        // builder is reached with Navigator.push, so a provider created inside
+        // ChefDashboard's own subtree is NOT an ancestor of the pushed route and
+        // resolving it there threw ProviderNotFoundException ("Something went
+        // wrong"). Registering it here keeps the in-progress grid alive across
+        // the builder <-> pricing navigation as intended.
+        ChangeNotifierProvider(create: (_) => MealPlanProvider()),
+        // Same reasoning for subscriptions: the Plans tab creates one, but Home
+        // now pushes PlansBrowseScreen/MySubscriptionsScreen directly, and a
+        // tab-scoped provider is not an ancestor of those routes.
+        ChangeNotifierProvider(create: (_) => SubscriptionProvider()),
         // Server-Driven UI. Registered early so it is resolvable from the very
         // first route. Constructing it installs baked-in defaults, so the app
         // is renderable before any network call happens — see

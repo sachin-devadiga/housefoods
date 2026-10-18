@@ -111,7 +111,7 @@ class _ManageHoursScreenState extends State<ManageHoursScreen> {
           else
             TextButton(
               onPressed: _save,
-              child: const Text("SAVE", style: TextStyle(color: AppTheme.primaryColor, fontWeight: FontWeight.bold)),
+              child: const Text("SAVE", style: TextStyle(color: AppTheme.secondaryColor, fontWeight: FontWeight.bold)),
             ),
         ],
       ),

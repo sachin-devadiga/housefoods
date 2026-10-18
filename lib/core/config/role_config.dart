@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 enum AppRole { customer, chef, deliveryPartner }
 
 class RoleConfig {
@@ -54,6 +56,35 @@ class RoleConfig {
         return 'Earn on your schedule';
       case null:
         return '';
+    }
+  }
+
+  /// Brand mark for the splash screen. The resto app ships a green recolour
+  /// of the same glyph so a kitchen phone does not look like the customer app.
+  static String get logoAsset {
+    switch (role) {
+      case AppRole.chef:
+        return 'assets/logo_green.png';
+      case AppRole.customer:
+      case AppRole.deliveryPartner:
+      case null:
+        return 'assets/logo.jpeg';
+    }
+  }
+
+  /// Brand colour for this role's splash.
+  ///
+  /// The resto app is green end-to-end (its UI already uses
+  /// AppTheme.secondaryColor); this keeps the splash from flashing the
+  /// customer app's orange before the first frame.
+  static Color get splashColor {
+    switch (role) {
+      case AppRole.chef:
+        return const Color(0xFF43A047); // Green 600
+      case AppRole.customer:
+      case AppRole.deliveryPartner:
+      case null:
+        return const Color(0xFFFF5722); // Deep Orange
     }
   }
 

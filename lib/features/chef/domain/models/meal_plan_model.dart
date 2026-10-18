@@ -299,23 +299,32 @@ class MealPlan {
   }
 
   MealPlan copyWith({
+    String? id,
+    String? kitchenId,
     String? name,
     String? description,
+    List<String>? inclusions,
+    bool? isVeg,
+    String? imageUrl,
     bool? isActive,
+    String? startingPrice,
     List<PlanPrice>? prices,
     List<MealPlanSlot>? slots,
   }) {
     return MealPlan(
-      id: id,
-      kitchenId: kitchenId,
+      // `id` is settable so a duplicated plan can be forced back to
+      // "unsaved" (id: '') and POST as a new plan rather than PATCH the
+      // original over the top.
+      id: id ?? this.id,
+      kitchenId: kitchenId ?? this.kitchenId,
       kitchenName: kitchenName,
       name: name ?? this.name,
       description: description ?? this.description,
-      inclusions: inclusions,
-      isVeg: isVeg,
-      imageUrl: imageUrl,
+      inclusions: inclusions ?? this.inclusions,
+      isVeg: isVeg ?? this.isVeg,
+      imageUrl: imageUrl ?? this.imageUrl,
       isActive: isActive ?? this.isActive,
-      startingPrice: startingPrice,
+      startingPrice: startingPrice ?? this.startingPrice,
       prices: prices ?? this.prices,
       slots: slots ?? this.slots,
     );

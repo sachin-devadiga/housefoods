@@ -1,3 +1,5 @@
+
+import 'package:mealin/core/constants/app_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -56,7 +58,7 @@ class InboxScreen extends StatelessWidget {
               return ListTile(
                 leading: CircleAvatar(
                   backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.1),
-                  backgroundImage: room.otherUserImage != null ? NetworkImage(room.otherUserImage!) : null,
+                  backgroundImage: room.otherUserImage != null ? NetworkImage(AppConstants.resolveMediaUrl(room.otherUserImage)) : null,
                   child: room.otherUserImage == null 
                       ? const Icon(Icons.person, color: AppTheme.primaryColor) 
                       : null,

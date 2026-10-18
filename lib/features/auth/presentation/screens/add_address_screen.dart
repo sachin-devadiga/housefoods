@@ -24,7 +24,7 @@ class _AddAddressScreenState extends State<AddAddressScreen> {
   double? _pickedLat;
   double? _pickedLng;
 
-  void _openMapPicker() async {
+  Future<void> _openMapPicker() async {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const MapPickerScreen()),
@@ -40,7 +40,44 @@ class _AddAddressScreenState extends State<AddAddressScreen> {
   }
 
   void _saveAddress() async {
-    if (_formKey.currentState!.validate()) {
+    if (!_formKey.currentState!.validate()) return;
+
+    // An address without coordinates is stored as lat/lng 0.0, which silently
+    // breaks kitchen-distance filtering and hands the rider a location in the
+    // Gulf of Guinea. Ask before allowing an unpinned address to be saved.
+    if (_pickedLat == null) {
+      final pinIt = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Pin your address?'),
+          content: const Text(
+            'Without a map pin this address has no location. Nearby kitchens '
+            'may not be shown, and riders may not be able to find you.',
+            style: TextStyle(fontSize: 13.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Pin on map'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Save anyway'),
+            ),
+          ],
+        ),
+      );
+      if (pinIt == true) {
+        await _openMapPicker();
+        if (_pickedLat == null) return; // user backed out
+      }
+    }
+
+    await _persistAddress();
+  }
+
+  Future<void> _persistAddress() async {
+    {
       setState(() => _isLoading = true);
 
       try {

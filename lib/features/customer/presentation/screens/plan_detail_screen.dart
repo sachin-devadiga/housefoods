@@ -9,6 +9,7 @@ import '../../../auth/data/repositories/user_repository_impl.dart';
 import '../../../auth/domain/models/address_model.dart';
 import '../../../auth/domain/models/user_model.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../auth/presentation/screens/add_address_screen.dart';
 import '../../domain/models/subscription_model.dart';
 import 'subscription_checkout_screen.dart';
 
@@ -87,7 +88,13 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
 
   void _pickAddress() {
     final addresses = _user?.addresses ?? const <AddressModel>[];
-    if (addresses.isEmpty) return;
+    // Previously this returned silently when the list was empty, so a customer
+    // with no saved address tapped the tile and nothing happened at all. Send
+    // them straight into the add flow instead.
+    if (addresses.isEmpty) {
+      _addAddress();
+      return;
+    }
     showModalBottomSheet(
       context: context,
       builder: (ctx) => Column(
@@ -115,6 +122,30 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
         ],
       ),
     );
+  }
+
+  /// AddAddressScreen pops a plain `true`, not the created address, so the new
+  /// one is identified by diffing ids after a reload rather than by trusting
+  /// the pop value — casting that `true` to AddressModel would crash.
+  Future<void> _addAddress() async {
+    final user = _user;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in to add an address')),
+      );
+      return;
+    }
+    final before = user.addresses.map((a) => a.id).toSet();
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => AddAddressScreen(user: user)),
+    );
+    if (!mounted) return;
+    await _loadUser();
+    if (changed != true) return;
+    final fresh =
+        (_user?.addresses ?? const <AddressModel>[]).where((a) => !before.contains(a.id)).toList();
+    if (fresh.isNotEmpty) setState(() => _selectedAddress = fresh.first);
   }
 
   void _goToCheckout() {
@@ -244,9 +275,13 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
               style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
               onPressed: canCheckout ? _goToCheckout : null,
               child: Text(
-                _selectedPrice == null
-                    ? 'Unavailable'
-                    : 'Continue · ₹${_selectedPrice!.price.toStringAsFixed(0)}',
+                // A disabled button with no explanation reads as a broken app,
+                // so say exactly what is missing.
+                !canCheckout && _selectedPrice != null
+                    ? 'Add a delivery address to continue'
+                    : _selectedPrice == null
+                        ? 'Unavailable'
+                        : 'Continue · ₹${_selectedPrice!.price.toStringAsFixed(0)}',
                 style: const TextStyle(color: Colors.white, fontSize: 16),
               ),
             ),
@@ -371,14 +406,34 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
   Widget _buildAddressTile() {
     final addresses = _user?.addresses ?? const <AddressModel>[];
     if (addresses.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.grey.shade300),
+      // Must be actionable. This used to be an inert label that told the user
+      // to go to their profile, while Continue sat disabled below with no
+      // stated reason — a dead end with no way forward from this screen.
+      return InkWell(
+        onTap: _addAddress,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.4)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.add_location_alt_outlined,
+                  color: AppTheme.primaryColor, size: 20),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text('Add a delivery address',
+                    style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.primaryColor)),
+              ),
+              const Icon(Icons.chevron_right, color: AppTheme.primaryColor),
+            ],
+          ),
         ),
-        child: const Text('No saved address. Add one from your profile first.',
-            style: TextStyle(fontSize: 13, color: Colors.grey)),
       );
     }
     return GestureDetector(

@@ -257,6 +257,24 @@ class Order(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     delivery_status = models.CharField(max_length=20, choices=DELIVERY_STATUS_CHOICES, default='pending')
     payment_id = models.CharField(max_length=255, blank=True, default='')
+
+    # --- Payment tracking -------------------------------------------------
+    # `payment_id` alone cannot distinguish a Razorpay payment from a COD
+    # order: both end up with the same empty string until a payment exists.
+    # Without these, chef earnings and admin revenue summed every order the
+    # moment it was created, so uncollected cash counted as income.
+    PAYMENT_METHOD_CHOICES = [
+        ('online', 'Online'),
+        ('cod', 'Cash on Delivery'),
+    ]
+    payment_method = models.CharField(
+        max_length=10, choices=PAYMENT_METHOD_CHOICES, default='online',
+    )
+    # COD is settled by the rider at handover; online is settled up-front.
+    # Payouts stay held until an order is BOTH delivered and paid.
+    is_paid = models.BooleanField(default=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+
     delivery_partner = models.ForeignKey(
         UserProfile, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='delivery_orders'
@@ -288,10 +306,25 @@ class Order(models.Model):
             models.Index(fields=['customer', 'status']),
             models.Index(fields=['kitchen', 'status']),
             models.Index(fields=['delivery_partner', 'delivery_status']),
+            # Chef earnings and payout eligibility both filter on this.
+            models.Index(fields=['kitchen', 'is_paid']),
         ]
 
     def __str__(self):
         return f'Order #{self.id} - {self.customer.email}'
+
+    @property
+    def is_cod(self):
+        return self.payment_method == 'cod'
+
+    @property
+    def payout_eligible(self):
+        """True when this order may count toward a chef's payout.
+
+        Both conditions matter: cash that has not been collected must not be
+        paid out, and neither must a meal that has not been delivered.
+        """
+        return self.is_paid and self.delivery_status == 'delivered'
 
 
 class OrderItem(models.Model):

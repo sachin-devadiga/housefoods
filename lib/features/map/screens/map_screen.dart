@@ -78,7 +78,19 @@ class _MapScreenState extends State<MapScreen> {
       children: [
         TileLayer(
           urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.housefoods.app',
+          userAgentPackageName: 'com.mealin.app',
+          tileProvider: NetworkTileProvider(
+            headers: {'User-Agent': 'Mealin/1.0 (contact@mealin.in)'},
+            silenceExceptions: true,
+          ),
+        ),
+        RichAttributionWidget(
+          attributions: [
+            TextSourceAttribution(
+              'OpenStreetMap contributors',
+              onTap: () {},
+            ),
+          ],
         ),
         if (provider.currentLocation != null)
           MarkerLayer(

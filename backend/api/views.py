@@ -590,6 +590,11 @@ class OrderStatusUpdateView(APIView):
                 order.preparation_time = prep
             if order.delivery_status == 'delivered':
                 order.delivered_at = timezone.now()
+                # Chef-side delivery confirmation also settles COD, so a cash
+                # order is never left uncollected when the kitchen closes it.
+                if order.is_cod and not order.is_paid:
+                    order.is_paid = True
+                    order.paid_at = timezone.now()
             elif order.delivery_status == 'picked_up':
                 order.picked_up_at = order.picked_up_at or timezone.now()
             order.save()
@@ -734,6 +739,12 @@ class UpdateDeliveryStatusView(APIView):
                 order.picked_up_at = timezone.now()
             elif new_status == 'delivered':
                 order.delivered_at = timezone.now()
+                # Cash is collected at the door. Reaching this branch means the
+                # customer entered the correct delivery OTP, so the handover
+                # is verified and the COD amount is now collected.
+                if order.is_cod and not order.is_paid:
+                    order.is_paid = True
+                    order.paid_at = timezone.now()
             order.save()
 
             if new_status == 'picked_up':
@@ -1380,7 +1391,9 @@ class PlaceOrderView(APIView):
             if not items_data:
                 return Response({'error': 'items are required for one-time orders'}, status=status.HTTP_400_BAD_REQUEST)
 
-            serializer = OrderCreateSerializer(data=request.data, context={'request': request})
+            serializer = OrderCreateSerializer(
+                data=request.data, context={'request': request},
+            )
             if not serializer.is_valid():
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1425,12 +1438,24 @@ class PlaceOrderWithWalletView(APIView):
             if not items_data:
                 return Response({'error': 'items are required for one-time orders'}, status=status.HTTP_400_BAD_REQUEST)
 
-            serializer = OrderCreateSerializer(data=request.data, context={'request': request})
+            raw_deduction = request.data.get('wallet_deduction')
+            wallet_deduction = Decimal(str(raw_deduction)) if raw_deduction else Decimal('0')
+
+            # Decide the method before serialising so the serializer can reject
+            # the wallet + COD combination before any balance is locked.
+            is_cod = request.data.get('payment_method') == 'cod'
+            if is_cod and wallet_deduction > 0:
+                return Response(
+                    {'error': 'Wallet balance cannot be used with cash on delivery.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            serializer = OrderCreateSerializer(
+                data=request.data, context={'request': request},
+            )
             if not serializer.is_valid():
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-            raw_deduction = request.data.get('wallet_deduction')
-            wallet_deduction = Decimal(str(raw_deduction)) if raw_deduction else Decimal('0')
             profile = UserProfile.objects.select_for_update().get(pk=request.user.profile.pk)
 
             if wallet_deduction > profile.wallet_balance:
@@ -1895,6 +1920,54 @@ class ChefPayoutListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(chef=self.request.user.profile)
+
+
+# ──────────────────────────────────────────────
+# ADMIN PAYMENT OVERRIDE
+# ──────────────────────────────────────────────
+
+class AdminOrderPaymentView(APIView):
+    """Manual settlement of an order's payment.
+
+    Riders normally settle cash on delivery, but that fails when the customer
+    pays by card/UPI at the door, the rider forgets to mark it, or a COD order
+    is cancelled after collection and needs reversing. Admin is the escape
+    hatch; every write records who changed it via `payment_id` so the audit
+    trail survives in the order row itself.
+    """
+
+    permission_classes = [IsAdmin]
+
+    def post(self, request, pk):
+        try:
+            order = Order.objects.get(pk=pk)
+        except Order.DoesNotExist:
+            return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        raw = request.data.get('is_paid')
+        if raw is None:
+            return Response(
+                {'error': 'is_paid (true/false) is required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        is_paid = raw if isinstance(raw, bool) else str(raw).lower() == 'true'
+
+        order.is_paid = is_paid
+        order.paid_at = timezone.now() if is_paid else None
+        if is_paid:
+            marker = f'admin:{request.user.username}'
+            order.payment_id = order.payment_id or marker
+        else:
+            order.payment_id = ''
+        order.save(update_fields=['is_paid', 'paid_at', 'payment_id', 'updated_at'])
+
+        return Response({
+            'ok': True,
+            'order_id': order.id,
+            'is_paid': order.is_paid,
+            'paid_at': order.paid_at,
+            'payout_eligible': order.payout_eligible,
+        })
 
 
 # ──────────────────────────────────────────────

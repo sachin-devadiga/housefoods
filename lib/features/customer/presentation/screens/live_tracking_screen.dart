@@ -1,17 +1,16 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/api_service.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/services/map_api_service.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../domain/models/order_model.dart';
 import '../widgets/daily_feedback_dialog.dart';
 
 class LiveTrackingScreen extends StatefulWidget {
-  final OrderModel order;
-
+  final dynamic order;
   const LiveTrackingScreen({super.key, required this.order});
 
   @override
@@ -19,81 +18,76 @@ class LiveTrackingScreen extends StatefulWidget {
 }
 
 class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
-  final ApiService _api = ApiService(baseUrl: AppConstants.apiBaseUrl);
+  final MapController _mapController = MapController();
   final LocationService _locationService = LocationService();
-  final Completer<GoogleMapController> _mapController = Completer();
-  String _currentStatus = '';
-  bool _feedbackPrompted = false;
-  Timer? _pollTimer;
+  final ApiService _api = ApiService(baseUrl: AppConstants.apiBaseUrl);
+
   LatLng? _currentPosition;
   LatLng? _kitchenPosition;
   LatLng? _riderPosition;
-  final Set<Marker> _markers = {};
-  final Set<Polyline> _polylines = {};
+  final List<Marker> _markers = [];
+  final List<Polyline> _polylines = [];
+  String _currentStatus = '';
+  bool _feedbackPrompted = false;
+  Timer? _statusTimer;
 
   @override
   void initState() {
     super.initState();
-    _currentStatus = widget.order.status;
-    _loadLocations();
-    _startPolling();
+    _loadInitial();
+    _statusTimer = Timer.periodic(const Duration(seconds: 20), (_) => _fetchStatus());
   }
 
   @override
   void dispose() {
-    _pollTimer?.cancel();
+    _statusTimer?.cancel();
+    _mapController.dispose();
     super.dispose();
   }
 
-  void _startPolling() {
-    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) => _fetchStatus());
-  }
-
-  Future<void> _loadLocations() async {
-    try {
-      final pos = await _locationService.getCurrentLocation();
-      if (pos != null) {
+  Future<void> _loadInitial() async {
+    final result = await _locationService.getCurrentLocation();
+    if (result.isGranted && mounted) {
+      final pos = result.position!;
+      setState(() {
+        _currentPosition = LatLng(pos.latitude, pos.longitude);
+      });
+    }
+    final lat = widget.order?.kitchenLatitude ?? widget.order?.latitude;
+    final lng = widget.order?.kitchenLongitude ?? widget.order?.longitude;
+    if (lat != null && lng != null) {
+      final kitchenLatLng = LatLng(double.parse(lat.toString()), double.parse(lng.toString()));
+      if (mounted) {
         setState(() {
-          _currentPosition = LatLng(pos.latitude, pos.longitude);
-          _markers.add(Marker(
-            markerId: const MarkerId('current_location'),
-            position: _currentPosition!,
-            infoWindow: const InfoWindow(title: 'Your Location'),
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-          ));
+          _kitchenPosition = kitchenLatLng;
         });
-        _fitMapBounds();
       }
-    } catch (_) {
-      debugPrint('Failed to get current location');
     }
-
-    if (widget.order.kitchenId.isNotEmpty) {
-      try {
-        final data = await _api.get('${AppConstants.kitchensEndpoint}${widget.order.kitchenId}/');
-        final lat = data['latitude'];
-        final lng = data['longitude'];
-        if (lat != null && lng != null) {
-          final kitchenLatLng = LatLng(double.parse(lat.toString()), double.parse(lng.toString()));
-          setState(() {
-            _kitchenPosition = kitchenLatLng;
-            _markers.add(Marker(
-              markerId: const MarkerId('kitchen'),
-              position: kitchenLatLng,
-              infoWindow: InfoWindow(title: widget.order.kitchenName),
-              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
-            ));
-          });
-          _fitMapBounds();
+    if (mounted) {
+      setState(() {
+        _markers.clear();
+        if (_currentPosition != null) {
+          _markers.add(Marker(
+            point: _currentPosition!,
+            width: 24,
+            height: 24,
+            child: Container(
+              decoration: const BoxDecoration(color: Colors.blue, shape: BoxShape.circle),
+            ),
+          ));
         }
-      } catch (_) {
-        debugPrint('Failed to load kitchen location');
-      }
+        if (_kitchenPosition != null) {
+          _markers.add(Marker(
+            point: _kitchenPosition!,
+            width: 40,
+            height: 40,
+            child: const Icon(Icons.restaurant, color: Colors.orange, size: 40),
+          ));
+        }
+      });
+      _fitMapBounds();
     }
-
-    if (_currentPosition == null && _kitchenPosition != null) {
-      _mapController.future.then((c) => c.animateCamera(CameraUpdate.newLatLngZoom(_kitchenPosition!, 14)));
-    }
+    _fetchStatus();
   }
 
   void _fitMapBounds() {
@@ -103,7 +97,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     if (_riderPosition != null) points.add(_riderPosition!);
     if (points.length < 2) {
       if (_currentPosition != null) {
-        _mapController.future.then((c) => c.animateCamera(CameraUpdate.newLatLngZoom(_currentPosition!, 15)));
+        _mapController.move(_currentPosition!, 15);
       }
       return;
     }
@@ -115,10 +109,11 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
       if (p.longitude < minLng) minLng = p.longitude;
       if (p.longitude > maxLng) maxLng = p.longitude;
     }
-    final bounds = LatLngBounds(southwest: LatLng(minLat, minLng), northeast: LatLng(maxLat, maxLng));
-    _mapController.future.then((controller) {
-      controller.animateCamera(CameraUpdate.newLatLngBounds(bounds, 80));
-    });
+    final bounds = LatLngBounds(
+      LatLng(minLat, minLng),
+      LatLng(maxLat, maxLng),
+    );
+    _mapController.fitCamera(CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(80)));
   }
 
   Future<void> _fetchStatus() async {
@@ -134,7 +129,6 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
       }
     } catch (_) {}
 
-    // Fetch rider's live location
     _fetchRiderLocation();
   }
 
@@ -148,12 +142,13 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
           final riderLatLng = LatLng(lat, lng);
           setState(() {
             _riderPosition = riderLatLng;
-            _markers.removeWhere((m) => m.markerId.value == 'rider');
+            _markers.removeWhere((m) => m.key == const ValueKey('rider'));
             _markers.add(Marker(
-              markerId: const MarkerId('rider'),
-              position: riderLatLng,
-              infoWindow: InfoWindow(title: data['rider_name'] ?? 'Rider'),
-              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+              key: const ValueKey('rider'),
+              point: riderLatLng,
+              width: 40,
+              height: 40,
+              child: const Icon(Icons.delivery_dining, color: Colors.blue, size: 40),
             ));
           });
           _fitMapBounds();
@@ -175,17 +170,16 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
       );
       if (route['route'] != null && mounted) {
         final coords = (route['route'] as List).map((c) {
-          if (c is List && c.length >= 2) return LatLng(c[0].toDouble(), c[1].toDouble());
+          if (c is List && c.length >= 2) return LatLng((c[0] as num).toDouble(), (c[1] as num).toDouble());
           return null;
         }).whereType<LatLng>().toList();
         if (coords.isNotEmpty) {
           setState(() {
             _polylines.clear();
             _polylines.add(Polyline(
-              polylineId: const PolylineId('rider_to_customer'),
               points: coords,
               color: Colors.blue,
-              width: 5,
+              strokeWidth: 5,
             ));
           });
         }
@@ -216,22 +210,21 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
         children: [
           Expanded(
             flex: 3,
-            child: GoogleMap(
-              initialCameraPosition: CameraPosition(
-                target: _currentPosition ?? _kitchenPosition ?? const LatLng(28.6139, 77.2090),
-                zoom: 14,
+            child: FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: _currentPosition ?? _kitchenPosition ?? const LatLng(28.6139, 77.2090),
+                initialZoom: 14,
+                onMapReady: () => _fitMapBounds(),
               ),
-              markers: _markers,
-              polylines: _polylines,
-              myLocationEnabled: false,
-              myLocationButtonEnabled: false,
-              zoomControlsEnabled: false,
-              onMapCreated: (controller) {
-                if (!_mapController.isCompleted) {
-                  _mapController.complete(controller);
-                }
-                _fitMapBounds();
-              },
+              children: [
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.mealin.app',
+                ),
+                PolylineLayer(polylines: _polylines),
+                MarkerLayer(markers: _markers),
+              ],
             ),
           ),
           Expanded(
@@ -290,11 +283,11 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                widget.order.kitchenName,
+                widget.order.kitchenName ?? '',
                 style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               Text(
-                "Meal: ${widget.order.mealType.toUpperCase()}",
+                "Meal: ${(widget.order.mealType ?? '').toString().toUpperCase()}",
                 style: TextStyle(color: Colors.grey[600]),
               ),
             ],

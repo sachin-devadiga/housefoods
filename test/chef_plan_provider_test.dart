@@ -471,6 +471,69 @@ void main() {
     });
   });
 
+  group('draft duplication and cover image', () {
+    test('startDuplicate clears the id so it POSTs as a new plan', () {
+      final provider = build(FakeApiService());
+
+      provider.startDuplicate(const MealPlan(
+        id: '42',
+        name: 'Weekly Thali',
+        kitchenId: '3',
+        isActive: true,
+      ));
+
+      // id cleared => savePlan takes the POST branch instead of PATCHing over
+      // the original plan, which would overwrite it.
+      expect(provider.draft!.id, isEmpty);
+      expect(provider.draft!.name, 'Weekly Thali (copy)');
+      // The server forces is_active=false on create anyway; the draft should
+      // not claim to be live.
+      expect(provider.draft!.isActive, isFalse);
+      expect(provider.draft!.kitchenId, '3');
+    });
+
+    test('startDuplicate carries the grid and prices across', () {
+      final provider = build(FakeApiService());
+
+      provider.startDuplicate(const MealPlan(
+        id: '42',
+        name: 'Gridded',
+        kitchenId: '3',
+        slots: [
+          MealPlanSlot(
+            dayOfWeek: 0,
+            dayName: 'Mon',
+            mealType: 'dinner',
+            title: 'Dal Rice',
+          ),
+        ],
+        prices: [PlanPrice(cadence: 'week', price: '250')],
+      ));
+
+      expect(provider.draftSlots.keys, contains('0|dinner'));
+      expect(provider.draftPrices.keys, contains('week'));
+    });
+
+    test('setDraftImage updates the draft and the write payload', () {
+      final provider = build(FakeApiService());
+      provider.startDraft(null);
+      provider.setDraftName('With photo');
+
+      provider.setDraftImage('/media/uploads/abc.jpg');
+
+      expect(provider.draft!.imageUrl, '/media/uploads/abc.jpg');
+      // The snake_case key the backend's ModelSerializer expects.
+      expect(provider.buildDraftPlan().toWriteJson()['image_url'],
+          '/media/uploads/abc.jpg');
+    });
+
+    test('setDraftImage is a no-op with no draft open', () {
+      final provider = build(FakeApiService());
+      provider.setDraftImage('/media/uploads/abc.jpg');
+      expect(provider.draft, isNull);
+    });
+  });
+
   group('reset', () {
     test('clears subscriber state too', () async {
       final api = FakeApiService();

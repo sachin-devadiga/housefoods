@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/api_service.dart';
 import '../../../../core/services/location_service.dart';
@@ -28,15 +29,15 @@ class DeliveryTrackingMapScreen extends StatefulWidget {
 }
 
 class _DeliveryTrackingMapScreenState extends State<DeliveryTrackingMapScreen> {
-  final Completer<GoogleMapController> _mapController = Completer();
+  final MapController _mapController = MapController();
   final LocationService _locationService = LocationService();
   final ApiService _api = ApiService(baseUrl: AppConstants.apiBaseUrl);
 
   LatLng? _riderPosition;
   LatLng? _kitchenPosition;
   LatLng? _customerPosition;
-  final Set<Marker> _markers = {};
-  final Set<Polyline> _polylines = {};
+  final List<Marker> _markers = [];
+  final List<Polyline> _polylines = [];
   Timer? _locationTimer;
   bool _isLoading = true;
 
@@ -50,6 +51,7 @@ class _DeliveryTrackingMapScreenState extends State<DeliveryTrackingMapScreen> {
   @override
   void dispose() {
     _locationTimer?.cancel();
+    _mapController.dispose();
     super.dispose();
   }
 
@@ -58,23 +60,25 @@ class _DeliveryTrackingMapScreenState extends State<DeliveryTrackingMapScreen> {
   }
 
   Future<void> _updateRiderLocation() async {
-    try {
-      final pos = await _locationService.getCurrentLocation();
-      if (pos != null) {
-        setState(() {
-          _riderPosition = LatLng(pos.latitude, pos.longitude);
-          _markers.removeWhere((m) => m.markerId.value == 'rider');
-          _markers.add(Marker(
-            markerId: const MarkerId('rider'),
-            position: _riderPosition!,
-            infoWindow: const InfoWindow(title: 'Your Location'),
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
-          ));
-        });
-        // Send GPS to backend so customer can see rider location
-        _sendLocationToBackend(pos.latitude, pos.longitude);
-      }
-    } catch (_) {}
+    final result = await _locationService.getCurrentLocation();
+    if (!result.isGranted) return;
+
+    final pos = result.position!;
+    final riderLatLng = LatLng(pos.latitude, pos.longitude);
+    if (mounted) {
+      setState(() {
+        _riderPosition = riderLatLng;
+        _markers.removeWhere((m) => m.key == const ValueKey('rider'));
+        _markers.add(Marker(
+          key: const ValueKey('rider'),
+          point: riderLatLng,
+          width: 40,
+          height: 40,
+          child: const Icon(Icons.delivery_dining, color: Colors.blue, size: 40),
+        ));
+      });
+    }
+    _sendLocationToBackend(pos.latitude, pos.longitude);
   }
 
   void _sendLocationToBackend(double lat, double lng) async {
@@ -89,18 +93,18 @@ class _DeliveryTrackingMapScreenState extends State<DeliveryTrackingMapScreen> {
   Future<void> _loadLocations() async {
     setState(() => _isLoading = true);
 
-    try {
-      final pos = await _locationService.getCurrentLocation();
-      if (pos != null) {
-        _riderPosition = LatLng(pos.latitude, pos.longitude);
-        _markers.add(Marker(
-          markerId: const MarkerId('rider'),
-          position: _riderPosition!,
-          infoWindow: const InfoWindow(title: 'Your Location'),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
-        ));
-      }
-    } catch (_) {}
+    final result = await _locationService.getCurrentLocation();
+    if (result.isGranted) {
+      final pos = result.position!;
+      _riderPosition = LatLng(pos.latitude, pos.longitude);
+      _markers.add(Marker(
+        key: const ValueKey('rider'),
+        point: _riderPosition!,
+        width: 40,
+        height: 40,
+        child: const Icon(Icons.delivery_dining, color: Colors.blue, size: 40),
+      ));
+    }
 
     final kitchenLat = widget.delivery?['kitchen_details']?['latitude'];
     final kitchenLng = widget.delivery?['kitchen_details']?['longitude'];
@@ -110,10 +114,11 @@ class _DeliveryTrackingMapScreenState extends State<DeliveryTrackingMapScreen> {
         double.tryParse(kitchenLng.toString()) ?? 0,
       );
       _markers.add(Marker(
-        markerId: const MarkerId('kitchen'),
-        position: _kitchenPosition!,
-        infoWindow: InfoWindow(title: widget.kitchenName),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+        key: const ValueKey('kitchen'),
+        point: _kitchenPosition!,
+        width: 40,
+        height: 40,
+        child: const Icon(Icons.restaurant, color: Colors.orange, size: 40),
       ));
     }
 
@@ -125,10 +130,11 @@ class _DeliveryTrackingMapScreenState extends State<DeliveryTrackingMapScreen> {
         double.tryParse(customerLng.toString()) ?? 0,
       );
       _markers.add(Marker(
-        markerId: const MarkerId('customer'),
-        position: _customerPosition!,
-        infoWindow: InfoWindow(title: widget.deliveryAddress),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+        key: const ValueKey('customer'),
+        point: _customerPosition!,
+        width: 40,
+        height: 40,
+        child: const Icon(Icons.location_on, color: Colors.green, size: 40),
       ));
     } else if (_riderPosition != null) {
       _customerPosition = _riderPosition;
@@ -141,7 +147,7 @@ class _DeliveryTrackingMapScreenState extends State<DeliveryTrackingMapScreen> {
       _moveToPosition(_riderPosition!);
     }
 
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   Future<void> _fetchRoute(LatLng start, LatLng end) async {
@@ -156,7 +162,7 @@ class _DeliveryTrackingMapScreenState extends State<DeliveryTrackingMapScreen> {
       if (route['route'] != null) {
         final coords = (route['route'] as List).map((c) {
           if (c is List && c.length >= 2) {
-            return LatLng(c[0].toDouble(), c[1].toDouble());
+            return LatLng((c[0] as num).toDouble(), (c[1] as num).toDouble());
           }
           return null;
         }).whereType<LatLng>().toList();
@@ -165,10 +171,9 @@ class _DeliveryTrackingMapScreenState extends State<DeliveryTrackingMapScreen> {
           setState(() {
             _polylines.clear();
             _polylines.add(Polyline(
-              polylineId: const PolylineId('route'),
               points: coords,
               color: AppTheme.primaryColor,
-              width: 5,
+              strokeWidth: 5,
             ));
           });
         }
@@ -186,7 +191,7 @@ class _DeliveryTrackingMapScreenState extends State<DeliveryTrackingMapScreen> {
         if (route['route'] != null) {
           final coords = (route['route'] as List).map((c) {
             if (c is List && c.length >= 2) {
-              return LatLng(c[0].toDouble(), c[1].toDouble());
+              return LatLng((c[0] as num).toDouble(), (c[1] as num).toDouble());
             }
             return null;
           }).whereType<LatLng>().toList();
@@ -195,10 +200,9 @@ class _DeliveryTrackingMapScreenState extends State<DeliveryTrackingMapScreen> {
             setState(() {
               _polylines.clear();
               _polylines.add(Polyline(
-                polylineId: const PolylineId('route'),
                 points: coords,
                 color: AppTheme.primaryColor,
-                width: 5,
+                strokeWidth: 5,
               ));
             });
           }
@@ -224,14 +228,14 @@ class _DeliveryTrackingMapScreenState extends State<DeliveryTrackingMapScreen> {
     }
 
     final bounds = LatLngBounds(
-      southwest: LatLng(minLat, minLng),
-      northeast: LatLng(maxLat, maxLng),
+      LatLng(minLat, minLng),
+      LatLng(maxLat, maxLng),
     );
-    _mapController.future.then((c) => c.animateCamera(CameraUpdate.newLatLngBounds(bounds, 80)));
+    _mapController.fitCamera(CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(80)));
   }
 
   void _moveToPosition(LatLng pos) {
-    _mapController.future.then((c) => c.animateCamera(CameraUpdate.newLatLngZoom(pos, 15)));
+    _mapController.move(pos, 15);
   }
 
   @override
@@ -246,16 +250,27 @@ class _DeliveryTrackingMapScreenState extends State<DeliveryTrackingMapScreen> {
       ),
       body: Stack(
         children: [
-          GoogleMap(
-            initialCameraPosition: CameraPosition(target: initialTarget, zoom: 14),
-            markers: _markers,
-            polylines: _polylines,
-            myLocationEnabled: true,
-            myLocationButtonEnabled: true,
-            zoomControlsEnabled: false,
-            onMapCreated: (controller) {
-              if (!_mapController.isCompleted) _mapController.complete(controller);
-            },
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: initialTarget,
+              initialZoom: 14,
+              onMapReady: () {
+                if (_kitchenPosition != null && _customerPosition != null) {
+                  _fitBounds();
+                } else if (_riderPosition != null) {
+                  _moveToPosition(_riderPosition!);
+                }
+              },
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.mealin.app',
+              ),
+              PolylineLayer(polylines: _polylines),
+              MarkerLayer(markers: _markers),
+            ],
           ),
           if (_isLoading)
             const Center(child: CircularProgressIndicator()),

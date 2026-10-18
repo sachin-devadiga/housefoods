@@ -141,7 +141,7 @@ class _DeliveryPartnerProfileTabState extends State<DeliveryPartnerProfileTab> {
               radius: 48,
               backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.1),
               backgroundImage: _avatarUrl != null && _avatarUrl!.isNotEmpty
-                  ? NetworkImage(_avatarUrl!)
+                  ? NetworkImage(AppConstants.resolveMediaUrl(_avatarUrl))
                   : null,
               child: _avatarUrl == null || _avatarUrl!.isEmpty
                   ? const Icon(Icons.person, size: 48, color: AppTheme.primaryColor)

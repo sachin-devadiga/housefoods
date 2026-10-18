@@ -1,3 +1,5 @@
+
+import 'package:mealin/core/constants/app_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -205,7 +207,7 @@ class _AddDishScreenState extends State<AddDishScreen> {
         decoration: BoxDecoration(
           color: Colors.grey[200],
           borderRadius: BorderRadius.circular(16),
-          image: _imageUrl != null ? DecorationImage(image: NetworkImage(_imageUrl!), fit: BoxFit.cover) : null,
+          image: _imageUrl != null ? DecorationImage(image: NetworkImage(AppConstants.resolveMediaUrl(_imageUrl)), fit: BoxFit.cover) : null,
         ),
         child: _imageUrl == null
             ? Column(

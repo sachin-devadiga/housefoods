@@ -31,6 +31,14 @@ class OrderModel {
   final String deliveryStatus; // 'pending', 'accepted', 'ready_for_delivery', 'assigned', 'picked_up', 'delivered'
   final int preparationTime; // minutes, set by restaurant on accept
   final String paymentId;
+
+  /// 'online' or 'cod'. Cash orders stay unpaid until the rider collects.
+  final String paymentMethod;
+
+  /// Null means "not stated" — pre-COD rows and any payload without the
+  /// field. Treated as paid so old orders do not all read as outstanding.
+  final bool? isPaid;
+
   final DateTime createdAt;
   final bool isPaused;
   final String deliverySlotId;
@@ -66,6 +74,8 @@ class OrderModel {
     this.deliveryStatus = 'pending',
     this.preparationTime = 0,
     required this.paymentId,
+    this.paymentMethod = 'online',
+    this.isPaid,
     required this.createdAt,
     this.isPaused = false,
     this.deliverySlotId = '',
@@ -110,6 +120,7 @@ class OrderModel {
       if (deliveryLongitude != null) 'delivery_longitude': deliveryLongitude.toString(),
       'status': status,
       'payment_id': paymentId,
+      'payment_method': paymentMethod,
       'delivery_slot_id': deliverySlotId,
       'meal_type': mealType,
     };
@@ -169,6 +180,9 @@ class OrderModel {
           ? (map['preparation_time'] ?? map['preparationTime'] ?? 0) as int
           : int.tryParse('${map['preparation_time'] ?? map['preparationTime'] ?? 0}') ?? 0,
       paymentId: map['payment_id'] ?? map['paymentId'] ?? '',
+      paymentMethod:
+          map['payment_method']?.toString() ?? map['paymentMethod']?.toString() ?? 'online',
+      isPaid: map['is_paid'] as bool? ?? map['isPaid'] as bool?,
       createdAt: parseDate('created_at'),
       isPaused: map['is_paused'] ?? map['isPaused'] ?? false,
       deliverySlotId: map['delivery_slot_id'] ?? map['deliverySlotId'] ?? '',

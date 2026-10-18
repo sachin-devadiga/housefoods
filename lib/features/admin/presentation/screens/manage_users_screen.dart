@@ -1,3 +1,5 @@
+
+import 'package:mealin/core/constants/app_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -138,7 +140,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                         child: ListTile(
                           leading: CircleAvatar(
                             backgroundColor: roleColor.withValues(alpha: 0.15),
-                            backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+                            backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(AppConstants.resolveMediaUrl(avatarUrl)) : null,
                             child: avatarUrl.isEmpty ? Text(name.isNotEmpty ? name[0].toUpperCase() : '?', style: TextStyle(color: roleColor, fontWeight: FontWeight.bold)) : null,
                           ),
                           title: Text(name.isNotEmpty ? name : email, style: const TextStyle(fontWeight: FontWeight.w600)),

@@ -20,6 +20,48 @@ class ChefOrderCard extends StatelessWidget {
     required this.onPrintBill,
   });
 
+  /// Tells the kitchen this order will be paid in cash at the door, and
+  /// whether that cash has actually been collected yet. Without it a COD
+  /// order looks identical to a prepaid one and the chef has no idea to expect
+  /// money.
+  Widget _buildCodBanner() {
+    final collected = order.isPaid == true;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: (collected ? Colors.green : Colors.orange).withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: (collected ? Colors.green : Colors.orange).withValues(alpha: 0.4),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            collected ? Icons.check_circle : Icons.payments_outlined,
+            size: 18,
+            color: collected ? Colors.green.shade700 : Colors.orange.shade800,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              collected
+                  ? 'Cash collected — ₹${order.amount.toStringAsFixed(0)} received'
+                  : 'Cash on delivery — collect ₹${order.amount.toStringAsFixed(0)}',
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: collected ? Colors.green.shade800 : Colors.orange.shade900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Color _progressColor() {
     switch (order.deliveryStatus.toLowerCase()) {
       case 'accepted':
@@ -64,6 +106,7 @@ class ChefOrderCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (order.paymentMethod == 'cod') _buildCodBanner(),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -128,7 +171,7 @@ class ChefOrderCard extends StatelessWidget {
                               Text('Note: ${item.specialInstructions}',
                                   style: TextStyle(
                                       fontSize: 12,
-                                      color: Colors.orange[800],
+                                      color: AppTheme.secondaryColor,
                                       fontStyle: FontStyle.italic)),
                           ],
                         ),

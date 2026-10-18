@@ -4,7 +4,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/services/geocoding_service.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:latlong2/latlong.dart';
 import '../../../auth/presentation/screens/map_picker_screen.dart';
 import '../../../../features/customer/domain/models/kitchen_model.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
@@ -46,17 +46,26 @@ class _KitchenSetupScreenState extends State<KitchenSetupScreen> {
 
   Future<void> _pickImage(String path, Function(String) onUpload) async {
     final chefProvider = Provider.of<ChefProvider>(context, listen: false);
-    final url = await chefProvider.pickAndUploadImage(path);
-    if (url != null) {
-      setState(() => onUpload(url));
+    try {
+      final url = await chefProvider.pickAndUploadImage(path);
+      if (!mounted) return;
+      if (url != null) {
+        setState(() => onUpload(url));
+      } else {
+        _showError('Could not upload image. Please try again.');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showError('Image upload failed: $e');
     }
   }
 
   Future<void> _useCurrentLocation() async {
     setState(() => _isGettingLocation = true);
     try {
-      final position = await _locationService.getCurrentLocation();
-      if (position == null) throw 'Could not determine location. Please enable GPS.';
+      final result = await _locationService.getCurrentLocation();
+      if (!result.isGranted) throw result.reason ?? 'Could not determine location.';
+      final position = result.position!;
       final address = await _geocodingService.getAddressFromCoords(
         LatLng(position.latitude, position.longitude),
       );
@@ -123,8 +132,11 @@ class _KitchenSetupScreenState extends State<KitchenSetupScreen> {
         double? lat = _latitude;
         double? lng = _longitude;
         if (lat == null || lng == null) {
-          final position = await _locationService.getCurrentLocation();
-          if (position == null) throw 'Could not determine location. Please enable GPS.';
+          final result = await _locationService.getCurrentLocation();
+          if (!result.isGranted) {
+            throw result.reason ?? 'Could not determine location.';
+          }
+          final position = result.position!;
           lat = position.latitude;
           lng = position.longitude;
         }
@@ -257,7 +269,7 @@ class _KitchenSetupScreenState extends State<KitchenSetupScreen> {
         decoration: BoxDecoration(
           color: Colors.grey[200],
           borderRadius: BorderRadius.circular(16),
-          image: url != null ? DecorationImage(image: NetworkImage(url), fit: BoxFit.cover) : null,
+          image: url != null ? DecorationImage(image: NetworkImage(AppConstants.resolveMediaUrl(url)), fit: BoxFit.cover) : null,
         ),
         child: url == null 
             ? Column(mainAxisAlignment: MainAxisAlignment.center, children: [

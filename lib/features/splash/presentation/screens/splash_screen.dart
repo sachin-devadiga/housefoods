@@ -192,7 +192,7 @@ class _SplashScreenState extends State<SplashScreen> {
         : 'Order food from your favorite restaurants';
 
     return Scaffold(
-      backgroundColor: AppTheme.primaryColor,
+      backgroundColor: RoleConfig.splashColor,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -200,7 +200,7 @@ class _SplashScreenState extends State<SplashScreen> {
             ClipRRect(
               borderRadius: BorderRadius.circular(24),
               child: Image.asset(
-                'assets/logo.jpeg',
+                RoleConfig.logoAsset,
                 width: 120,
                 height: 120,
                 fit: BoxFit.cover,

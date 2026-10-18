@@ -219,6 +219,16 @@ class SubscriptionProvider extends ChangeNotifier {
       return;
     }
 
+    // Meal plans are prepaid and have no cash fallback, so without a real
+    // gateway key this is a hard stop — but it must be a clear message rather
+    // than a blank Razorpay webview.
+    if (!AppConstants.razorpayConfigured) {
+      _onFailure?.call(
+          'Online payment is not set up yet. Meal plans cannot be subscribed '
+          'until a payment key is configured.');
+      return;
+    }
+
     final options = {
       'key': AppConstants.razorpayKey,
       'amount': (amount * 100).toInt(),

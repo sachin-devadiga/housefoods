@@ -157,7 +157,11 @@ class ApiService {
       final url = data['image_url'] ?? data['url'] ?? '';
       return url;
     } on DioException catch (e) {
-      throw _handleDioError(e);
+      // The default branch collapses every transport-level failure into
+      // "Something went wrong", which is useless when diagnosing an upload.
+      // Keep the transport message so the SnackBar can show what actually
+      // happened (DNS, TLS, connection reset, body too large, etc.).
+      throw _handleUploadError(e);
     }
   }
 
@@ -182,6 +186,21 @@ class ApiService {
       return data;
     }
     return {'data': data, 'status_code': response.statusCode};
+  }
+
+  ApiException _handleUploadError(DioException e) {
+    if (e.response != null && e.response?.data is Map) {
+      final errorData = e.response!.data as Map<String, dynamic>;
+      final message = errorData['error'] as String? ??
+          errorData['detail'] as String? ??
+          errorData.entries.map((e) => '${e.key}: ${e.value}').join(', ');
+      return ApiException(message, e.response!.statusCode ?? 0);
+    }
+    final target = e.requestOptions.baseUrl + e.requestOptions.path;
+    return ApiException(
+      'Upload failed (${e.type.name})${e.message == null ? '' : ': ${e.message}'} [$target]',
+      e.response?.statusCode ?? 0,
+    );
   }
 
   ApiException _handleDioError(DioException e) {

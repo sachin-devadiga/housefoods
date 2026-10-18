@@ -176,6 +176,11 @@ class ChefProvider extends ChangeNotifier {
       final data = await _api.get(AppConstants.ordersEndpoint, queryParams: {'status': 'active'});
       final orders = (data['data'] as List?) ?? [];
 
+      // Cash-on-delivery orders are unsettled until the rider collects them.
+      // Counting them here let a chef request a payout for money that had
+      // never been handed over.
+      final settledOrders = orders.where((o) => o['is_paid'] != false).toList();
+
       double total = 0;
       double monthly = 0;
       double daily = 0;
@@ -183,7 +188,7 @@ class ChefProvider extends ChangeNotifier {
       final todayStart = DateTime(now.year, now.month, now.day);
       final weekTotals = List<double>.filled(7, 0);
 
-      for (final order in orders) {
+      for (final order in settledOrders) {
         final orderKitchenId = order['kitchen'];
         if (orderKitchenId != null && orderKitchenId.toString() == kitchenId.toString()) {
           final raw = order['amount'];
@@ -338,26 +343,30 @@ class ChefProvider extends ChangeNotifier {
   }
 
   Future<String?> pickAndUploadImage(String folderPath) async {
+    await _ensureAuthenticated();
+    final File? imageFile = await _storageService.pickImage(ImageSource.gallery);
+    if (imageFile == null) {
+      // The user cancelled the picker. That is not an error worth surfacing.
+      return null;
+    }
+    _isLoading = true;
+    notifyListeners();
     try {
-      await _ensureAuthenticated();
-      final File? imageFile = await _storageService.pickImage(ImageSource.gallery);
-      if (imageFile != null) {
-        _isLoading = true;
-        notifyListeners();
-        final url = await _api.uploadFile(
-          AppConstants.uploadEndpoint,
-          imageFile.path,
-        );
-        if (url.isEmpty) return null;
-        return url;
+      final url = await _api.uploadFile(
+        AppConstants.uploadEndpoint,
+        imageFile.path,
+      );
+      if (url.isEmpty) {
+        throw ApiException('Server returned no image URL', 0);
       }
+      return url;
     } catch (e) {
       debugPrint("Upload error: $e");
+      rethrow;
     } finally {
       _isLoading = false;
       notifyListeners();
     }
-    return null;
   }
 
   Future<void> createKitchen(Map<String, dynamic> kitchenData) async {

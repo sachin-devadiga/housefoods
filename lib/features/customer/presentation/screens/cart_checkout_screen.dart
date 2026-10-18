@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 // ignore_for_file: deprecated_member_use
+import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_theme.dart';
 
 import '../../../auth/presentation/providers/auth_provider.dart';
@@ -39,7 +40,12 @@ class _CartCheckoutScreenState extends State<CartCheckoutScreen> {
   AddressModel? _selectedAddress;
   bool _isUserLoading = true;
   bool _isProcessing = false;
-  _PayMode _payMode = _PayMode.online;
+
+  /// Defaults to cash on delivery whenever no payment gateway key is compiled
+  /// in. Offering "Pay online" as the default in that build led straight into
+  /// a blank Razorpay webview, because the placeholder key cannot succeed.
+  _PayMode _payMode =
+      AppConstants.razorpayConfigured ? _PayMode.online : _PayMode.cod;
   double _tip = 0;
   final _couponController = TextEditingController();
   bool _isCouponWorking = false;
@@ -138,7 +144,10 @@ class _CartCheckoutScreenState extends State<CartCheckoutScreen> {
             _buildPaymentCard(),
             const SizedBox(height: 16),
             _buildOffersCard(orderProvider),
-            if (walletBalance > 0) ...[
+            // Wallet credit and cash on delivery are mutually exclusive, so the
+            // whole card is hidden rather than shown disabled: offering it and
+            // rejecting it at submit time is worse than not offering it.
+            if (walletBalance > 0 && _payMode != _PayMode.cod) ...[
               const SizedBox(height: 16),
               _buildWalletCard(orderProvider, walletBalance, payable),
             ],
@@ -162,7 +171,14 @@ class _CartCheckoutScreenState extends State<CartCheckoutScreen> {
             minimumSize: const Size(double.infinity, 52),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
-          onPressed: _isProcessing ? null : () => _placeOrder(payable, grandTotal),
+          onPressed: _isProcessing
+              ? null
+              : _selectedAddress == null
+                  // Don't offer to pay when there is nowhere to deliver it.
+                  // Route straight into the add-address flow instead of
+                  // showing a SnackBar and returning.
+                  ? _addAddressFlow
+                  : () => _placeOrder(payable, grandTotal),
           child: _isProcessing
               ? const SizedBox(
                   width: 22,
@@ -170,9 +186,11 @@ class _CartCheckoutScreenState extends State<CartCheckoutScreen> {
                   child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
                 )
               : Text(
-                  _payMode == _PayMode.cod
-                      ? 'Place Order • ₹${grandTotal.toStringAsFixed(0)}'
-                      : 'Pay ₹${grandTotal.toStringAsFixed(0)}',
+                  _selectedAddress == null
+                      ? 'Add delivery address to continue'
+                      : _payMode == _PayMode.cod
+                          ? 'Place Order • ₹${grandTotal.toStringAsFixed(0)}'
+                          : 'Pay ₹${grandTotal.toStringAsFixed(0)}',
                   style: const TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
                 ),
         ),
@@ -299,7 +317,31 @@ class _CartCheckoutScreenState extends State<CartCheckoutScreen> {
     );
   }
 
-  Widget _buildPaymentCard() {
+  /// Switching to COD releases any wallet credit.
+///
+/// Wallet money is already the customer's, so combining it with "pay the rider
+/// in cash" would leave a partially-settled order the app has no way to
+/// reconcile. The backend rejects it too; doing it here avoids a round trip and
+/// an error screen.
+void _selectPayMode(_PayMode mode) {
+  setState(() => _payMode = mode);
+  if (mode == _PayMode.cod && mounted) {
+    final provider = context.read<OrderProvider>();
+    if (provider.isWalletApplied) {
+      final payable = _payableBase(provider);
+      provider.toggleWallet(false, payable, _user?.walletBalance ?? 0);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'HouseCredits removed — not available with cash on delivery'),
+          backgroundColor: AppTheme.secondaryColor,
+        ),
+      );
+    }
+  }
+}
+
+Widget _buildPaymentCard() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -310,21 +352,34 @@ class _CartCheckoutScreenState extends State<CartCheckoutScreen> {
               RadioListTile<_PayMode>(
                 value: _PayMode.online,
                 groupValue: _payMode,
-                onChanged: (v) => setState(() => _payMode = v ?? _PayMode.online),
+                // Disabled rather than hidden: the customer can see online
+                // payment exists and why it is unavailable, instead of
+                // wondering where it went.
+                onChanged: !AppConstants.razorpayConfigured
+                    ? null
+                    : (v) => setState(() => _selectPayMode(v ?? _PayMode.online)),
                 activeColor: AppTheme.primaryColor,
                 title: const Text('UPI / Card / Netbanking', style: TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: const Text('Pay securely online', style: TextStyle(fontSize: 12)),
-                secondary: const Icon(Icons.smartphone, color: AppTheme.primaryColor),
+                subtitle: Text(
+                  AppConstants.razorpayConfigured
+                      ? 'Pay securely online'
+                      : 'Not available right now',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                secondary: Icon(Icons.smartphone,
+                    color: AppConstants.razorpayConfigured
+                        ? AppTheme.primaryColor
+                        : Colors.grey),
                 dense: true,
               ),
               const Divider(height: 1, indent: 16, endIndent: 16),
               RadioListTile<_PayMode>(
                 value: _PayMode.cod,
                 groupValue: _payMode,
-                onChanged: (v) => setState(() => _payMode = v ?? _PayMode.online),
+                onChanged: (v) => setState(() => _selectPayMode(v ?? _PayMode.online)),
                 activeColor: AppTheme.primaryColor,
                 title: const Text('Cash on Delivery', style: TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: const Text('Pay at your doorstep', style: TextStyle(fontSize: 12)),
+                subtitle: const Text('Pay in cash at your doorstep', style: TextStyle(fontSize: 12)),
                 secondary: const Icon(Icons.payments_outlined, color: Colors.green),
                 dense: true,
               ),
@@ -535,17 +590,30 @@ class _CartCheckoutScreenState extends State<CartCheckoutScreen> {
   }
 
   Future<void> _addAddressFlow() async {
-    if (_user == null) {
+    final user = _user;
+    if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please log in to add an address')),
       );
       return;
     }
-    await Navigator.push(
+    // AddAddressScreen pops a plain `true`, not the created address, so the new
+    // one is found by diffing ids after a reload — trusting the pop value would
+    // mean casting `true` to AddressModel and crashing.
+    final before = user.addresses.map((a) => a.id).toSet();
+    final changed = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(builder: (_) => AddAddressScreen(user: _user!)),
+      MaterialPageRoute(builder: (_) => AddAddressScreen(user: user)),
     );
-    _loadUser();
+    if (!mounted || changed != true) return;
+    final fresh = user.addresses
+        .where((a) => !before.contains(a.id))
+        .toList();
+    if (fresh.isNotEmpty) {
+      setState(() => _selectedAddress = fresh.first);
+      return;
+    }
+    await _loadUser();
   }
 
   void _showAddressPicker() {

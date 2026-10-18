@@ -221,12 +221,29 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'tax', 'platform_fee', 'tip', 'delivery_address', 'delivery_time',
             'start_date', 'end_date', 'delivery_slot_id', 'meal_type', 'items_data',
             'delivery_latitude', 'delivery_longitude',
+            'payment_method', 'is_paid', 'paid_at',
         ]
         read_only_fields = ['plan_name']
+
+    def validate(self, attrs):
+        # Wallet credit is money already in the customer's account, so it
+        # cannot be combined with "pay the rider in cash" without inventing a
+        # partial-payment reconciliation the app does not support.
+        if attrs.get('payment_method') == 'cod' and self.context.get('wallet_deduction'):
+            raise serializers.ValidationError(
+                {'payment_method': 'Wallet balance cannot be used with cash on delivery.'}
+            )
+        return attrs
 
     def create(self, validated_data):
         items_data = validated_data.pop('items_data', [])
         validated_data['customer'] = self.context['request'].user.profile
+
+        # COD is unsettled until the rider collects it at handover; an online
+        # order is settled by definition once it is accepted here.
+        if validated_data.get('payment_method') == 'cod':
+            validated_data['is_paid'] = False
+            validated_data['paid_at'] = None
 
         order_type = validated_data.get('order_type', 'one_time')
         if order_type == 'one_time':

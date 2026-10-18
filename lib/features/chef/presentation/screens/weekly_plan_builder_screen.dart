@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/models/meal_plan_model.dart';
+import '../providers/chef_provider.dart';
 import '../providers/meal_plan_provider.dart';
 import '../widgets/plan_slot_editor_sheet.dart';
 import 'plan_pricing_screen.dart';
@@ -33,20 +34,49 @@ class _WeeklyPlanBuilderScreenState extends State<WeeklyPlanBuilderScreen> {
   };
 
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
+  String? _imageUrl;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      context.read<MealPlanProvider>().startDraft(widget.plan);
+      final plan = widget.plan;
+      context.read<MealPlanProvider>().startDraft(plan);
+      if (plan != null) {
+        _nameController.text = plan.name;
+        _descriptionController.text = plan.description;
+        _imageUrl = plan.imageUrl;
+      }
     });
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _descriptionController.dispose();
     super.dispose();
+  }
+
+  /// Cover photo for the plan card. Reuses the chef's existing upload path so
+  /// one signed-in session and one endpoint serve both kitchen and plan media.
+  Future<void> _pickCoverImage() async {
+    final chefProvider = Provider.of<ChefProvider>(context, listen: false);
+    try {
+      final url = await chefProvider.pickAndUploadImage('meal_plans');
+      if (!mounted || url == null) return;
+      setState(() => _imageUrl = url);
+      context.read<MealPlanProvider>().setDraftImage(url);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Image upload failed: $e'),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+    }
   }
 
   void _openCell(int dayOfWeek, String mealType) {
@@ -105,6 +135,56 @@ class _WeeklyPlanBuilderScreenState extends State<WeeklyPlanBuilderScreen> {
       return;
     }
     if (!mounted) return;
+
+    // The server forces `is_active: false` on create, so a saved plan is
+    // always a draft. Offer the publish step here instead of making the chef
+    // back out, find the card, and hunt for the publish button.
+    final saved = provider.draft;
+    final publishNow = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Plan saved'),
+        content: const Text(
+          'Saved as a draft. Publish it now to make it visible to customers?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Later'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.secondaryColor),
+            onPressed: () => Navigator.pop(ctx, true),
+            child:
+                const Text('Publish', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (publishNow == true && saved != null && saved.id.isNotEmpty) {
+      try {
+        await provider.publishPlan(saved.id, true);
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(provider.errorMessage ?? 'Could not publish.'),
+            backgroundColor: AppTheme.errorColor,
+          ),
+        );
+        return;
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Plan published.')),
+      );
+      return;
+    }
+
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Plan saved as a draft.')),
     );
@@ -150,7 +230,41 @@ class _WeeklyPlanBuilderScreenState extends State<WeeklyPlanBuilderScreen> {
                   border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
+              TextField(
+                key: const Key('planCoverImageField'),
+                readOnly: true,
+                onTap: _pickCoverImage,
+                decoration: InputDecoration(
+                  labelText: 'Cover photo',
+                  hintText: 'Tap to choose an image',
+                  prefixIcon: const Icon(Icons.image_outlined),
+                  suffixIcon: _imageUrl == null
+                      ? const Icon(Icons.add_a_photo_outlined)
+                      : const Icon(Icons.check_circle,
+                          color: AppTheme.secondaryColor),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              if (_imageUrl != null) ...[
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    _imageUrl!,
+                    height: 140,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      height: 140,
+                      color: Colors.grey[200],
+                      alignment: Alignment.center,
+                      child: const Icon(Icons.broken_image_outlined),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
               Row(
                 children: [
                   const Icon(Icons.grid_view, size: 18, color: Colors.grey),
@@ -170,7 +284,6 @@ class _WeeklyPlanBuilderScreenState extends State<WeeklyPlanBuilderScreen> {
               for (var day = 0; day < _dayNames.length; day++)
                 _buildDayRow(day, provider),
               const SizedBox(height: 24),
-              const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: provider.isSaving ? null : _save,
                 style: ElevatedButton.styleFrom(

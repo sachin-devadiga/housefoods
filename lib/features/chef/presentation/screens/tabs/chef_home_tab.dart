@@ -4,9 +4,14 @@ import '../../../../../core/theme/app_theme.dart';
 import '../../../../customer/presentation/providers/order_provider.dart';
 import '../../providers/chef_provider.dart';
 import '../../providers/meal_plan_provider.dart';
+import 'package:mealin/features/customer/domain/models/kitchen_model.dart';
 import '../daily_fulfillment_screen.dart';
 import '../dispatch_history_screen.dart';
 import '../plan_subscribers_screen.dart';
+import '../weekly_plan_builder_screen.dart';
+import '../edit_kitchen_screen.dart';
+import '../kitchen_setup_screen.dart';
+import 'chef_menu_tab.dart';
 
 class ChefHomeTab extends StatefulWidget {
   const ChefHomeTab({super.key});
@@ -86,10 +91,10 @@ class _ChefHomeTabState extends State<ChefHomeTab> {
                     const SizedBox(width: 12),
                     // Reactive Today's Meal Count
                     _buildStatCard(
-                      "Today's Meals", 
-                      orderProvider.todayDeliveries.length.toString(), 
-                      Icons.soup_kitchen, 
-                      Colors.orange,
+                      "Today's Meals",
+                      orderProvider.todayDeliveries.length.toString(),
+                      Icons.soup_kitchen,
+                      AppTheme.secondaryColor,
                       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DailyFulfillmentScreen())),
                     ),
                   ],
@@ -148,6 +153,62 @@ class _ChefHomeTabState extends State<ChefHomeTab> {
                   Icons.history,
                   Colors.teal,
                   () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DispatchHistoryScreen())),
+                ),
+                const SizedBox(height: 12),
+                _buildControlTile(
+                  context,
+                  "Edit Kitchen Details",
+                  "Update name, address, photos, specialties",
+                  Icons.edit,
+                  AppTheme.secondaryColor,
+                  () {
+                    final kitchen = provider.myKitchen;
+                    if (kitchen == null) return;
+                    final model = KitchenModel.fromMap(
+                      kitchen,
+                      (kitchen['id'] ?? '').toString(),
+                    );
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => EditKitchenScreen(kitchen: model)),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                _buildControlTile(
+                  context,
+                  "Manage Menu",
+                  "Add, edit or remove dishes",
+                  Icons.restaurant_menu,
+                  AppTheme.secondaryColor,
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ChefMenuTab()),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildControlTile(
+                  context,
+                  "Create Weekly Plan",
+                  "Build a 7-day meal subscription",
+                  Icons.calendar_month,
+                  Colors.deepPurple,
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const WeeklyPlanBuilderScreen()),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildControlTile(
+                  context,
+                  "View Subscribers",
+                  "See who subscribed to your plans",
+                  Icons.people_outline,
+                  Colors.indigo,
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PlanSubscribersScreen()),
+                  ),
                 ),
               ],
             ),
@@ -258,6 +319,19 @@ class _ChefHomeTabState extends State<ChefHomeTab> {
                 "Register your kitchen to start selling meals.",
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey[600], fontSize: 15),
+              ),
+              const SizedBox(height: 32),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.secondaryColor,
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const KitchenSetupScreen()),
+                ),
+                icon: const Icon(Icons.add, color: Colors.white),
+                label: const Text("Register Kitchen", style: TextStyle(color: Colors.white)),
               ),
             ],
           ),

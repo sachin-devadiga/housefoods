@@ -190,16 +190,22 @@ class _PlansBrowseScreenState extends State<PlansBrowseScreen> {
         const SizedBox(height: 90),
         Column(
           children: [
-            Icon(Icons.no_meals_outlined, size: 56, color: Colors.grey[300]),
+            Icon(Icons.no_meals_outlined,
+                size: 56, color: Colors.grey[300]),
             const SizedBox(height: 12),
             const Text('No meal plans nearby',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                style:
+                    TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 32),
-              child: Text('No kitchen within 15 km offers a plan right now. Check again soon.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, color: Colors.grey)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Text(
+                'No kitchen within 15 km has published a plan yet. Plans are '
+                'added by kitchens — check again soon, or keep browsing '
+                'one-time orders in the meantime.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: Colors.grey),
+              ),
             ),
           ],
         ),

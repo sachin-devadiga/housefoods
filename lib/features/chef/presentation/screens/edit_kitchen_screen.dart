@@ -5,7 +5,7 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/widgets/app_cached_image.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/services/geocoding_service.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:latlong2/latlong.dart';
 import '../../../auth/presentation/screens/map_picker_screen.dart';
 import '../../../../features/customer/domain/models/kitchen_model.dart';
 import '../providers/chef_provider.dart';
@@ -51,17 +51,29 @@ class _EditKitchenScreenState extends State<EditKitchenScreen> {
 
   Future<void> _updatePhoto() async {
     final provider = Provider.of<ChefProvider>(context, listen: false);
-    final url = await provider.pickAndUploadImage(AppConstants.kitchenImagesPath);
-    if (url != null) {
-      setState(() => _imageUrl = url);
+    try {
+      final url = await provider.pickAndUploadImage(AppConstants.kitchenImagesPath);
+      if (url != null) {
+        setState(() => _imageUrl = url);
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not upload image. Please try again.'), backgroundColor: AppTheme.errorColor),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Image upload failed: $e'), backgroundColor: AppTheme.errorColor),
+      );
     }
   }
 
   Future<void> _useCurrentLocation() async {
     setState(() => _isLocating = true);
     try {
-      final position = await LocationService().getCurrentLocation();
-      if (position == null) throw 'Could not determine location. Please enable GPS.';
+      final result = await LocationService().getCurrentLocation();
+      if (!result.isGranted) throw result.reason ?? 'Could not determine location.';
+      final position = result.position!;
       final address = await GeocodingService().getAddressFromCoords(
         LatLng(position.latitude, position.longitude),
       );
@@ -368,7 +380,7 @@ class _EditKitchenScreenState extends State<EditKitchenScreen> {
         decoration: BoxDecoration(
           color: Colors.grey[200],
           borderRadius: BorderRadius.circular(16),
-          image: _imageUrl != null ? DecorationImage(image: NetworkImage(_imageUrl!), fit: BoxFit.cover) : null,
+          image: _imageUrl != null ? DecorationImage(image: NetworkImage(AppConstants.resolveMediaUrl(_imageUrl)), fit: BoxFit.cover) : null,
         ),
         child: Stack(
           children: [
@@ -379,7 +391,7 @@ class _EditKitchenScreenState extends State<EditKitchenScreen> {
               child: Container(
                 margin: const EdgeInsets.all(12),
                 padding: const EdgeInsets.all(8),
-                decoration: const BoxDecoration(color: AppTheme.primaryColor, shape: BoxShape.circle),
+                decoration: const BoxDecoration(color: AppTheme.secondaryColor, shape: BoxShape.circle),
                 child: const Icon(Icons.camera_alt, color: Colors.white, size: 18),
               ),
             ),

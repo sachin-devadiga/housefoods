@@ -27,6 +27,31 @@ class AppConstants {
   static const String updateFcmTokenEndpoint = '/api/auth/fcm-token/';
   static const String toggleFavoriteEndpoint = '/api/auth/favorites/toggle';
 
+  /// Turns a stored media path into a URL an image widget can actually load.
+  ///
+  /// The backend persists MEDIA-relative paths (`/media/uploads/<name>.jpg`),
+  /// which are not valid image URLs on their own — `CachedNetworkImage` and
+  /// `NetworkImage` both need an absolute URL with a scheme and host, so every
+  /// relative path silently failed to render. Anything already absolute (an
+  /// http(s) URL, or a data/blob URI) is returned untouched.
+  static String resolveMediaUrl(String? path) {
+    if (path == null) return '';
+    final value = path.trim();
+    if (value.isEmpty) return '';
+    if (value.startsWith('http://') ||
+        value.startsWith('https://') ||
+        value.startsWith('data:') ||
+        value.startsWith('blob:') ||
+        value.startsWith('file://')) {
+      return value;
+    }
+    final base = apiBaseUrl.endsWith('/')
+        ? apiBaseUrl.substring(0, apiBaseUrl.length - 1)
+        : apiBaseUrl;
+    final suffix = value.startsWith('/') ? value : '/$value';
+    return '$base$suffix';
+  }
+
   // Storage Paths
   static const String profileImagesPath = 'profile_images';
   static const String mealImagesPath = 'meal_images';
@@ -128,6 +153,17 @@ class AppConstants {
   // Razorpay
   // Override with: --dart-define=RAZORPAY_KEY=rzp_live_xxxx
   static const String razorpayKey = String.fromEnvironment('RAZORPAY_KEY', defaultValue: 'rzp_test_YOUR_KEY_HERE');
+
+  /// True only when a real gateway key was compiled in.
+  ///
+  /// Debug builds do not require `RAZORPAY_KEY`, so [razorpayKey] ships as the
+  /// `rzp_test_YOUR_KEY_HERE` placeholder. Opening Razorpay with that key
+  /// renders a blank webview and never returns — the plugin reports no error,
+  /// so the failure was completely silent and no order was ever created.
+  /// Callers must check this *before* opening the checkout.
+  static bool get razorpayConfigured =>
+      razorpayKey.isNotEmpty &&
+      !razorpayKey.contains('YOUR_KEY');
 
   // Sarvam AI (STT/TTS) — proxied via MEALIN backend
   // API key lives ONLY on the backend (SARVAM_API_KEY env var).

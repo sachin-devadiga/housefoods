@@ -101,7 +101,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   CircleAvatar(
                     radius: 60,
                     backgroundColor: Colors.grey[200],
-                    backgroundImage: _profileImageUrl != null ? NetworkImage(_profileImageUrl!) : null,
+                    backgroundImage: _profileImageUrl != null ? NetworkImage(AppConstants.resolveMediaUrl(_profileImageUrl)) : null,
                     child: _profileImageUrl == null ? const Icon(Icons.person, size: 60, color: Colors.grey) : null,
                   ),
                   Positioned(

@@ -1,3 +1,5 @@
+
+import 'package:mealin/core/constants/app_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -395,7 +397,9 @@ Widget _bannerTile(BuildContext context, SduiBanner banner, SduiRenderContext ct
         color: AppTheme.primaryColor.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(14),
         image: (image != null && image.isNotEmpty)
-            ? DecorationImage(image: NetworkImage(image), fit: BoxFit.cover)
+            ? DecorationImage(
+                image: NetworkImage(AppConstants.resolveMediaUrl(image)),
+                fit: BoxFit.cover)
             : null,
       ),
       padding: const EdgeInsets.all(20),
@@ -438,7 +442,7 @@ Widget _promoBanner(BuildContext context, SduiNode node, SduiRenderContext ctx) 
         borderRadius: BorderRadius.circular(12),
         image: (node.imageUrl != null && node.imageUrl!.isNotEmpty)
             ? DecorationImage(
-                image: NetworkImage(node.imageUrl!), fit: BoxFit.cover)
+                image: NetworkImage(AppConstants.resolveMediaUrl(node.imageUrl)), fit: BoxFit.cover)
             : null,
       ),
       child: Column(

@@ -20,13 +20,13 @@ class AiChatRepository {
     double? lat;
     double? lng;
 
-    try {
-      final position = await _locationService.getCurrentLocation();
-      if (position != null) {
-        lat = position.latitude;
-        lng = position.longitude;
-      }
-    } catch (_) {}
+    // Location is a nice-to-have here: the chat still works without it, so a
+    // denied or blocked permission must not abort the request.
+    final result = await _locationService.getCurrentLocation();
+    if (result.isGranted) {
+      lat = result.position!.latitude;
+      lng = result.position!.longitude;
+    }
 
     final historyJson = conversationHistory
         .map((m) => {

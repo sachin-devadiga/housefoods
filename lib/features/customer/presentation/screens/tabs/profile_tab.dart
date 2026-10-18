@@ -104,7 +104,7 @@ class ProfileTab extends StatelessWidget {
           CircleAvatar(
             radius: 50,
             backgroundColor: AppTheme.primaryColor,
-            backgroundImage: photoUrl != null ? NetworkImage(photoUrl) : null,
+            backgroundImage: photoUrl != null ? NetworkImage(AppConstants.resolveMediaUrl(photoUrl)) : null,
             child: photoUrl == null ? const Icon(Icons.person, size: 50, color: Colors.white) : null,
           ),
           const SizedBox(height: 16),

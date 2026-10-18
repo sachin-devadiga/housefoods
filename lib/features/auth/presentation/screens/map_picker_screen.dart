@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/services/geocoding_service.dart';
@@ -13,11 +14,11 @@ class MapPickerScreen extends StatefulWidget {
 }
 
 class _MapPickerScreenState extends State<MapPickerScreen> {
-  final Completer<GoogleMapController> _controller = Completer<GoogleMapController>();
+  final MapController _mapController = MapController();
   final LocationService _locationService = LocationService();
   final GeocodingService _geocodingService = GeocodingService();
-  
-  LatLng? _currentPosition;
+
+  LatLng? _currentCenter;
   String _pickedAddress = "Locating...";
   bool _isLocating = true;
 
@@ -27,23 +28,31 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
     _setInitialLocation();
   }
 
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
+  }
+
   Future<void> _setInitialLocation() async {
-    try {
-      final pos = await _locationService.getCurrentLocation();
-      if (pos != null) {
-        final latLng = LatLng(pos.latitude, pos.longitude);
-        setState(() {
-          _currentPosition = latLng;
-        });
-        _updateAddress(latLng);
-      }
-    } catch (e) {
-      debugPrint("Initial Location Error: $e");
+    final result = await _locationService.getCurrentLocation();
+    if (!mounted) return;
+    if (result.isGranted) {
+      final pos = result.position!;
+      final latLng = LatLng(pos.latitude, pos.longitude);
+      setState(() {
+        _currentCenter = latLng;
+      });
+      _mapController.move(latLng, 16.0);
+      _updateAddress(latLng);
+    } else {
+      debugPrint("Initial location unavailable: ${result.status} ${result.reason}");
       setState(() => _isLocating = false);
     }
   }
 
   Future<void> _updateAddress(LatLng position) async {
+    if (!mounted) return;
     setState(() => _isLocating = true);
     final address = await _geocodingService.getAddressFromCoords(position);
     if (mounted) {
@@ -52,6 +61,19 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
         _isLocating = false;
       });
     }
+  }
+
+  Future<void> _goToMyLocation() async {
+    final result = await _locationService.getCurrentLocation();
+    if (!result.isGranted) {
+      debugPrint("My location unavailable: ${result.status} ${result.reason}");
+      return;
+    }
+    final pos = result.position!;
+    final latLng = LatLng(pos.latitude, pos.longitude);
+    _mapController.move(latLng, 16.0);
+    if (mounted) setState(() => _currentCenter = latLng);
+    _updateAddress(latLng);
   }
 
   @override
@@ -63,39 +85,54 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
         foregroundColor: Colors.black,
         elevation: 0,
       ),
-      body: _currentPosition == null
+      body: _currentCenter == null
           ? const Center(child: CircularProgressIndicator())
           : Stack(
               children: [
-                GoogleMap(
-                  initialCameraPosition: CameraPosition(
-                    target: _currentPosition!,
-                    zoom: 16.0,
+                FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: _currentCenter!,
+                    initialZoom: 16.0,
+                    onPositionChanged: (position, hasGesture) {
+                      _currentCenter = position.center;
+                    },
+                    onMapEvent: (event) {
+                      if (event is MapEventMoveEnd) {
+                        _updateAddress(_currentCenter!);
+                      }
+                    },
                   ),
-                  onMapCreated: (GoogleMapController controller) {
-                    _controller.complete(controller);
-                  },
-                  onCameraMove: (position) {
-                    _currentPosition = position.target;
-                  },
-                  onCameraIdle: () {
-                    if (_currentPosition != null) {
-                      _updateAddress(_currentPosition!);
-                    }
-                  },
-                  myLocationEnabled: true,
-                  myLocationButtonEnabled: false,
-                  zoomControlsEnabled: false,
+                  children: [
+                    TileLayer(
+                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.mealin.app',
+                      tileProvider: NetworkTileProvider(
+                        headers: {'User-Agent': 'Mealin/1.0 (contact@mealin.in)'},
+                        silenceExceptions: true,
+                      ),
+                    ),
+                  ],
                 ),
                 // Fixed Central Pin
                 Center(
                   child: Padding(
-                    padding: const EdgeInsets.only(bottom: 35), // Offset for pin point
+                    padding: const EdgeInsets.only(bottom: 35),
                     child: Icon(
                       Icons.location_on,
                       size: 45,
                       color: AppTheme.primaryColor,
                     ),
+                  ),
+                ),
+                Positioned(
+                  right: 16,
+                  bottom: 220,
+                  child: FloatingActionButton(
+                    mini: true,
+                    backgroundColor: Colors.white,
+                    onPressed: _goToMyLocation,
+                    child: const Icon(Icons.my_location, color: Colors.black),
                   ),
                 ),
                 _buildAddressCard(),
@@ -123,9 +160,9 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
                 children: [
                   const Icon(Icons.location_on_outlined, color: AppTheme.primaryColor),
                   const SizedBox(width: 12),
-                  const Text("SELECT ADDRESS", 
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
-                  if (_isLocating) 
+                  const Text("SELECT ADDRESS",
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                  if (_isLocating)
                     const Padding(
                       padding: EdgeInsets.only(left: 12),
                       child: SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
@@ -141,13 +178,15 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
               ),
               const SizedBox(height: 32),
               ElevatedButton(
-                onPressed: _isLocating ? null : () {
-                  Navigator.pop(context, {
-                    'address': _pickedAddress,
-                    'lat': _currentPosition!.latitude,
-                    'lng': _currentPosition!.longitude,
-                  });
-                },
+                onPressed: _isLocating || _currentCenter == null
+                    ? null
+                    : () {
+                        Navigator.pop(context, {
+                          'address': _pickedAddress,
+                          'lat': _currentCenter!.latitude,
+                          'lng': _currentCenter!.longitude,
+                        });
+                      },
                 child: const Text("Confirm Location"),
               ),
             ],

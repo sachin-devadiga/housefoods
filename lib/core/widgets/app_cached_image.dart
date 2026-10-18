@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import '../constants/app_constants.dart';
 import 'shimmer_loading.dart';
 
 class AppCachedImage extends StatelessWidget {
@@ -20,14 +21,17 @@ class AppCachedImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (imageUrl.isEmpty) {
+    // Stored values are MEDIA-relative paths; resolve before handing to the
+    // image loader or every picture renders as the error placeholder.
+    final resolved = AppConstants.resolveMediaUrl(imageUrl);
+    if (resolved.isEmpty) {
       return _buildErrorWidget();
     }
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
       child: CachedNetworkImage(
-        imageUrl: imageUrl,
+        imageUrl: resolved,
         width: width,
         height: height,
         fit: fit,

@@ -1,3 +1,5 @@
+
+import 'package:mealin/core/constants/app_constants.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -99,7 +101,7 @@ class _PromoCarouselState extends State<PromoCarousel> {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(16),
                         image: DecorationImage(
-                          image: NetworkImage(map['image_url'] ?? map['imageUrl']),
+                          image: NetworkImage(AppConstants.resolveMediaUrl(map['image_url'] ?? map['imageUrl'])),
                           fit: BoxFit.cover,
                         ),
                         boxShadow: [

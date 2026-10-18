@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/services/prefs_service.dart';
 import '../../../../features/customer/domain/models/kitchen_model.dart';
@@ -97,14 +96,11 @@ class KitchenProvider extends ChangeNotifier {
       if (newKitchens.length < _pageSize) _hasMore = false;
       _currentPage++;
 
-      Position? userPos;
-      try {
-        userPos = await _locationService.getCurrentLocation();
-      } catch (e) {
-        debugPrint("Location error: $e");
-      }
-
-      if (userPos != null) {
+      // Proximity sort is best-effort: without a fix, kitchens keep their
+      // server order rather than the whole feed failing.
+      final location = await _locationService.getCurrentLocation();
+      if (location.isGranted) {
+        final userPos = location.position!;
         for (var kitchen in newKitchens) {
           _kitchenDistances[kitchen.id] = _locationService.calculateDistance(
             userPos.latitude, userPos.longitude, kitchen.latitude, kitchen.longitude,

@@ -3,8 +3,11 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/theme/app_theme.dart';
-import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../auth/data/repositories/user_repository_impl.dart';
 import '../../../auth/domain/models/address_model.dart';
+import '../../../auth/domain/models/user_model.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../auth/presentation/screens/add_address_screen.dart';
 import '../../domain/models/subscription_model.dart';
 import '../providers/subscription_provider.dart';
 
@@ -35,16 +38,109 @@ class SubscriptionCheckoutScreen extends StatefulWidget {
 class _SubscriptionCheckoutScreenState extends State<SubscriptionCheckoutScreen> {
   SubscriptionQuoteModel? _quote;
 
+  /// Mutable copy of [SubscriptionCheckoutScreen.address]. The address is
+  /// chosen on the plan screen, but the customer must be able to correct it
+  /// here — this is the last screen before money moves. Changing it re-quotes
+  /// because the delivery fee is distance-based.
+  late AddressModel _address;
+
+  UserModel? _user;
+  bool _isUserLoading = true;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadQuote());
+    _address = widget.address;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadUser();
+      _loadQuote();
+    });
+  }
+
+  Future<void> _loadUser() async {
+    final uid =
+        Provider.of<AuthProvider>(context, listen: false).userProfile?['uid'] ??
+            '';
+    UserModel? user;
+    if (uid.isNotEmpty) {
+      user = await UserRepositoryImpl().getUser(uid);
+    }
+    if (!mounted) return;
+    setState(() {
+      _user = user;
+      _isUserLoading = false;
+    });
+  }
+
+  /// Switching delivery address changes the distance, so the whole quote —
+  /// including the delivery fee and therefore the amount charged — has to be
+  /// recomputed. Reusing the stale quote would charge the old distance.
+  Future<void> _applyAddress(AddressModel next) async {
+    setState(() => _address = next);
+    await _loadQuote();
+  }
+
+  Future<void> _pickAddress() async {
+    final addresses = _user?.addresses ?? const <AddressModel>[];
+    if (addresses.isEmpty) {
+      _addAddress();
+      return;
+    }
+    final picked = await showModalBottomSheet<AddressModel>(
+      context: context,
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text('Select Address',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ),
+          ...addresses.map((addr) => ListTile(
+                leading: Radio<AddressModel>(
+                  value: addr,
+                  groupValue: _address,
+                  onChanged: (val) => Navigator.pop(ctx, val),
+                  activeColor: AppTheme.primaryColor,
+                ),
+                title: Text(addr.fullAddress),
+                subtitle: Text(addr.label),
+              )),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+    if (picked != null) await _applyAddress(picked);
+  }
+
+  Future<void> _addAddress() async {
+    final user = _user;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in to add an address')),
+      );
+      return;
+    }
+    // AddAddressScreen pops a plain `true`, not the created address, so the new
+    // one is identified by diffing ids after a reload rather than by trusting
+    // the pop value — casting that `true` to AddressModel would crash.
+    final before = (_user?.addresses ?? const <AddressModel>[]).map((a) => a.id).toSet();
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => AddAddressScreen(user: user)),
+    );
+    await _loadUser();
+    if (changed != true) return;
+    final fresh = (_user?.addresses ?? const <AddressModel>[])
+        .where((a) => !before.contains(a.id))
+        .toList();
+    if (fresh.isNotEmpty) await _applyAddress(fresh.first);
   }
 
   Future<void> _loadQuote() async {
     final quote = await context.read<SubscriptionProvider>().fetchQuote(
           priceId: widget.price.id,
-          addressId: widget.address.id,
+          addressId: _address.id,
         );
     if (!mounted) return;
     setState(() => _quote = quote);
@@ -69,7 +165,7 @@ class _SubscriptionCheckoutScreenState extends State<SubscriptionCheckoutScreen>
     context.read<SubscriptionProvider>().openSubscriptionCheckout(
           plan: widget.plan,
           price: widget.price,
-          addressId: widget.address.id,
+          addressId: _address.id,
           startDate: widget.startDate,
           amount: quote.periodTotal,
           userEmail: email,
@@ -109,6 +205,10 @@ class _SubscriptionCheckoutScreenState extends State<SubscriptionCheckoutScreen>
                   padding: const EdgeInsets.all(16),
                   children: [
                     _buildPlanCard(),
+                    const SizedBox(height: 16),
+                    _buildAddressCard(),
+                    const SizedBox(height: 16),
+                    _buildPaymentCard(),
                     const SizedBox(height: 16),
                     _buildScheduleCard(quote),
                     const SizedBox(height: 16),
@@ -200,6 +300,77 @@ class _SubscriptionCheckoutScreenState extends State<SubscriptionCheckoutScreen>
     );
   }
 
+  Widget _buildAddressCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.location_on, color: AppTheme.primaryColor, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Deliver to',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 3),
+                  Text(_address.fullAddress,
+                      style: const TextStyle(fontSize: 12.5, color: Colors.grey)),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: _isUserLoading ? null : _pickAddress,
+              child: Text((_user?.addresses.isEmpty ?? true) ? 'Add' : 'Change'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Meal plans are charged up front for the whole period — the kitchen has to
+  /// buy and cook before a single plate is delivered, so there is nothing to
+  /// collect on the doorstep. The method is stated explicitly rather than
+  /// implied by a bare "Pay" button, so the customer is never surprised at the
+  /// last step.
+  Widget _buildPaymentCard() {
+    return Card(
+      child: const Padding(
+        padding: EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Icon(Icons.account_balance_wallet_outlined,
+                color: AppTheme.primaryColor, size: 20),
+            SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Payment Method',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 3),
+                  Text(
+                    'Prepaid online — UPI, card or netbanking',
+                    style: TextStyle(fontSize: 12.5, color: Colors.grey),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Paid upfront for the full period. Meal plans are not '
+                    'available on cash on delivery.',
+                    style: TextStyle(fontSize: 11.5, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildScheduleCard(SubscriptionQuoteModel quote) {
     return Card(
       child: Padding(
@@ -207,16 +378,6 @@ class _SubscriptionCheckoutScreenState extends State<SubscriptionCheckoutScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _row('Deliver to', widget.address.label),
-            const SizedBox(height: 6),
-            Padding(
-              padding: const EdgeInsets.only(right: 40),
-              child: Text(
-                widget.address.fullAddress,
-                style: const TextStyle(fontSize: 12.5, color: Colors.grey),
-              ),
-            ),
-            const Divider(height: 24),
             _row('Starts on', _fmtDate(widget.startDate)),
             const SizedBox(height: 6),
             _row('Period', '${quote.durationDays} days'),

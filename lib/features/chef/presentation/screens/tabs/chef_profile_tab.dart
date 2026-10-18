@@ -147,7 +147,7 @@ class ChefProfileTab extends StatelessWidget {
           radius: 50,
           backgroundColor: AppTheme.secondaryColor,
           backgroundImage: imageUrl.isNotEmpty
-              ? NetworkImage(imageUrl)
+              ? NetworkImage(AppConstants.resolveMediaUrl(imageUrl))
               : null,
           child: imageUrl.isEmpty
               ? const Icon(Icons.restaurant, size: 50, color: Colors.white)

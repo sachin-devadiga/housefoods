@@ -160,6 +160,35 @@ class MealPlanProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setDraftDescription(String description) {
+    final draft = _draft;
+    if (draft == null) return;
+    _draft = draft.copyWith(description: description);
+    notifyListeners();
+  }
+
+  void setDraftImage(String url) {
+    final draft = _draft;
+    if (draft == null) return;
+    _draft = draft.copyWith(imageUrl: url);
+    notifyListeners();
+  }
+
+  /// Copies an existing plan into an unsaved draft so the builder opens a
+  /// fresh plan that already carries the old grid and prices.
+  ///
+  /// The server forces `is_active: false` on create, so a duplicate is always
+  /// a draft until the chef publishes it deliberately.
+  void startDuplicate(MealPlan source) {
+    startDraft(
+      source.copyWith(
+        id: '',
+        name: '${source.name} (copy)',
+        isActive: false,
+      ),
+    );
+  }
+
   void upsertSlot(MealPlanSlot slot) {
     _draftSlots[slotKey(slot.dayOfWeek, slot.mealType)] = slot;
     notifyListeners();

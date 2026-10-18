@@ -58,7 +58,7 @@ class _ChefEarningsTabState extends State<ChefEarningsTab> {
                 children: [
                   _buildSmallCard("This Month", "₹${chefProvider.monthlyEarnings.toStringAsFixed(0)}", Colors.blue),
                   const SizedBox(width: 12),
-                  _buildSmallCard("Pending Payout", "₹${chefProvider.pendingPayout.toStringAsFixed(0)}", Colors.orange),
+                  _buildSmallCard("Pending Payout", "₹${chefProvider.pendingPayout.toStringAsFixed(0)}", AppTheme.secondaryColor),
                 ],
               ),
 

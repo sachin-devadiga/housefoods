@@ -119,6 +119,9 @@ urlpatterns = [
     path('admin/users/<str:uid>/', views.AdminUserDetailView.as_view(), name='admin-user-detail'),
     path('admin/kitchens/', views.AdminKitchenListView.as_view(), name='admin-kitchen-list'),
     path('admin/orders/', views.AdminOrderListView.as_view(), name='admin-order-list'),
+    # Manual settlement override for cash-on-delivery orders.
+    path('admin/orders/<int:pk>/payment/',
+         views.AdminOrderPaymentView.as_view(), name='admin-order-payment'),
     path('admin/payouts/', views.AdminPayoutListView.as_view(), name='admin-payout-list'),
     path('admin/payouts/<int:pk>/status/', views.AdminPayoutUpdateView.as_view(), name='admin-payout-update'),
     path('admin/settings/', views.AdminSettingListView.as_view(), name='admin-setting-list'),

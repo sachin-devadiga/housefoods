@@ -21,29 +21,23 @@ class SubscriptionsTab extends StatefulWidget {
 }
 
 class _SubscriptionsTabState extends State<SubscriptionsTab> {
-  final SubscriptionProvider _provider = SubscriptionProvider();
-
   @override
   void initState() {
     super.initState();
-    _provider.fetchMySubscriptions();
-  }
-
-  @override
-  void dispose() {
-    _provider.dispose();
-    super.dispose();
+    // The provider is registered in main.dart so the pushed plan screens can
+    // resolve it too; this tab must not own a private instance.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<SubscriptionProvider>().fetchMySubscriptions();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider<SubscriptionProvider>.value(
-      value: _provider,
-      child: Consumer<SubscriptionProvider>(
-        builder: (context, provider, child) {
-          final live = provider.mySubscriptions
-              .where((SubscriptionModel s) => !s.isCancelled)
-              .toList();
+    return Consumer<SubscriptionProvider>(
+      builder: (context, provider, child) {
+        final live = provider.mySubscriptions
+            .where((SubscriptionModel s) => !s.isCancelled)
+            .toList();
 
           return RefreshIndicator(
             color: AppTheme.primaryColor,
@@ -68,8 +62,7 @@ class _SubscriptionsTabState extends State<SubscriptionsTab> {
               ],
             ),
           );
-        },
-      ),
+      },
     );
   }
 

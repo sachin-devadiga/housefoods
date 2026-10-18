@@ -277,6 +277,16 @@ class OrderProvider extends ChangeNotifier {
     _onErrorCallback = onError;
     _pendingOneTimeItems = items;
     _pendingOneTimeTip = tip;
+
+    // Refuse before opening the gateway rather than rendering a blank webview.
+    // With the placeholder key Razorpay produces no callback at all, so the
+    // customer sat on an empty screen and no order was ever created.
+    if (!AppConstants.razorpayConfigured) {
+      _onErrorCallback?.call(
+          'Online payment is not set up yet. Please choose cash on delivery.');
+      return;
+    }
+
     if (order.amount == 0) {
       _handleOneTimePaymentSuccess(PaymentSuccessResponse(null, null, null, null));
       return;
@@ -292,6 +302,9 @@ class OrderProvider extends ChangeNotifier {
       _razorpay.open(options);
     } catch (e) {
       debugPrint('Razorpay error: $e');
+      // Previously swallowed here: the customer saw nothing at all. A failed
+      // open must always reach the UI.
+      _onErrorCallback?.call('Could not open payment: ${e.toString()}');
     }
   }
 
@@ -306,6 +319,8 @@ class OrderProvider extends ChangeNotifier {
         final orderData = {
           'kitchen': _pendingOrder!.kitchenId,
           'order_type': 'one_time',
+          // Settled by Razorpay before the order is created.
+          'payment_method': 'online',
           'amount': _pendingOrder!.amount.toString(),
           'delivery_address': _pendingOrder!.deliveryAddress,
           'delivery_latitude': _pendingOrder!.deliveryLatitude,
@@ -372,6 +387,7 @@ class OrderProvider extends ChangeNotifier {
       final orderData = {
         'kitchen': kitchenId,
         'order_type': 'one_time',
+        'payment_method': 'online',
         'amount': amount.toString(),
         'delivery_address': deliveryAddress,
         'delivery_latitude': deliveryLatitude,
@@ -427,6 +443,9 @@ class OrderProvider extends ChangeNotifier {
       final orderData = {
         'kitchen': kitchenId,
         'order_type': 'one_time',
+        // Settled by the rider at handover; recorded so the backend
+        // leaves the order unpaid until the cash is actually collected.
+        'payment_method': 'cod',
         'amount': amount.toString(),
         'delivery_address': deliveryAddress,
         'delivery_latitude': deliveryLatitude,

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import '../../../../../core/theme/app_theme.dart';
+import '../../../../../core/services/geocoding_service.dart';
+import '../../../../../core/services/location_service.dart';
 import '../../../../auth/presentation/providers/auth_provider.dart';
 import '../../providers/kitchen_provider.dart';
 import '../../providers/favorites_provider.dart';
@@ -12,9 +15,12 @@ import '../../widgets/zomato_widgets.dart';
 import '../kitchen_details_screen.dart';
 import '../kitchen_map_screen.dart';
 import '../search_page.dart';
+import '../plans_browse_screen.dart';
+import '../my_subscriptions_screen.dart';
 import '../../../../ai_assistant/presentation/screens/ai_chat_screen.dart';
 import '../../../../../core/sdui/default_config.dart';
 import '../../../../../core/sdui/sdui_screen_view.dart';
+import '../../../../../core/sdui/sdui_widget_registry.dart';
 
 enum _HomeMode { delivery, dining, nightlife }
 
@@ -27,7 +33,18 @@ class HomeTab extends StatefulWidget {
 
 class _HomeTabState extends State<HomeTab> {
   final ScrollController _scrollController = ScrollController();
+  final LocationService _locationService = LocationService();
+  final GeocodingService _geocodingService = GeocodingService();
   _HomeMode _mode = _HomeMode.delivery;
+
+  /// True once reverse geocoding has been tried for the current fix, so the
+  /// header can stop showing "Current location" only when there is genuinely
+  /// nothing better to say.
+  bool _labelResolved = false;
+
+  /// Null means "not resolved yet"; the header prompts rather than guessing.
+  String? _locationLabel;
+  bool _locationDenied = false;
 
   @override
   void initState() {
@@ -40,6 +57,40 @@ class _HomeTabState extends State<HomeTab> {
         context.read<FavoritesProvider>().loadFavorites(uid);
       }
       context.read<KitchenProvider>().fetchKitchens();
+      _loadLocation();
+    });
+  }
+
+  Future<void> _loadLocation() async {
+    final result = await _locationService.getCurrentLocation();
+    if (!mounted) return;
+
+    if (!result.isGranted) {
+      setState(() {
+        _locationDenied = true;
+        _labelResolved = true;
+        _locationLabel = result.reason ?? 'Location unavailable';
+      });
+      return;
+    }
+
+    // Show the fix immediately, then upgrade the label when geocoding lands.
+    // Reverse geocoding is a slow platform call and must never gate the map
+    // or the kitchen feed.
+    final position = result.position!;
+    setState(() {
+      _locationDenied = false;
+      _locationLabel = 'Current location';
+      _labelResolved = false;
+    });
+
+    final label = await _geocodingService.getShortLabel(
+      LatLng(position.latitude, position.longitude),
+    );
+    if (!mounted) return;
+    setState(() {
+      _labelResolved = true;
+      _locationLabel = label ?? 'Current location';
     });
   }
 
@@ -98,9 +149,22 @@ class _HomeTabState extends State<HomeTab> {
                   // 4. Server-driven banners. Renders nothing until an admin
                   //    publishes a `banners` spec, so this is invisible by
                   //    default and cannot regress the feed.
-                  const SliverToBoxAdapter(
-                    child: SduiSpecBody(specKey: SduiKeys.banners),
+                  SliverToBoxAdapter(
+                    child: SduiSpecBody(
+                      specKey: SduiKeys.banners,
+                      // Without this the registry's `open_screen` action is a
+                      // silent no-op: an admin could publish a "Subscribe &
+                      // Save" banner that renders but does nothing when tapped.
+                      renderContext: SduiRenderContext(
+                        onOpenScreen: _openSduiScreen,
+                      ),
+                    ),
                   ),
+                  // 4b. Native subscription entry. Kept in the app rather than
+                  //     only in SDUI so it survives an empty banner spec — the
+                  //     server must never be able to remove the only way into
+                  //     subscriptions.
+                  SliverToBoxAdapter(child: _buildPlansEntry()),
                   // 5. Top offers
                   SliverToBoxAdapter(child: _buildOffers(provider)),
                   // 5. Cuisines
@@ -226,23 +290,42 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   Widget _buildLocationHeader() {
+    final label = _locationLabel ?? 'Your current location';
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 2),
       child: Row(
         children: [
-          const Icon(Icons.location_on, color: AppTheme.primaryColor, size: 24),
+          GestureDetector(
+            onTap: _loadLocation,
+            child: Icon(
+              _locationDenied ? Icons.location_off : Icons.location_on,
+              color: _locationDenied ? ZomatoColors.grey : AppTheme.primaryColor,
+              size: 24,
+            ),
+          ),
           const SizedBox(width: 6),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Deliver to',
-                    style: TextStyle(fontSize: 12, color: ZomatoColors.grey)),
-                Text('Your current location',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: ZomatoColors.ink),
+          Expanded(
+            child: GestureDetector(
+              onTap: _loadLocation,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Deliver to',
+                      style: TextStyle(fontSize: 12, color: ZomatoColors.grey)),
+                  Text(
+                    _locationDenied
+                        ? 'Tap to enable location'
+                        : (_labelResolved ? label : 'Locating…'),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: _locationDenied ? ZomatoColors.grey : ZomatoColors.ink,
+                    ),
                     maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-              ],
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
             ),
           ),
           IconButton(
@@ -357,6 +440,90 @@ class _HomeTabState extends State<HomeTab> {
             child: const Text('Order Delivery Instead', style: TextStyle(color: Colors.white)),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Maps an SDUI screen id to a real screen. Unknown ids are ignored rather
+  /// than throwing, so a typo in a server-pushed spec cannot crash Home.
+  void _openSduiScreen(String screenId) {
+    switch (screenId) {
+      case 'plans':
+      case 'subscriptions':
+        _openPlans();
+      case 'orders':
+        _openMySubscriptions();
+      default:
+        debugPrint('[SDUI] home banner requested unknown screen: $screenId');
+    }
+  }
+
+  void _openPlans() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const PlansBrowseScreen()),
+    );
+  }
+
+  void _openMySubscriptions() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MySubscriptionsScreen()),
+    );
+  }
+
+  /// Prominent home entry into subscriptions. The bottom nav "Plans" tab is
+  /// easy to miss, and a customer who never finds it has no way to discover a
+  /// weekly meal plan exists.
+  Widget _buildPlansEntry() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: _openPlans,
+          child: Ink(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.autorenew,
+                      color: AppTheme.primaryColor, size: 22),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Subscribe & Save',
+                        style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Weekly meal plans from kitchens near you',
+                        style: TextStyle(fontSize: 12.5, color: ZomatoColors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right, color: ZomatoColors.grey),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
