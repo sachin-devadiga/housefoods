@@ -9,9 +9,13 @@ on:
         options: [customer, chef, delivery_partner]
         default: customer
   push:
-    tags: ['v*']
-  push:
+    # One `push` key only. Two of them is a duplicate mapping key, which GitHub
+    # rejects outright ("This run likely failed because of a workflow file
+    # issue") while most YAML parsers silently keep only the last one.
+    # branches + tags together means "either"; path filters are evaluated for
+    # branch pushes and ignored for tag pushes, so v* tags still fire.
     branches: [main]
+    tags: ['v*']
     paths:
       - 'lib/**'
       - 'android/**'

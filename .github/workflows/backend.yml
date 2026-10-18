@@ -5,11 +5,15 @@ on:
     branches: [main]
     paths:
       - 'backend/**'
-      - '.github/workflows/backend.yml'
+      - 'scripts/validate_workflows.py'
+      # All workflows, not just this one: a duplicate-key bug in
+      # build-android.yml otherwise never reaches a CI run that could see it.
+      - '.github/workflows/**'
   pull_request:
     paths:
       - 'backend/**'
-      - '.github/workflows/backend.yml'
+      - 'scripts/validate_workflows.py'
+      - '.github/workflows/**'
   workflow_dispatch:
 
 concurrency:
@@ -21,6 +25,23 @@ defaults:
     working-directory: backend
 
 jobs:
+  workflows:
+    name: Workflow files
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # GitHub rejects duplicate mapping keys outright; most YAML parsers do
+      # not. This workflow file failing to parse is the failure mode being guarded.
+      - name: Validate workflow YAML strictly
+        run: python scripts/validate_workflows.py
+
   check:
     name: Django checks + migrations
     runs-on: ubuntu-latest
