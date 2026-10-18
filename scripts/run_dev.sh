@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # Run the Mealin app on the Linux desktop with live reload.
 #
-#   ./run_dev.sh                 # customer role
-#   ./run_dev.sh chef            # kitchen role
-#   ./run_dev.sh delivery_partner
+#   ./scripts/run_dev.sh                 # customer role
+#   ./scripts/run_dev.sh chef            # kitchen role
+#   ./scripts/run_dev.sh delivery_partner
 #
 #   R = hot reload   r = hot restart   q = quit
 #
 # API: talks to https://api.mealin.in (the live production Django backend and
 # its database) by default -- the same value AppConstants.apiBaseUrl uses when
 # no --dart-define is passed. To use a local Django instead:
-#   API_BASE_URL=http://localhost:8000 ./run_dev.sh     (see start_backend.sh)
+#   API_BASE_URL=http://localhost:8000 ./scripts/run_dev.sh     (see scripts/start_backend.sh)
 #
 # This exists because this machine has no `clang` (flutter hardcodes CC/CXX at
 # packages/flutter_tools/lib/src/linux/build_linux.dart:197 and sudo is not
@@ -20,6 +20,9 @@
 # you can delete this script and use `flutter run -d linux` directly.
 
 set -euo pipefail
+
+# Always run from the repo root regardless of where this script lives.
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 ROLE="${1:-customer}"
 PREFIX="$HOME/.local/gstreamer-dev/usr"

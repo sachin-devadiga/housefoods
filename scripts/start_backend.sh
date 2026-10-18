@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run the Mealin backend (Django) locally against backend/db.sqlite3.
 #
-#   ./start_backend.sh
+#   ./scripts/start_backend.sh
 #
 # This is for LOCAL development only. The desktop app defaults to the live API
 # (https://api.mealin.in) so you normally do not need this at all -- see
@@ -17,7 +17,7 @@
 
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND="$ROOT/backend"
 PORT="${PORT:-8000}"
 
@@ -43,7 +43,7 @@ echo "  backend : http://localhost:${PORT}"
 echo "  database: backend/db.sqlite3 (local, empty)"
 echo
 echo "  To point the Flutter app here:"
-echo "    API_BASE_URL=http://localhost:${PORT} ./run_dev.sh"
+echo "    API_BASE_URL=http://localhost:${PORT} ./scripts/run_dev.sh"
 echo
 
 .venv/bin/python manage.py migrate

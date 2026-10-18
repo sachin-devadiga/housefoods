@@ -1,4 +1,6 @@
 @echo off
+REM Always run from the repo root regardless of where this script lives.
+cd /d "%~dp0.."
 REM Google Maps key comes from the environment; never hardcode it here.
 if "%MAPS_API_KEY%"=="" (
     echo ERROR: MAPS_API_KEY is not set. Google Maps will be blank in release builds.

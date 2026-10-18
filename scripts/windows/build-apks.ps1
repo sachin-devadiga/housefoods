@@ -2,6 +2,9 @@ param(
     [string]$Role = "all"
 )
 
+# Always run from the repo root regardless of where this script lives.
+Set-Location (Join-Path $PSScriptRoot "..")
+
 # Google Maps key comes from the environment; never hardcode it here.
 if ([string]::IsNullOrWhiteSpace($env:MAPS_API_KEY)) {
     Write-Host "ERROR: MAPS_API_KEY is not set. Google Maps will be blank in release builds." -ForegroundColor Red
