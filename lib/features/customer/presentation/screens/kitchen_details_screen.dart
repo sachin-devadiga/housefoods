@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/sdui/kitchen_details_copy.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -61,6 +62,9 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Section headings and the empty-state line are server-editable; the dish
+    // list itself stays native because it is driven by live provider data.
+    final copy = KitchenDetailsCopy.resolve(context);
     final bool isOpen = widget.kitchen.isOperatingNow;
     final cuisine = widget.kitchen.specialties.isNotEmpty
         ? widget.kitchen.specialties.take(3).join(', ')
@@ -161,7 +165,7 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
                     children: [
-                      const Text('Menu', style: ZomatoText.sectionTitle),
+                      Text(copy.menu, style: ZomatoText.sectionTitle),
                       const Spacer(),
                       _menuChip('All', _MenuFilter.all),
                       const SizedBox(width: 8),
@@ -174,9 +178,9 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
                 const SizedBox(height: 10),
                 _buildMenuItemsList(isOpen),
                 const SizedBox(height: 20),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  child: Text('Reviews', style: ZomatoText.sectionTitle),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(copy.reviews, style: ZomatoText.sectionTitle),
                 ),
                 const SizedBox(height: 10),
                 _buildReviewsList(),
@@ -289,6 +293,7 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
   }
 
   Widget _buildMenuItemsList(bool isOpen) {
+    final copy = KitchenDetailsCopy.resolve(context);
     return Consumer<KitchenProvider>(
       builder: (context, provider, child) {
         if (provider.isMenuItemsLoading) {
@@ -306,9 +311,11 @@ class _KitchenDetailsScreenState extends State<KitchenDetailsScreen> {
         }
 
         if (items.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 20),
-            child: Center(child: Text('No dishes in this section yet.', style: ZomatoText.bodyGrey)),
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Center(
+              child: Text(copy.emptyMessage, style: ZomatoText.bodyGrey),
+            ),
           );
         }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/sdui/login_copy.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/config/role_config.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -73,12 +74,12 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 const SizedBox(height: 40),
                 Text(
-                  appTitle,
+                  LoginCopy.resolve(context).title ?? appTitle,
                   style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  "Enter your email to receive an OTP",
+                  LoginCopy.resolve(context).subtitle ?? "Enter your email to receive an OTP",
                   style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                 ),
                 const SizedBox(height: 40),
@@ -106,7 +107,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 16),
                   _buildRoleCard(
                     title: "Order Food",
-                    subtitle: "Browse restaurants & get food delivered",
+                    subtitle: "Browse home kitchens & get food delivered",
                     role: 'customer',
                     icon: Icons.fastfood,
                   ),

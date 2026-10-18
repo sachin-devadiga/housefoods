@@ -167,13 +167,13 @@ class AppConstants {
   static const int subscriptionMinLeadDays = 7;
 
   // Chef subscriptions
-  // Only the customer-scoped subscription API exists today
-  // (backend/api/subscription_views.py). The chef plan write/manage endpoints
-  // below are NOT implemented yet — they are declared here so the chef-side
-  // provider has a single, honest place to wire them up when they land.
-  // Reads reuse the customer endpoints above; `subscriptionPlansEndpoint` is
-  // the one genuinely available plan read.
-  // TODO(backend): chef plan CRUD + subscriber list.
+  // Chef-scoped plan management, backed by
+  // backend/api/chef_plan_views.py. Every route is restricted to kitchens the
+  // caller owns; a non-chef gets 403, not an empty list.
+  //
+  // Both are paginated envelopes ({count, results, has_next}), matching the
+  // customer plan list. Note the distinct prefixes in the URL paths below —
+  // these are full paths, not relative to a base.
   static const String chefMealPlansEndpoint = '/api/auth/subscriptions/chef-plans/';
   static const String chefPlanSubscribersEndpoint =
       '/api/auth/subscriptions/chef-subscribers/';

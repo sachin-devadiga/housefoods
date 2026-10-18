@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'api',
+    'api.sdui',
 ]
 
 # Jazzmin Admin Theme
@@ -54,6 +55,12 @@ JAZZMIN_SETTINGS = {
         {'model': 'api.UserProfile'},
         {'model': 'api.Order'},
         {'model': 'api.Kitchen'},
+        # Server-Driven UI authoring. Specs are schema-validated on save, so an
+        # unrenderable layout cannot be published. See api/sdui/schema.py.
+        {'model': 'sdui.ScreenDefinition'},
+        {'model': 'sdui.FeatureFlag'},
+        {'model': 'sdui.NavigationConfig'},
+        {'model': 'sdui.AppConfig'},
     ],
     'usermenu_links': [
         {'name': 'View Site', 'url': '/', 'new_window': True},

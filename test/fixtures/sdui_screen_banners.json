@@ -1,0 +1,1 @@
+{"key":"banners","version":2,"schema_version":1,"root":{"type":"banner_carousel","id":"launch","height":180,"banners":[{"id":"launch","title":"Launch week: 20% off","subtitle":"Home-cooked meals, this week only","action":{"type":"open_url","value":"https://mealin.in"}}]}}

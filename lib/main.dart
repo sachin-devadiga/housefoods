@@ -18,6 +18,8 @@ import 'core/services/auth_service.dart';
 import 'core/constants/app_constants.dart';
 import 'core/error/error_screen.dart';
 import 'core/widgets/no_internet_overlay.dart';
+import 'core/sdui/sdui_provider.dart';
+import 'core/sdui/sdui_service.dart';
 import 'features/admin/presentation/providers/admin_provider.dart';
 import 'features/auth/data/repositories/auth_repository_impl.dart';
 import 'features/auth/data/repositories/user_repository_impl.dart';
@@ -119,6 +121,13 @@ class MealinApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => LanguageProvider()),
         ChangeNotifierProvider(create: (_) => CartProvider()),
         ChangeNotifierProvider(create: (_) => AiChatProvider(aiChatRepository)),
+        // Server-Driven UI. Registered early so it is resolvable from the very
+        // first route. Constructing it installs baked-in defaults, so the app
+        // is renderable before any network call happens — see
+        // lib/core/sdui/default_config.dart.
+        ChangeNotifierProvider(
+          create: (_) => SduiProvider(service: HttpSduiService(apiService: apiService)),
+        ),
       ],
       child: Consumer2<ThemeProvider, LanguageProvider>(
         builder: (context, themeProvider, languageProvider, child) {

@@ -13,6 +13,8 @@ import '../kitchen_details_screen.dart';
 import '../kitchen_map_screen.dart';
 import '../search_page.dart';
 import '../../../../ai_assistant/presentation/screens/ai_chat_screen.dart';
+import '../../../../../core/sdui/default_config.dart';
+import '../../../../../core/sdui/sdui_screen_view.dart';
 
 enum _HomeMode { delivery, dining, nightlife }
 
@@ -93,7 +95,13 @@ class _HomeTabState extends State<HomeTab> {
                 if (_mode != _HomeMode.delivery)
                   SliverFillRemaining(child: _buildComingSoon())
                 else ...[
-                  // 4. Top offers
+                  // 4. Server-driven banners. Renders nothing until an admin
+                  //    publishes a `banners` spec, so this is invisible by
+                  //    default and cannot regress the feed.
+                  const SliverToBoxAdapter(
+                    child: SduiSpecBody(specKey: SduiKeys.banners),
+                  ),
+                  // 5. Top offers
                   SliverToBoxAdapter(child: _buildOffers(provider)),
                   // 5. Cuisines
                   SliverToBoxAdapter(child: _buildCuisines()),
@@ -111,7 +119,7 @@ class _HomeTabState extends State<HomeTab> {
                   const SliverToBoxAdapter(
                     child: Padding(
                       padding: EdgeInsets.fromLTRB(16, 18, 16, 10),
-                      child: Text('All Restaurants Near You', style: ZomatoText.sectionTitle),
+                      child: Text('All Home Kitchens Near You', style: ZomatoText.sectionTitle),
                     ),
                   ),
                   // 9. Shimmers
@@ -154,7 +162,7 @@ class _HomeTabState extends State<HomeTab> {
                           children: [
                             Icon(Icons.search_off, size: 56, color: Colors.grey[300]),
                             const SizedBox(height: 12),
-                            const Text('No restaurants found',
+                            const Text('No home kitchens found',
                                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                             const SizedBox(height: 4),
                             const Text('Try a different search or clear filters',
@@ -163,7 +171,7 @@ class _HomeTabState extends State<HomeTab> {
                         ),
                       ),
                     ),
-                  // 12. Restaurant feed
+                  // 12. Kitchen feed
                   SliverPadding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     sliver: SliverList(
