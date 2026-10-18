@@ -39,8 +39,14 @@ jobs:
 
       # GitHub rejects duplicate mapping keys outright; most YAML parsers do
       # not. This workflow file failing to parse is the failure mode being guarded.
+      #
+      # working-directory must be overridden: the workflow-level default is
+      # `backend`, and the script lives at the repo root.
       - name: Validate workflow YAML strictly
-        run: python scripts/validate_workflows.py
+        working-directory: .
+        run: |
+          python -m pip install --quiet --disable-pip-version-check pyyaml
+          python scripts/validate_workflows.py
 
   check:
     name: Django checks + migrations
