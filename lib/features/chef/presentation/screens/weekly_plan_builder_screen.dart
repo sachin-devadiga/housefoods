@@ -91,13 +91,22 @@ class _WeeklyPlanBuilderScreenState extends State<WeeklyPlanBuilderScreen> {
       );
       return;
     }
-    await provider.savePlan(provider.buildDraftPlan());
+    try {
+      await provider.savePlan(provider.buildDraftPlan());
+    } catch (_) {
+      // The grid lives in the provider, so staying put keeps it intact.
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(provider.errorMessage ?? 'Could not save the plan.'),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+      return;
+    }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-            'Kept in this session — publishing plans is not available yet.'),
-      ),
+      const SnackBar(content: Text('Plan saved as a draft.')),
     );
   }
 
@@ -161,20 +170,6 @@ class _WeeklyPlanBuilderScreenState extends State<WeeklyPlanBuilderScreen> {
               for (var day = 0; day < _dayNames.length; day++)
                 _buildDayRow(day, provider),
               const SizedBox(height: 24),
-              if (!provider.canPersistPlans)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
-                  ),
-                  child: const Text(
-                    'Plan publishing is not wired to the server yet. Your grid is '
-                    'kept for this session only.',
-                    style: TextStyle(fontSize: 13),
-                  ),
-                ),
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: provider.isSaving ? null : _save,

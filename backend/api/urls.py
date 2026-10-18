@@ -4,6 +4,7 @@ from . import views
 from . import ai_chat_view
 from . import health_views
 from . import subscription_views
+from . import chef_plan_views
 
 router = DefaultRouter()
 router.register(r'kitchens/(?P<kitchen_pk>[^/.]+)/menu-categories', views.MenuCategoryViewSet, basename='menu-category')
@@ -126,6 +127,23 @@ urlpatterns = [
     # Chef Payouts
     path('payouts/', views.ChefPayoutListCreateView.as_view(), name='chef-payout-list-create'),
 
+    # Chef meal-plan management. These back the endpoints declared in
+    # lib/core/constants/app_constants.dart (chefMealPlansEndpoint,
+    # chefPlanSubscribersEndpoint), which previously did not exist.
+    path('subscriptions/chef-plans/', chef_plan_views.ChefMealPlanListCreateView.as_view(),
+         name='chef-meal-plans'),
+    path('subscriptions/chef-plans/<int:pk>/', chef_plan_views.ChefMealPlanDetailView.as_view(),
+         name='chef-meal-plan-detail'),
+    path('subscriptions/chef-plans/<int:pk>/subscribers/',
+         chef_plan_views.ChefPlanSubscribersListView.as_view(),
+         name='chef-plan-subscribers'),
+    path('subscriptions/chef-subscribers/',
+         chef_plan_views.ChefSubscribersListView.as_view(),
+         name='chef-subscribers'),
+    path('subscriptions/plan-cadences/',
+         chef_plan_views.ChefPlanCadencesView.as_view(),
+         name='plan-cadences'),
+
     # Delivery Documents
     path('delivery/documents/', views.DeliveryDocumentListView.as_view(), name='delivery-document-list'),
     path('delivery/documents/upload/', views.DeliveryDocumentUploadView.as_view(), name='delivery-document-upload'),
@@ -153,6 +171,11 @@ urlpatterns = [
 
     # AI Assistant
     path('ai/chat/', ai_chat_view.MealAIChatView.as_view(), name='ai-chat'),
+
+    # Server-Driven UI config. Public: the app must render before login.
+    # Reaches the app as /api/auth/config/... because api.urls is included at
+    # 'api/auth/' in backend/urls.py.
+    path('config/', include('api.sdui.urls')),
 
     # Safe deployment diagnostics (booleans only, no secrets/tracebacks)
     path('admin-health/', health_views.AdminHealthView.as_view(), name='admin-health'),

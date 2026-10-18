@@ -72,12 +72,27 @@ class _PlanPricingScreenState extends State<PlanPricingScreen> {
 
   Future<void> _save() async {
     final provider = context.read<MealPlanProvider>();
-    await provider.savePlan(provider.buildDraftPlan());
+    try {
+      await provider.savePlan(provider.buildDraftPlan());
+    } catch (_) {
+      // savePlan already set provider.errorMessage from the server's own
+      // wording. Stay on this screen so the entered prices are not lost.
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            provider.errorMessage ?? 'Could not save the plan.',
+          ),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+      return;
+    }
     if (!mounted) return;
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Kept in this session — publishing is not available yet.'),
+        content: Text('Plan saved. Publish it from the plan list when ready.'),
       ),
     );
   }
