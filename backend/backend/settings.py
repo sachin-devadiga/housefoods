@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 from datetime import timedelta
 import dj_database_url
@@ -11,6 +12,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'change-this-in-production')
 
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
+
+# Django's test runner is not a deployment, and it does not disable the
+# production TLS posture for you. With DEBUG=False -- which is how CI runs, and
+# how the VPS runs -- SECURE_SSL_REDIRECT makes every test-client request to
+# http://testserver answer 301 before it reaches a view. 92 of 124 tests failed
+# that way while passing locally against DEBUG=True.
+def _is_testing(argv):
+    """True when this process is a test run rather than a server.
+
+    A function rather than a bare expression so the detection itself is
+    testable -- a module-level constant is evaluated once at import and cannot
+    be re-derived in a test.
+    """
+    return 'test' in argv or any(a == 'pytest' or a.startswith('pytest') for a in argv[:1])
+
+
+TESTING = _is_testing(sys.argv)
 
 ALLOWED_HOSTS = [
     host.strip()
@@ -251,12 +269,22 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 # Passenger/cPanel terminates HTTPS at the proxy before forwarding to Django.
-if not DEBUG:
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    SECURE_SSL_REDIRECT = True
-    SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '31536000'))
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
+# Skipped under TESTING: see the TESTING note above. The production posture
+# itself is asserted by api/tests_production_settings.py and re-checked by
+# deploy/hostinger/deploy.sh against the running container.
+# Held as a dict rather than inline assignments so api/tests_production_settings.py
+# can assert the real production values. A conditional that never executes under
+# test cannot be covered by any test; this one can.
+PRODUCTION_TLS_SETTINGS = {
+    'SECURE_PROXY_SSL_HEADER': ('HTTP_X_FORWARDED_PROTO', 'https'),
+    'SECURE_SSL_REDIRECT': True,
+    'SECURE_HSTS_SECONDS': int(os.getenv('SECURE_HSTS_SECONDS', '31536000')),
+    'SESSION_COOKIE_SECURE': True,
+    'CSRF_COOKIE_SECURE': True,
+}
+
+if not DEBUG and not TESTING:
+    globals().update(PRODUCTION_TLS_SETTINGS)
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
